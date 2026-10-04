@@ -1,0 +1,29 @@
+# 数据目录：用户模型、Atlas 结果缓存、导出文件都不进仓库，只保留空目录
+input/*
+!input/.gitkeep
+grids/*
+!grids/.gitkeep
+output/*
+!output/.gitkeep
+
+# TWK Everett 是商业授权字体，不能随仓库分发
+app/static/fonts/*.otf
+!app/static/fonts/README.md
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# 本地配置与密钥
+.env
+config.json
+
+# 工具与系统文件
+.claude/
+Thumbs.db
+.DS_Store
+
+# 交接记录只留在本地和 OneDrive：里面有指向私有 Claude 文档的链接
+PROGRESS.md

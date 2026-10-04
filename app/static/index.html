@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Quantum cup</title>
+  <script>
+    // 先定主题，避免页面闪一下
+    (function () {
+      var t = null;
+      try { t = localStorage.getItem('qcup-theme'); } catch (e) {}
+      if (t !== 'light' && t !== 'dark') {
+        t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      }
+      document.documentElement.dataset.theme = t;
+    })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500&display=swap">
+  <link rel="stylesheet" href="/static/styles.css">
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+<div class="app">
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-name">Quantum cup</span>
+      <span class="brand-sub">体素 × Quantum Blur Core</span>
+    </div>
+    <div class="topbar-actions">
+      <button type="button" id="key-button" class="btn btn-sm btn-secondary">
+        <span class="dot" id="key-dot"></span><span id="key-label">设置 API key</span>
+      </button>
+      <button type="button" id="theme-button" class="btn btn-sm btn-tertiary btn-square" aria-label="切换浅色或深色">
+        <svg class="icon icon-sun" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="3"/><path d="M8 1.5v1.5M8 13v1.5M1.5 8H3M13 8h1.5M3.4 3.4l1.1 1.1M11.5 11.5l1.1 1.1M3.4 12.6l1.1-1.1M11.5 4.5l1.1-1.1"/></svg>
+        <svg class="icon icon-moon" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 9.2A5.5 5.5 0 0 1 6.8 2.5a5.5 5.5 0 1 0 6.7 6.7Z"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <div class="panels">
+  <aside class="sidebar" aria-label="流程">
+
+    <section class="card" id="step-model">
+      <header class="card-head"><span class="step-no">01</span><h2>模型</h2></header>
+      <div class="row">
+        <button type="button" id="pick-file" class="btn btn-sm btn-primary">选择模型文件</button>
+        <button type="button" id="use-test-cup" class="btn btn-sm btn-secondary">使用测试杯子</button>
+        <input type="file" id="file-input" hidden accept=".stl,.obj,.ply,.glb,.off">
+      </div>
+      <p class="help">支持 .stl、.obj、.ply、.glb、.off，也可以把文件拖进预览窗口。</p>
+      <div class="field">
+        <label for="up-select">模型里朝上的轴</label>
+        <div class="select-wrap">
+          <select id="up-select" class="select select-sm">
+            <option value="+z">+Z（3D 打印常用）</option>
+            <option value="+y">+Y（Blender、glTF 导出常用）</option>
+            <option value="+x">+X</option>
+            <option value="-z">−Z（上下颠倒）</option>
+            <option value="-y">−Y</option>
+            <option value="-x">−X</option>
+          </select>
+          <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg>
+        </div>
+      </div>
+      <dl class="stats" id="model-stats" hidden></dl>
+    </section>
+
+    <section class="card" id="step-voxel">
+      <header class="card-head"><span class="step-no">02</span><h2>体素化</h2></header>
+      <div class="field">
+        <span class="field-label" id="n-label">网格尺寸</span>
+        <div class="segmented block" role="radiogroup" aria-labelledby="n-label" id="n-seg">
+          <button type="button" role="radio" data-value="16" aria-checked="false">16³</button>
+          <button type="button" role="radio" data-value="32" aria-checked="true">32³</button>
+          <button type="button" role="radio" data-value="64" aria-checked="false">64³</button>
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label for="pad-input">四周留白（格）</label>
+          <input type="number" id="pad-input" class="input input-sm mono" min="0" max="6" step="1" value="2">
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="fill-input" class="switch" checked>
+          <span>填充内部</span>
+        </label>
+      </div>
+      <dl class="stats" id="grid-stats" hidden></dl>
+    </section>
+
+    <section class="card" id="step-process">
+      <header class="card-head"><span class="step-no">03</span><h2>量子处理</h2></header>
+      <div class="field">
+        <div class="segmented block" role="radiogroup" aria-label="处理方式" id="mode-seg">
+          <button type="button" role="radio" data-value="gaussian" aria-checked="false">高斯替身</button>
+          <button type="button" role="radio" data-value="emulator" aria-checked="true">本地模拟</button>
+          <button type="button" role="radio" data-value="atlas" aria-checked="false">Atlas</button>
+        </div>
+        <p class="help" id="mode-help"></p>
+      </div>
+
+      <div id="gaussian-params" class="group" hidden>
+        <div class="field">
+          <div class="field-head"><label for="sigma">模糊半径 sigma</label><output id="sigma-out" class="mono"></output></div>
+          <input type="range" class="slider" id="sigma" min="0.3" max="3" step="0.1" value="1">
+        </div>
+      </div>
+
+      <div id="quantum-params" class="group">
+        <div class="field">
+          <div class="field-head"><label for="strength">强度 strength</label><output id="strength-out" class="mono"></output></div>
+          <input type="range" class="slider" id="strength" min="0" max="1" step="0.01" value="0.3">
+        </div>
+        <div class="field">
+          <div class="field-head"><label for="reach">扩散范围 reach</label><output id="reach-out" class="mono"></output></div>
+          <input type="range" class="slider" id="reach" min="0" max="1" step="0.01" value="0">
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label for="style-select">旋转门 style</label>
+            <div class="select-wrap">
+              <select id="style-select" class="select select-sm">
+                <option value="x">x（Rx）</option>
+                <option value="y">y（Ry）</option>
+                <option value="xy">xy（先 Rx 再 Ry）</option>
+                <option value="yx">yx（先 Ry 再 Rx）</option>
+              </select>
+              <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg>
+            </div>
+          </div>
+          <div class="field">
+            <label for="shots-input">测量次数 shots</label>
+            <input type="number" id="shots-input" class="input input-sm mono" min="1" step="1000" placeholder="精确">
+          </div>
+        </div>
+        <div class="field">
+          <span class="field-label" id="axes-label">模糊方向 axes</span>
+          <div class="checks" role="group" aria-labelledby="axes-label">
+            <label class="check-item"><input type="checkbox" class="check" id="axis-0" checked><span>X</span></label>
+            <label class="check-item"><input type="checkbox" class="check" id="axis-1" checked><span>Y</span></label>
+            <label class="check-item"><input type="checkbox" class="check" id="axis-2" checked><span>Z</span></label>
+          </div>
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="run-input">实验名</label>
+        <input type="text" id="run-input" class="input input-sm mono" value="run1" maxlength="40" spellcheck="false" autocomplete="off">
+        <p class="help">用在缓存和导出的文件名里。想把同一组参数再提交一次，就换个名字。</p>
+      </div>
+
+      <div id="atlas-actions" class="group" hidden>
+        <p class="note warn" id="atlas-size-note" hidden>64³ 的结果有 26 万多个数，可能超过 Atlas 单次结果约 2 MB 的上限。建议先用 32³。</p>
+        <div class="row">
+          <button type="button" id="submit-atlas" class="btn btn-sm btn-secondary">提交到 Atlas</button>
+        </div>
+        <p class="status-line" id="atlas-status" hidden></p>
+        <p class="help" id="atlas-stale-note" hidden>下面显示的还不是这组参数在 Atlas 上的结果，提交后才会更新。</p>
+      </div>
+
+      <dl class="stats" id="process-stats" hidden></dl>
+    </section>
+
+    <section class="card" id="step-mesh">
+      <header class="card-head"><span class="step-no">04</span><h2>转回模型</h2></header>
+      <div class="field">
+        <div class="field-head"><label for="level">阈值</label><output id="level-out" class="mono"></output></div>
+        <input type="range" class="slider" id="level" min="0.05" max="0.95" step="0.01" value="0.5">
+        <p class="help">相对原模型实体的密度，原来的实体是 1。调低会膨胀、粘连；调高会侵蚀、碎裂。</p>
+      </div>
+      <div class="field">
+        <div class="field-head"><label for="smooth">平滑次数</label><output id="smooth-out" class="mono"></output></div>
+        <input type="range" class="slider" id="smooth" min="0" max="30" step="1" value="5">
+      </div>
+      <div class="field">
+        <span class="field-label" id="keep-label">碎块</span>
+        <div class="segmented block" role="radiogroup" aria-labelledby="keep-label" id="keep-seg">
+          <button type="button" role="radio" data-value="largest" aria-checked="true">只留最大一块</button>
+          <button type="button" role="radio" data-value="all" aria-checked="false">保留所有大块</button>
+        </div>
+        <p class="help">不到 200 个面的碎屑两种方式都会去掉。</p>
+      </div>
+      <div class="field">
+        <label for="height-input">打印高度（mm）</label>
+        <input type="number" id="height-input" class="input input-sm mono" min="5" max="1000" step="1" value="90">
+      </div>
+      <div class="row">
+        <button type="button" id="export" class="btn btn-sm btn-secondary" disabled>导出 STL</button>
+      </div>
+      <p class="help" id="export-result" hidden></p>
+    </section>
+
+  </aside>
+
+  <aside class="inspector" aria-label="检查">
+    <section class="card">
+      <header class="card-head"><h2>切片</h2><output id="slice-out" class="mono muted"></output></header>
+      <div class="slice-frame"><canvas id="slice-canvas" width="280" height="280"></canvas></div>
+      <div class="field-row">
+        <div class="segmented" role="radiogroup" aria-label="切片来源" id="slice-source-seg">
+          <button type="button" role="radio" data-value="input" aria-checked="true">输入</button>
+          <button type="button" role="radio" data-value="processed" aria-checked="false" disabled>处理后</button>
+        </div>
+        <div class="segmented" role="radiogroup" aria-label="切片方向" id="slice-axis-seg">
+          <button type="button" role="radio" data-value="0" aria-checked="false">X</button>
+          <button type="button" role="radio" data-value="1" aria-checked="false">Y</button>
+          <button type="button" role="radio" data-value="2" aria-checked="true">Z</button>
+        </div>
+      </div>
+      <div class="field">
+        <label for="slice-index" class="sr-only">切片位置</label>
+        <input type="range" class="slider" id="slice-index" min="0" max="31" step="1" value="16">
+      </div>
+      <p class="help">和背景的反差越大，数值越大。蓝线是当前阈值的边界。</p>
+    </section>
+
+    <section class="card">
+      <header class="card-head"><h2>打印检查</h2></header>
+      <p class="help" id="report-empty">完成量子处理后，这里会显示导出模型的检查结果。</p>
+      <dl class="stats" id="report-stats" hidden></dl>
+      <p class="note warn" id="report-note" hidden></p>
+    </section>
+  </aside>
+  </div>
+
+  <main class="stage">
+    <div class="stage-bar">
+      <div class="segmented" role="radiogroup" aria-label="预览内容" id="view-seg">
+        <button type="button" role="radio" data-value="model" aria-checked="true" disabled>原模型</button>
+        <button type="button" role="radio" data-value="voxels" aria-checked="false" disabled>体素</button>
+        <button type="button" role="radio" data-value="processed" aria-checked="false" disabled>处理后</button>
+        <button type="button" role="radio" data-value="result" aria-checked="false" disabled>结果</button>
+      </div>
+      <button type="button" id="reset-view" class="btn btn-sm btn-secondary">重置视角</button>
+    </div>
+    <div class="viewport" id="viewport">
+      <div class="empty" id="empty">
+        <svg class="icon icon-24" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7.5v9L12 21l8-4.5v-9L12 3Z"/><path d="M4 7.5 12 12l8-4.5M12 12v9"/></svg>
+        <p class="empty-title">从一个模型开始</p>
+        <p class="empty-text">在左侧选择模型文件，或使用测试杯子。也可以把文件拖到这里。</p>
+      </div>
+      <div class="drop-hint" id="drop-hint" hidden>松开以载入模型</div>
+    </div>
+    <div class="stage-foot">
+      <span class="spinner" id="spinner" hidden></span>
+      <span id="stage-foot-text"></span>
+    </div>
+  </main>
+
+</div>
+
+<dialog class="modal" id="key-modal" aria-labelledby="key-title">
+  <form method="dialog" class="modal-body" id="key-form">
+    <h2 id="key-title">Atlas API key</h2>
+    <p class="modal-text">key 只保存在这台电脑的用户目录（~/.quantum-cup），不会写进项目文件夹，也不会回显在页面上。</p>
+    <p class="note warn" id="key-base-note" hidden></p>
+    <div class="field">
+      <label for="key-input">API key</label>
+      <input type="password" id="key-input" class="input mono" placeholder="moth_…" autocomplete="off" spellcheck="false">
+    </div>
+    <p class="status-line" id="key-status"></p>
+    <div class="row">
+      <button type="button" id="key-save" class="btn btn-primary">保存</button>
+      <button type="button" id="key-test" class="btn btn-secondary">测试连接</button>
+      <button type="button" id="key-clear" class="btn btn-tertiary">清除</button>
+      <span class="spacer"></span>
+      <button type="submit" class="btn btn-tertiary">关闭</button>
+    </div>
+  </form>
+</dialog>
+
+<div class="toasts" id="toasts" aria-live="polite"></div>
+
+<script type="module" src="/static/app.js"></script>
+</body>
+</html>
