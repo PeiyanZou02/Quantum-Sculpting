@@ -17,8 +17,10 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "app"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import emulator                              # noqa: E402
 import pipeline                              # noqa: E402
 import server                                # noqa: E402
+import tiling                                # noqa: E402
 from fake_atlas import TEST_KEY, FakeAtlas   # noqa: E402
 
 
@@ -43,6 +45,7 @@ class ServerTest(unittest.TestCase):
         cls.fake = FakeAtlas().start()
         server.ATLAS_BASE = cls.fake.base
         server.ATLAS_POLL = 0.02
+        server.atlas.RETRY_SCALE = 0.005
         cls.c = server.app.test_client()
 
     @classmethod
@@ -53,13 +56,24 @@ class ServerTest(unittest.TestCase):
     def setUp(self):
         server.S = server.State()
         self.fake.bare_result = self.fake.fail_jobs = False
+        self.fake.max_values, self.fake.throttle, self.fake.polls_needed = None, 0, 3
+        (server.HOME / "limits.json").unlink(missing_ok=True)
         self.c.delete("/api/key")
 
     def post(self, path, data=None, expect=200):
         r = self.c.post(path, json=data or {})
         if r.status_code != expect:
-            self.fail(f"{path} → {r.status_code}（期望 {expect}）：{r.get_data(as_text=True)[:300]}")
+            self.fail(f"{path} → {r.status_code}（期望 {expect}）：{r.get_data()[:300].decode('utf-8', 'replace')}")
         return r
+
+    @staticmethod
+    def unpack(response):
+        """把紧凑格式（有东西的盒子、每个数一个字节）还原成整块，和界面做的一样。"""
+        meta = json.loads(response.headers["X-Meta"])
+        full = np.zeros((meta["n"],) * 3, dtype=np.float32)
+        box = tuple(slice(a, b) for a, b in meta["box"])
+        full[box] = np.frombuffer(response.data, dtype=np.uint8).reshape(full[box].shape) / 255.0
+        return full
 
     def ready(self, n=32):
         self.post("/api/model/test-cup")
@@ -86,7 +100,8 @@ class ServerTest(unittest.TestCase):
         self.assertEqual(len(faces), model["faces"])
 
         grid = self.post("/api/voxelize", {"n": 32, "pad": 2, "fill": True}).get_json()
-        self.assertEqual((grid["n"], grid["qubits"], grid["total"]), (32, 15, 32 ** 3))
+        self.assertEqual((grid["n"], grid["total"]), (32, 32 ** 3))
+        self.assertEqual(grid["tiles"]["cube"], {"shape": [32, 32, 32], "jobs": 1, "total": 1})
         self.assertGreater(grid["solid"], 500)
         # 原模型经过 transform 应该正好落在实体格子的范围里
         t = np.array(grid["transform"])
@@ -133,10 +148,12 @@ class ServerTest(unittest.TestCase):
 
     def test_every_grid_size_and_mode(self):
         self.post("/api/model/test-cup")
-        for n in (16, 32, 64):
-            self.assertEqual(self.post("/api/voxelize", {"n": n}).get_json()["qubits"], 3 * int(np.log2(n)))
+        for n in (16, 32, 64, 128):
+            tiles = self.post("/api/voxelize", {"n": n}).get_json()["tiles"]
+            self.assertEqual(tiles["cube"]["jobs"] > 1, n > 32)
             for body in ({"mode": "gaussian", "sigma": 1.0},
                          {"mode": "emulator", "strength": 0.5, "reach": 0.2, "style": "xy", "axes": [0, 2]},
+                         {"mode": "emulator", "strength": 0.3, "tiling": "layers"},
                          {"mode": "emulator", "strength": 0.4, "shots": 200000}):
                 self.post("/api/process", body)
                 report = json.loads(self.post("/api/mesh", {"level": 0.5}).headers["X-Meta"])
@@ -158,6 +175,104 @@ class ServerTest(unittest.TestCase):
         turned = self.post("/api/model/orient", {"up": "+y"}).get_json()
         self.assertAlmostEqual(turned["extents"][1], 90, delta=0.5)
         self.assertEqual(turned["up"], "+y")
+
+    def test_models_already_in_input_can_be_reopened(self):
+        self.post("/api/model/test-cup")
+        names = [m["name"] for m in self.c.get("/api/models").get_json()]
+        self.assertIn("test_cup.stl", names)
+        opened = self.post("/api/model/open", {"name": "test_cup.stl", "up": "+y"}).get_json()
+        self.assertEqual((opened["name"], opened["up"]), ("test_cup", "+y"))
+        self.assertAlmostEqual(opened["extents"][1], 90, delta=0.5)
+        self.post("/api/model/open", {"name": "../app/server.py"}, expect=400)
+        self.post("/api/model/open", {"name": "missing.stl"}, expect=400)
+
+    def test_fill_modes(self):
+        self.post("/api/model/test-cup")
+        for fill in ("holes", "capped", "none", True, False):
+            self.post("/api/voxelize", {"n": 16, "fill": fill})
+        self.assertEqual(self.post("/api/voxelize", {"n": 16, "fill": "capped"}).get_json()["fill"], "capped")
+        self.post("/api/voxelize", {"n": 16, "fill": "solid"}, expect=400)
+
+    def test_compact_grid_is_the_same_data_in_far_fewer_bytes(self):
+        self.ready(64)
+        plain = self.c.get("/api/grid/input")
+        small = self.c.get("/api/grid/input?compact=1")
+        grid = np.frombuffer(plain.data, dtype="<f4").reshape(64, 64, 64)
+        np.testing.assert_array_equal(self.unpack(small), grid)
+        self.assertLess(len(small.data), len(plain.data) / 4)
+        self.post("/api/process", {"mode": "emulator", "strength": 0.3})
+        processed = np.frombuffer(self.c.get("/api/grid/processed").data, dtype="<f4").reshape(64, 64, 64)
+        r = self.c.get("/api/grid/processed?compact=1")
+        np.testing.assert_allclose(self.unpack(r), processed, atol=1 / 255)
+        self.assertEqual(json.loads(r.headers["X-Meta"])["proc"]["mode"], "emulator")
+
+    def test_coverage_voxelisation(self):
+        self.post("/api/key", {"key": TEST_KEY})
+        self.post("/api/model/test-cup")
+        binary = self.post("/api/voxelize", {"n": 32, "values": "binary"}).get_json()
+        info = self.post("/api/voxelize", {"n": 32, "values": "coverage"}).get_json()
+        self.assertEqual((binary["values"], info["values"]), ("binary", "coverage"))
+        self.assertLess(info["solid"], 0.8 * binary["solid"], "薄壁杯子在 0/1 体素化下胖了不少")
+        grid = np.frombuffer(self.c.get("/api/grid/input").data, dtype="<f4")
+        self.assertTrue(((grid > 0.05) & (grid < 0.95)).any(), "应该有不是 0 也不是 1 的格子")
+        np.testing.assert_allclose(self.unpack(self.c.get("/api/grid/input?compact=1")).ravel(), grid, atol=1 / 255)
+
+        self.post("/api/process", {"mode": "emulator", "strength": 0.3})
+        plain = json.loads(self.post("/api/mesh", {"level": 0.5}).headers["X-Meta"])
+        # 杯壁只有一格多厚，模糊之后大多低于 0.5；阈值放低一些，推移量也小一些
+        moved = json.loads(self.post("/api/mesh", {"method": "advect", "refine": 4, "amount": 0.5,
+                                                   "level": 0.3}).headers["X-Meta"])
+        self.assertEqual(moved["field"], "threshold")
+        gone = self.post("/api/mesh", {"method": "advect", "refine": 4, "amount": 8, "level": 0.9}, expect=400)
+        self.assertIn("表面消失了", gone.get_json()["error"])
+        self.assertGreater(moved["faces"], plain["faces"])
+
+        # 小数也能交给 Atlas
+        job = self.wait_for_job(self.post("/api/process", {"mode": "atlas", "run": "cover"}).get_json()["job_id"])
+        self.assertEqual(job["status"], "done", job["error"])
+        sent = np.array(list(self.fake.jobs.values())[-1]["params"]["values"])
+        self.assertTrue(((sent > 0.05) & (sent < 0.95)).any())
+        self.assertEqual(self.c.get("/api/state").get_json()["grid"]["values"], "coverage")
+
+    def test_level_set_route_to_a_mesh(self):
+        self.ready(32)
+        self.post("/api/process", {"mode": "emulator", "strength": 0.3})
+        plain = json.loads(self.post("/api/mesh", {"level": 0.5}).headers["X-Meta"])
+        self.assertEqual((plain["method"], plain["refine"]), ("threshold", 1))
+
+        # 没有推移量时，「推动表面」给出的就是原模型本身，只是更细
+        r = self.post("/api/mesh", {"method": "advect", "refine": 4, "amount": 0})
+        still = json.loads(r.headers["X-Meta"])
+        verts, faces = parse_mesh(r.data)
+        self.assertTrue(still["watertight"])
+        self.assertEqual((still["method"], still["refine"], still["fine_voxel_mm"] < still["voxel_mm"]),
+                         ("advect", 4, True))
+        self.assertTrue(-1 <= verts.min() and verts.max() <= 32, "预览模型应该在量子网格坐标里")
+        self.assertAlmostEqual(still["extents"][0] / still["extents"][2], 80 / 90, delta=0.03)
+        self.assertGreater(len(faces), 4 * plain["faces"])
+
+        moved = json.loads(self.post("/api/mesh", {"method": "advect", "refine": 4, "amount": 3,
+                                                   "field": "difference"}).headers["X-Meta"])
+        self.assertNotEqual(moved["faces"], still["faces"])
+        for body in ({"refine": 2}, {"vfilter": "gaussian", "vwidth": 1.5}, {"grow": 1.0}, {"close": 1.5},
+                     {"method": "advect", "refine": 2, "amount": 2, "field": "threshold", "vfilter": "curvature"},
+                     {"method": "advect", "refine": 2, "amount": 1, "field": "gradient", "grow": 1, "close": 1}):
+            report = json.loads(self.post("/api/mesh", {"level": 0.4, **body}).headers["X-Meta"])
+            self.assertGreater(report["faces"], 0, body)
+
+        thick = json.loads(self.post("/api/mesh", {"grow": 2.0}).headers["X-Meta"])
+        self.assertGreater(thick["volume_cm3"], plain["volume_cm3"])
+
+        out = self.post("/api/export", {"method": "advect", "refine": 4, "amount": 2.5, "level": 0.5}).get_json()
+        self.assertEqual(out["file"], "run1_emulator_n32_L050_adv2.5_x4.stl")
+        sidecar = json.loads((server.OUTPUT / "run1_emulator_n32_L050_adv2.5_x4.json").read_text(encoding="utf-8"))
+        self.assertEqual((sidecar["mesh"]["method"], sidecar["mesh"]["amount"]), ("advect", 2.5))
+
+        self.post("/api/mesh", {"refine": 3}, expect=400)
+        self.post("/api/mesh", {"grow": -8.0}, expect=400)
+        self.post("/api/voxelize", {"n": 64})
+        self.post("/api/process", {"mode": "gaussian"})
+        self.post("/api/mesh", {"refine": 8}, expect=400)          # 64 × 8 超过 256
 
     def test_helpful_errors(self):
         self.assertIn("模型", self.post("/api/voxelize", expect=400).get_json()["error"])
@@ -254,6 +369,138 @@ class ServerTest(unittest.TestCase):
         job = self.post("/api/process", {**body, "run": "q2"}).get_json()
         self.assertEqual(self.wait_for_job(job["job_id"])["status"], "done")
         self.assertEqual(self.fake.submits, before + 2)
+
+    def test_large_grid_is_sent_to_atlas_in_tiles(self):
+        self.post("/api/key", {"key": TEST_KEY})
+        info = self.ready(64)
+        self.assertEqual(info["tiles"]["cube"], {"shape": [32, 32, 64], "jobs": 4, "total": 4})
+        before = self.fake.submits
+        body = {"mode": "atlas", "strength": 0.3, "style": "xy", "run": "tiled"}
+        job = self.wait_for_job(self.post("/api/process", body).get_json()["job_id"])
+        self.assertEqual(job["status"], "done", job["error"])
+        self.assertEqual((job["tiles_total"], job["tiles_done"], job["tiles_cached"]), (4, 4, 0))
+        self.assertEqual(self.fake.submits, before + 4)
+        self.assertEqual(job["meta"]["tiles"], {"mode": "cube", "shape": [32, 32, 64], "jobs": 4, "cached": 0})
+        for sent in list(self.fake.jobs.values())[-4:]:
+            self.assertEqual(np.array(sent["params"]["values"]).shape, (32, 32, 64))
+
+        # 拼起来的结果应该和本地按同样方式分块的模拟一致（假服务用的就是本地模拟）
+        got = np.frombuffer(self.c.get("/api/grid/processed").data, dtype="<f4").reshape(64, 64, 64)
+        grid = np.frombuffer(self.c.get("/api/grid/input").data, dtype="<f4").reshape(64, 64, 64)
+        want = pipeline.normalize(
+            emulator.quantum_blur_tiled(grid, (32, 32, 64), strength=0.3, style="xy"), grid.sum())
+        np.testing.assert_allclose(got, want, atol=2e-3)
+        self.post("/api/process", {"mode": "emulator", "strength": 0.3, "style": "xy"})
+        local = np.frombuffer(self.c.get("/api/grid/processed").data, dtype="<f4").reshape(64, 64, 64)
+        np.testing.assert_allclose(local, want, atol=1e-6)
+
+        # 再来一次：四块都读缓存
+        again = self.post("/api/process", body).get_json()
+        self.assertEqual((again["status"], again["meta"]["cached"]), ("done", True))
+        self.assertEqual(self.fake.submits, before + 4)
+
+        # 换成按层分块：又是 4 个新任务，每个是 64×64×16
+        job = self.wait_for_job(self.post("/api/process", {**body, "tiling": "layers"}).get_json()["job_id"])
+        self.assertEqual(job["meta"]["tiles"]["shape"], [64, 64, 16])
+        self.assertEqual(self.fake.submits, before + 8)
+
+    def test_identical_and_uniform_tiles_are_not_submitted_twice(self):
+        self.post("/api/key", {"key": TEST_KEY})
+        self.ready(64)
+        rng = np.random.default_rng(7)
+        block = (rng.random((32, 32, 64)) > 0.5).astype(np.float32)
+        mirrored = np.zeros((64, 64, 64), dtype=np.float32)
+        mirrored[:32, :32] = block
+        mirrored[32:, :32] = block[::-1]
+        mirrored[:32, 32:] = block[:, ::-1]
+        mirrored[32:, 32:] = block[::-1, ::-1]
+        with server.S.lock:
+            server.S.grid, server.S.grid_id = mirrored, server.S.grid_id + 1
+        before = self.fake.submits
+        job = self.wait_for_job(self.post("/api/process", {"mode": "atlas", "run": "mirror"}).get_json()["job_id"])
+        self.assertEqual(job["status"], "done", job["error"])
+        self.assertEqual((job["tiles_total"], job["tiles_done"], job["tiles_cached"]), (4, 4, 3))
+        self.assertEqual(self.fake.submits, before + 1, "四块镜像之后一样，只应该提交一次")
+        got = np.frombuffer(self.c.get("/api/grid/processed").data, dtype="<f4").reshape(64, 64, 64)
+        want = pipeline.normalize(emulator.quantum_blur_tiled(mirrored, (32, 32, 64), strength=0.5), mirrored.sum())
+        np.testing.assert_allclose(got, want, atol=2e-3)
+
+        solid = np.zeros((64, 64, 64), dtype=np.float32)
+        solid[:32, :32] = 1                               # 一整块实心，其余是空的
+        with server.S.lock:
+            server.S.grid, server.S.grid_id = solid, server.S.grid_id + 1
+        before = self.fake.submits
+        job = self.wait_for_job(self.post("/api/process", {"mode": "atlas", "run": "solid"}).get_json()["job_id"])
+        self.assertEqual(job["status"], "done", job["error"])
+        self.assertEqual(self.fake.submits, before, "均匀的实心块 Rx 不会改变它，不用提交")
+        job = self.wait_for_job(self.post("/api/process", {"mode": "atlas", "run": "solid", "style": "xy"})
+                                .get_json()["job_id"])
+        self.assertEqual(self.fake.submits, before + 1, "带 Ry 的门会改变它，要提交")
+
+    def test_tiles_are_halved_when_atlas_rejects_their_size(self):
+        self.fake.max_values = 40_000          # 像真实服务一样：6.5 万个数的结果交不上去
+        self.post("/api/key", {"key": TEST_KEY})
+        self.ready(64)
+        before = self.fake.submits
+        job = self.wait_for_job(self.post("/api/process", {"mode": "atlas", "run": "limit"}).get_json()["job_id"])
+        self.assertEqual(job["status"], "done", job["error"])
+        self.assertEqual(job["tile_shape"], [32, 32, 32])
+        self.assertEqual(job["tiles_total"], 8)
+        self.assertIn("小一半", job["note"])
+        self.assertEqual(self.fake.submits, before + 1 + 8, "只应该浪费一个探路的任务")
+        self.assertEqual(server.atlas_bits(), 15, "上限应该被记住")
+        with server.S.lock:
+            self.assertEqual(server.grid_tiles()["cube"]["shape"], [32, 32, 32])
+
+    def test_a_failed_tile_stops_the_run_and_finished_tiles_are_kept(self):
+        self.post("/api/key", {"key": TEST_KEY})
+        self.ready(64)
+        body = {"mode": "atlas", "run": "partial"}
+        original = server.atlas.Atlas.result
+        calls = {"n": 0}
+
+        def flaky(client, job_id):
+            calls["n"] += 1
+            if calls["n"] == 3:
+                raise server.atlas.AtlasError("simulated network drop")
+            return original(client, job_id)
+
+        server.atlas.Atlas.result = flaky
+        try:
+            job = self.wait_for_job(self.post("/api/process", body).get_json()["job_id"])
+        finally:
+            server.atlas.Atlas.result = original
+        self.assertEqual(job["status"], "failed")
+        self.assertIn("simulated network drop", job["error"])
+        before = self.fake.submits
+        job = self.wait_for_job(self.post("/api/process", body).get_json()["job_id"])
+        self.assertEqual(job["status"], "done", job["error"])
+        self.assertGreaterEqual(job["tiles_cached"], 2, "之前算完的分块应该直接读缓存")
+        self.assertEqual(self.fake.submits, before, "已经提交过的任务不应该再提交一遍")
+
+    def test_partial_result_can_be_previewed_while_tiles_are_running(self):
+        self.fake.polls_needed = 12
+        self.post("/api/key", {"key": TEST_KEY})
+        self.ready(64)
+        job_id = self.post("/api/process", {"mode": "atlas", "run": "preview"}).get_json()["job_id"]
+        seen = None
+        for _ in range(400):
+            r = self.c.get(f"/api/process/{job_id}/preview")
+            if r.status_code == 200:
+                seen = self.unpack(r)
+                break
+            time.sleep(0.01)
+        self.assertIsNotNone(seen, "运行中应该能取到部分结果")
+        self.assertEqual(seen.shape, (64, 64, 64))
+        self.assertEqual(self.wait_for_job(job_id)["status"], "done")
+        self.assertEqual(self.c.get(f"/api/process/{job_id}/preview").status_code, 404)
+
+    def test_rate_limited_submissions_are_retried(self):
+        self.fake.throttle = 2
+        self.post("/api/key", {"key": TEST_KEY})
+        self.ready(16)
+        job = self.wait_for_job(self.post("/api/process", {"mode": "atlas", "run": "busy"}).get_json()["job_id"])
+        self.assertEqual(job["status"], "done", job["error"])
 
     def test_atlas_result_as_bare_list(self):
         self.fake.bare_result = True

@@ -31,6 +31,8 @@ class FakeAtlas:
         self.bare_result = False      # True：结果直接是嵌套列表；False：{"output": [...]}
         self.fail_jobs = False        # True：任务进入 failed
         self.polls_needed = 3         # 第几次查询状态时完成
+        self.max_values = None        # 结果超过这么多个数就失败，模拟真实服务约 2 MB 的上限
+        self.throttle = 0             # 接下来这么多次提交返回 429
         self.submits = 0
         self.jobs = {}
         self.app = self._build()
@@ -69,6 +71,9 @@ class FakeAtlas:
             if qubits > params.get("max_qubits", 20):
                 return problem(422, "too_many_qubits",
                                "The shape of `values` requires more qubits than `max_qubits` allows.")
+            if self.throttle > 0:
+                self.throttle -= 1
+                return problem(429, "Too Many Requests", "slow down")
             self.submits += 1
             job_id = str(uuid.uuid4())
             self.jobs[job_id] = {"params": params, "values": values, "polls": 0}
@@ -86,6 +91,10 @@ class FakeAtlas:
                     "submitted_at": "2026-10-04T00:00:00Z", "updated_at": "2026-10-04T00:00:01Z"}
             if job["polls"] < self.polls_needed:
                 body["status"] = "queued" if job["polls"] == 1 else "running"
+            elif self.max_values and job["values"].size > self.max_values:
+                body["status"] = "failed"       # 真实服务就是这样：先接受任务，交结果时才失败
+                body["error"] = {"type": "ApplicationError", "retryable": False, "message":
+                                 "[TMPRL1103] Attempted to upload payloads with size that exceeded the error limit."}
             elif self.fail_jobs:
                 body["status"] = "failed"
                 body["error"] = {"type": "engine_error", "message": "simulated failure", "retryable": False}

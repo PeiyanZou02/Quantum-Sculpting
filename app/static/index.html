@@ -58,6 +58,13 @@
         <input type="file" id="file-input" hidden accept=".stl,.obj,.ply,.glb,.off">
       </div>
       <p class="help">支持 .stl、.obj、.ply、.glb、.off，也可以把文件拖进预览窗口。</p>
+      <div class="field" id="model-list-field" hidden>
+        <label for="model-select">已经在 input/ 里的模型</label>
+        <div class="select-wrap">
+          <select id="model-select" class="select select-sm"></select>
+          <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg>
+        </div>
+      </div>
       <div class="field">
         <label for="up-select">模型里朝上的轴</label>
         <div class="select-wrap">
@@ -72,6 +79,7 @@
           <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg>
         </div>
       </div>
+      <p class="note warn" id="lying-hint" hidden></p>
       <dl class="stats" id="model-stats" hidden></dl>
     </section>
 
@@ -83,17 +91,35 @@
           <button type="button" role="radio" data-value="16" aria-checked="false">16³</button>
           <button type="button" role="radio" data-value="32" aria-checked="true">32³</button>
           <button type="button" role="radio" data-value="64" aria-checked="false">64³</button>
+          <button type="button" role="radio" data-value="128" aria-checked="false">128³</button>
+          <button type="button" role="radio" data-value="256" aria-checked="false">256³</button>
         </div>
       </div>
-      <div class="field-row">
-        <div class="field">
-          <label for="pad-input">四周留白（格）</label>
-          <input type="number" id="pad-input" class="input input-sm mono" min="0" max="6" step="1" value="2">
+      <div class="field">
+        <label for="fill-select">内部</label>
+        <div class="select-wrap">
+          <select id="fill-select" class="select select-sm">
+            <option value="holes">填满封闭的内部</option>
+            <option value="capped">先封住底部再填（底部敞开的扫描模型）</option>
+            <option value="none">不填，只要外壳</option>
+          </select>
+          <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg>
         </div>
-        <label class="toggle">
-          <input type="checkbox" id="fill-input" class="switch" checked>
-          <span>填充内部</span>
-        </label>
+      </div>
+      <div class="field">
+        <label for="values-select">格子里的数</label>
+        <div class="select-wrap">
+          <select id="values-select" class="select select-sm">
+            <option value="coverage">覆盖率：格子被占了多少就是多少（更准）</option>
+            <option value="binary">0 或 1：表面碰到的格子都算实心</option>
+          </select>
+          <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg>
+        </div>
+        <p class="help" id="values-help"></p>
+      </div>
+      <div class="field">
+        <label for="pad-input">四周留白（格）</label>
+        <input type="number" id="pad-input" class="input input-sm mono" min="0" max="6" step="1" value="2">
       </div>
       <dl class="stats" id="grid-stats" hidden></dl>
     </section>
@@ -153,6 +179,15 @@
         </div>
       </div>
 
+      <div class="field" id="tiling-field" hidden>
+        <span class="field-label" id="tiling-label">分块方式</span>
+        <div class="segmented block" role="radiogroup" aria-labelledby="tiling-label" id="tiling-seg">
+          <button type="button" role="radio" data-value="cube" aria-checked="true">立方块</button>
+          <button type="button" role="radio" data-value="layers" aria-checked="false">水平层</button>
+        </div>
+        <p class="help" id="tiling-help"></p>
+      </div>
+
       <div class="field">
         <label for="run-input">实验名</label>
         <input type="text" id="run-input" class="input input-sm mono" value="run1" maxlength="40" spellcheck="false" autocomplete="off">
@@ -160,7 +195,7 @@
       </div>
 
       <div id="atlas-actions" class="group" hidden>
-        <p class="note warn" id="atlas-size-note" hidden>64³ 的结果有 26 万多个数，可能超过 Atlas 单次结果约 2 MB 的上限。建议先用 32³。</p>
+        <p class="help" id="atlas-jobs-note" hidden></p>
         <div class="row">
           <button type="button" id="submit-atlas" class="btn btn-sm btn-secondary">提交到 Atlas</button>
         </div>
@@ -179,7 +214,79 @@
         <p class="help">相对原模型实体的密度，原来的实体是 1。调低会膨胀、粘连；调高会侵蚀、碎裂。</p>
       </div>
       <div class="field">
-        <div class="field-head"><label for="smooth">平滑次数</label><output id="smooth-out" class="mono"></output></div>
+        <span class="field-label" id="method-label">表面怎么来</span>
+        <div class="segmented block" role="radiogroup" aria-labelledby="method-label" id="method-seg">
+          <button type="button" role="radio" data-value="threshold" aria-checked="true">取阈值</button>
+          <button type="button" role="radio" data-value="advect" aria-checked="false">量子场推动表面</button>
+        </div>
+        <p class="help" id="method-help"></p>
+      </div>
+
+      <div id="advect-params" class="group" hidden>
+        <div class="field">
+          <div class="field-head"><label for="amount">推移量（量子网格的格）</label><output id="amount-out" class="mono"></output></div>
+          <input type="range" class="slider" id="amount" min="0" max="8" step="0.25" value="2">
+        </div>
+        <div class="field">
+          <label for="field-select">推动表面的场</label>
+          <div class="select-wrap">
+            <select id="field-select" class="select select-sm">
+              <option value="threshold">朝量子结果靠拢（稳定，量越大越像直接取阈值）</option>
+              <option value="difference">放大差异（不稳定，量大了会碎裂）</option>
+              <option value="gradient">沿密度梯度（矢量速度场，整体向内收）</option>
+            </select>
+            <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg>
+          </div>
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="refine-select">几何细化</label>
+        <div class="select-wrap">
+          <select id="refine-select" class="select select-sm">
+            <option value="1">×1（和量子网格一样细）</option>
+            <option value="2">×2</option>
+            <option value="4">×4</option>
+            <option value="8">×8</option>
+          </select>
+          <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg>
+        </div>
+        <p class="help" id="refine-help"></p>
+      </div>
+
+      <h3 class="subhead">体素运算</h3>
+      <div class="field-row">
+        <div class="field">
+          <label for="vfilter-select">体素平滑</label>
+          <div class="select-wrap">
+            <select id="vfilter-select" class="select select-sm">
+              <option value="none">不用</option>
+              <option value="gaussian">高斯</option>
+              <option value="mean">均值</option>
+              <option value="median">中值</option>
+              <option value="curvature">拉普拉斯流（近似曲率流）</option>
+            </select>
+            <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg>
+          </div>
+        </div>
+        <div class="field">
+          <div class="field-head"><label for="vwidth">宽度（细格）</label><output id="vwidth-out" class="mono"></output></div>
+          <input type="range" class="slider" id="vwidth" min="0.5" max="4" step="0.25" value="1">
+        </div>
+      </div>
+      <div class="field">
+        <div class="field-head"><label for="grow">加厚 / 收缩（细格）</label><output id="grow-out" class="mono"></output></div>
+        <input type="range" class="slider" id="grow" min="-4" max="4" step="0.25" value="0">
+      </div>
+      <div class="field">
+        <div class="field-head"><label for="close">闭合缝隙（细格）</label><output id="close-out" class="mono"></output></div>
+        <input type="range" class="slider" id="close" min="0" max="4" step="0.5" value="0">
+        <p class="help">这几项都在体素上做，再取表面，相当于 Houdini 的 VDB Smooth SDF 和 VDB Reshape SDF。</p>
+      </div>
+
+      <h3 class="subhead">网格</h3>
+      <div class="field">
+        <div class="field-head"><label for="smooth">网格平滑次数</label><output id="smooth-out" class="mono"></output></div>
         <input type="range" class="slider" id="smooth" min="0" max="30" step="1" value="5">
       </div>
       <div class="field">

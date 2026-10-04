@@ -7,6 +7,8 @@
   GET  /me                            → 当前账户（用来检查 key）
 认证：Authorization: Bearer <moth_ API key>
 """
+import time
+
 import numpy as np
 import requests
 
@@ -15,6 +17,8 @@ ENGINE = "blur-core-v1"
 
 # API 前面的 Cloudflare 会拒绝部分默认 UA，这里如实标明自己
 USER_AGENT = "quantum-cup-prototype/0.1 (python-requests)"
+
+RETRY_SCALE = 1.0       # 测试里调小，免得真的等
 
 DONE = {"completed", "succeeded", "success"}
 FAILED = {"failed", "cancelled", "canceled"}
@@ -33,6 +37,15 @@ class AtlasError(RuntimeError):
         self.status = status          # HTTP 状态码；不是 HTTP 错误时为 None
 
 
+class PayloadTooLarge(AtlasError):
+    """任务的数据超过了 Atlas 单个任务约 2 MB 的上限（错误码 TMPRL1103）。"""
+
+
+def is_payload_error(detail):
+    text = str(detail or "").lower()
+    return "tmprl1103" in text or ("payload" in text and "size" in text)
+
+
 class Atlas:
     def __init__(self, key, base=None):
         key = (key or "").strip()
@@ -46,11 +59,17 @@ class Atlas:
         }
 
     def _request(self, method, path, body=None, timeout=120):
-        try:
-            r = requests.request(method, self.base + path, json=body,
-                                 headers=self._headers, timeout=timeout)
-        except requests.RequestException as e:
-            raise AtlasError(f"连不上 Atlas（{type(e).__name__}）。检查网络后重试。") from e
+        for attempt in range(6):
+            try:
+                r = requests.request(method, self.base + path, json=body,
+                                     headers=self._headers, timeout=timeout)
+            except requests.RequestException as e:
+                raise AtlasError(f"连不上 Atlas（{type(e).__name__}）。检查网络后重试。") from e
+            if r.status_code != 429 or attempt == 5:
+                break
+            # 分块时会连续提交很多任务，被限流就按服务端要求（或逐次加倍）等一会儿
+            wait = r.headers.get("Retry-After", "")
+            time.sleep(min(float(wait) if wait.isdigit() else 2.0 * 2 ** attempt, 60.0) * RETRY_SCALE)
         if r.status_code >= 400:
             raise AtlasError(_describe_error(r), status=r.status_code)
         try:

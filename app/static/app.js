@@ -38,6 +38,24 @@ const json = (data, method = 'POST') => ({
 const getJSON = async (path) => (await request(path)).json();
 const postJSON = async (path, data) => (await request(path, json(data))).json();
 
+// 服务端只发有东西的那个盒子，每个数一个字节；这里铺回 n³ 的数组
+async function getGrid(path) {
+  const { buffer, meta } = await getBinary(`${path}?compact=1`);
+  const n = meta.n, n2 = n * n;
+  const data = new Float32Array(n * n2);
+  const bytes = new Uint8Array(buffer);
+  const [[x0, x1], [y0, y1], [z0, z1]] = meta.box;
+  const depth = z1 - z0;
+  let i = 0;
+  for (let x = x0; x < x1; x++) {
+    for (let y = y0; y < y1; y++) {
+      const row = x * n2 + y * n + z0;
+      for (let z = 0; z < depth; z++) data[row + z] = bytes[i++] / 255;
+    }
+  }
+  return { data, meta };
+}
+
 async function getBinary(path, options) {
   const res = await request(path, options);
   return { meta: JSON.parse(res.headers.get('X-Meta') || '{}'), buffer: await res.arrayBuffer() };
@@ -107,14 +125,28 @@ class Viewer {
   }
 
   resetView() {
+    this.lookAt(new THREE.Vector3(0, 0, 0.47), 0.95);    // 让单位立方体的外接球刚好放得下
+  }
+
+  lookAt(target, radius) {
     const v = THREE.MathUtils.degToRad(this.camera.fov) / 2;
     const h = Math.atan(Math.tan(v) * this.camera.aspect);
-    const distance = 0.95 / Math.sin(Math.min(v, h));    // 让单位立方体的外接球刚好放得下
+    const distance = radius / Math.sin(Math.min(v, h));
     const direction = new THREE.Vector3(0.62, -0.72, 0.42).normalize();
-    this.controls.target.set(0, 0, 0.47);
-    this.camera.position.copy(this.controls.target).addScaledVector(direction, distance);
+    this.controls.target.copy(target);
+    this.camera.position.copy(target).addScaledVector(direction, distance);
     this.controls.update();
     this.dirty = true;
+  }
+
+  // 把相机对准某一层的内容：瘦高的模型在整个网格里只占一小条，按网格取景会很小
+  focus(name) {
+    const layer = this.layers[name];
+    if (!layer) { this.resetView(); return; }
+    this.scene.updateMatrixWorld(true);
+    const sphere = new THREE.Box3().setFromObject(layer).getBoundingSphere(new THREE.Sphere());
+    if (!(sphere.radius > 0)) { this.resetView(); return; }
+    this.lookAt(sphere.center, sphere.radius * 1.15);
   }
 
   applyTheme() {
@@ -235,8 +267,8 @@ const VIEWS = ['model', 'voxels', 'processed', 'result'];
 const MODE_LABEL = { gaussian: '高斯替身', emulator: '本地模拟', atlas: 'Atlas' };
 const MODE_HELP = {
   gaussian: '普通的高斯模糊，只用来检查流程是否走得通，和量子效果无关。',
-  emulator: '在本机近似模拟 Quantum Blur Core，拖动参数会实时更新。最终效果以 Atlas 的结果为准。',
-  atlas: '把体素网格提交给 Atlas 的 blur-core-v1。相同参数和实验名的结果会缓存，不会重复提交。',
+  emulator: '在本机近似模拟 Quantum Blur Core，分块方式和 Atlas 一样，拖动参数会实时更新。最终效果以 Atlas 的结果为准。',
+  atlas: '把体素网格提交给 Atlas 的 blur-core-v1，大网格会自动分块。相同参数和实验名的结果会缓存，不会重复提交。',
 };
 const ATLAS_STATE = {
   submitting: '正在提交', queued: '排队中', pending: '排队中', running: '运行中', processing: '运行中',
@@ -255,6 +287,8 @@ const state = {
   view: 'model',
   slicePref: 'processed',
   adopt: false,         // 服务端有新的处理结果等着取（Atlas 任务完成、或刷新页面后恢复）
+  partial: false,       // 「处理后」里现在是 Atlas 算到一半的样子
+  frameNext: false,     // 下一次体素化完成后把相机对准模型
   atlasJob: null,
   atlasStatus: null,    // [dot, text]
 };
@@ -300,11 +334,18 @@ const level = () => Number($('level').value);
 const voxelParams = () => ({
   n: Number(segValue('n-seg')),
   pad: Number($('pad-input').value),
-  fill: $('fill-input').checked,
+  fill: $('fill-select').value,
+  values: $('values-select').value,
 });
+
+const VALUES_HELP = {
+  coverage: '先把模型变成距离场，再算每个格子被占的比例。0.5 的等值面就是模型真实的表面。',
+  binary: '最初的做法。表面碰到的格子全算实心，模型会比原来胖半格多；以前用这种方式算过的 Atlas 结果可以直接读缓存。',
+};
 
 const processParams = () => ({
   mode: segValue('mode-seg'),
+  tiling: segValue('tiling-seg'),
   run: $('run-input').value,
   sigma: Number($('sigma').value),
   strength: Number($('strength').value),
@@ -319,7 +360,29 @@ const meshParams = () => ({
   smooth: Number($('smooth').value),
   keep: segValue('keep-seg'),
   height: Number($('height-input').value) || 90,
+  method: segValue('method-seg'),
+  refine: Number($('refine-select').value),
+  amount: Number($('amount').value),
+  field: $('field-select').value,
+  vfilter: $('vfilter-select').value,
+  vwidth: Number($('vwidth').value),
+  grow: Number($('grow').value),
+  close: Number($('close').value),
 });
+
+const METHOD_HELP = {
+  threshold: '在量子结果上直接取等值面。细节受量子网格分辨率的限制。',
+  advect: '先把原模型变成细的距离场，再让量子结果推着它的表面走（Houdini 里 VDB Advect 的做法）。'
+    + '量子计算用很粗的网格就行，细节留在细网格里。',
+};
+
+// 细化后的网格最多 256³：量子网格越大，能选的倍数越少
+function syncRefine() {
+  const select = $('refine-select');
+  const n = state.grid ? state.grid.n : 32;
+  for (const option of select.options) option.disabled = n * Number(option.value) > 256;
+  if (select.selectedOptions[0].disabled) select.value = String(Math.max(1, 256 / n));
+}
 
 // ── 提示 ────────────────────────────────────────────────────────────────
 
@@ -411,11 +474,11 @@ async function idle() {
 async function doVoxelize() {
   if (!state.model) return;
   const info = await postJSON('/api/voxelize', voxelParams());
-  const { buffer } = await getBinary('/api/grid/input');
+  const { data } = await getGrid('/api/grid/input');
   state.grid = info;
-  state.gridData = new Float32Array(buffer);
+  state.gridData = data;
   state.proc = state.procData = state.report = state.meshError = null;
-  state.adopt = false;                                 // 服务端换了网格，旧的处理结果已经作废
+  state.adopt = state.partial = false;                 // 服务端换了网格，旧的处理结果已经作废
   $('pad-input').value = info.pad;
   viewer.setGrid(info.n);
   viewer.setTransform('model', info.transform);
@@ -423,6 +486,11 @@ async function doVoxelize() {
   viewer.clear('processed');
   viewer.clear('result');
   syncSliceRange();
+  syncRefine();                                        // 网格变大了，细化倍数可能要跟着降
+  if (state.frameNext) {                               // 新模型第一次体素化完，把相机对准它
+    state.frameNext = false;
+    viewer.focus('voxels');
+  }
 }
 
 async function doProcess() {
@@ -440,9 +508,10 @@ async function doProcess() {
 }
 
 async function adoptProcessed() {
-  const { buffer, meta } = await getBinary('/api/grid/processed');
+  const { data, meta } = await getGrid('/api/grid/processed');
   state.proc = meta.proc;
-  state.procData = new Float32Array(buffer);
+  state.partial = false;
+  state.procData = data;
   // 服务端会把实验名整理成能当文件名的样子，写回来保持一致
   if (document.activeElement !== $('run-input')) $('run-input').value = meta.proc.run;
   paintProcessed();
@@ -481,17 +550,32 @@ async function loadModel(send) {
     const { buffer } = await getBinary('/api/model/mesh');
     // 换了模型，服务端已经清掉后面几步的结果，这里同步清掉
     state.grid = state.gridData = state.proc = state.procData = state.report = state.meshError = null;
-    state.adopt = false;
+    state.adopt = state.partial = false;
     for (const name of ['voxels', 'processed', 'result']) viewer.clear(name);
     viewer.setMesh('model', buffer);
     viewer.layers.model.visible = false;               // 等体素化给出位置再显示
     state.view = 'voxels';
+    state.frameNext = true;
     $('export-result').hidden = true;
+    refreshModels();
     invalidate(STAGE.voxel);
   } catch (e) {
     $('spinner').hidden = true;
     toast(e.message);
   }
+}
+
+// input/ 里已有的模型：重启或换机器之后不用再上传
+async function refreshModels() {
+  let models = [];
+  try { models = await getJSON('/api/models'); } catch (e) { /* 列不出来就不显示这一栏 */ }
+  const select = $('model-select');
+  const current = state.model ? state.model.name : null;
+  select.replaceChildren(new Option('选择一个打开…', ''),
+    ...models.map((m) => new Option(m.mb >= 0.1 ? `${m.name}（${m.mb} MB）` : m.name, m.name)));
+  const match = models.find((m) => m.name.replace(/\.[^.]+$/, '') === current);
+  select.value = match ? match.name : '';
+  $('model-list-field').hidden = models.length === 0;
 }
 
 function uploadFile(file) {
@@ -521,25 +605,61 @@ async function submitAtlas() {
     }
     state.atlasJob = r.job_id;
     render();
+    let seen = -1, lastPartial = 0;
     while (state.atlasJob) {
       await sleep(1000);
       const job = await getJSON(`/api/process/${state.atlasJob}`);
       if (job.status === 'running') {
         const label = ATLAS_STATE[job.atlas_status] || job.atlas_status;
-        state.atlasStatus = ['info', `${label} · 已等待 ${Math.round(job.elapsed)} 秒`];
+        const tiles = job.tiles_total > 1 ? `分块 ${job.tiles_done} / ${job.tiles_total} · ` : `${label} · `;
+        state.atlasStatus = ['info', `${tiles}已等待 ${formatWait(job.elapsed)}${job.note ? `。${job.note}` : ''}`];
+        const gap = state.grid && state.grid.n >= 256 ? 5000 : 2500;
+        if (job.tiles_total > 1 && job.tiles_done > 0 && job.version !== seen
+            && performance.now() - lastPartial > gap) {
+          seen = job.version;
+          lastPartial = performance.now();
+          await showPartial(state.atlasJob);
+        }
         render();
         continue;
       }
       state.atlasJob = null;
+      if (job.status !== 'done' || job.stale) dropPartial();
       if (job.status === 'failed') state.atlasStatus = ['err', job.error];
       else if (job.stale) state.atlasStatus = ['warn', '结果已返回并缓存。等待期间体素网格改过，所以没有套用。'];
       else atlasFinished(false, job.meta);
     }
   } catch (e) {
     state.atlasJob = null;
+    dropPartial();
     state.atlasStatus = ['err', e.message];
   }
   render();
+}
+
+const formatWait = (seconds) => (seconds < 90 ? `${Math.round(seconds)} 秒` : `${(seconds / 60).toFixed(1)} 分钟`);
+
+// 分块一块一块算完，预览跟着一块一块变：没算完的块先显示原样
+async function showPartial(jobId) {
+  try {
+    const { data, meta } = await getGrid(`/api/process/${jobId}/preview`);
+    if (!state.grid || meta.n !== state.grid.n) return;
+    state.procData = data;
+    state.proc = state.report = null;
+    state.partial = true;
+    viewer.clear('result');
+    state.view = 'processed';
+    paintProcessed();
+  } catch (e) { /* 正好算完了，取不到也没关系 */ }
+}
+
+function dropPartial() {
+  if (!state.partial) return;
+  state.partial = false;
+  if (!state.proc) {
+    state.procData = null;
+    viewer.clear('processed');
+  }
 }
 
 // 现在显示的是不是「当前这组参数」的 Atlas 结果
@@ -547,13 +667,20 @@ function atlasCurrent() {
   const p = state.proc;
   if (!p || p.mode !== 'atlas') return false;
   const c = processParams();
-  const shown = [p.run, p.params.strength, p.params.reach, p.params.style, p.params.axes, p.params.shots];
-  const wanted = [c.run.trim(), c.strength, c.reach, c.style, c.axes.length === 3 ? null : c.axes, c.shots];
+  const tiled = state.grid && state.grid.tiles.cube.total > 1;
+  const shown = [p.run, p.params.strength, p.params.reach, p.params.style, p.params.axes, p.params.shots,
+    tiled && p.tiles ? p.tiles.mode : null];
+  const wanted = [c.run.trim(), c.strength, c.reach, c.style, c.axes.length === 3 ? null : c.axes, c.shots,
+    tiled ? c.tiling : null];
   return JSON.stringify(shown) === JSON.stringify(wanted);
 }
 
 function atlasFinished(cached, meta) {
-  state.atlasStatus = ['ok', cached ? '已读取缓存的结果，没有重新提交。' : `完成，用时 ${meta.seconds} 秒。`];
+  state.partial = false;
+  const jobs = meta.tiles && meta.tiles.jobs > 1 ? `${meta.tiles.jobs} 个分块，` : '';
+  const reused = meta.tiles && meta.tiles.cached ? `其中 ${meta.tiles.cached} 个读的缓存，` : '';
+  state.atlasStatus = ['ok', cached ? '已读取缓存的结果，没有重新提交。'
+    : `完成：${jobs}${reused}用时 ${formatWait(meta.seconds)}。`];
   state.adopt = true;
   state.view = 'result';
   invalidate(STAGE.process);
@@ -691,7 +818,7 @@ function currentView() {
 function footText(view) {
   const { model: m, grid: g, report: r } = state;
   if (view === 'model') return `${m.name} · ${fmt(m.faces)} 个面 · ${dims(m.extents)}`;
-  if (view === 'voxels') return `${g.n}³ 网格 · ${fmt(g.solid)} 个实体格子 · ${g.qubits} 个量子比特`;
+  if (view === 'voxels') return `${g.n}³ 网格 · ${fmt(g.solid)} 个实体格子`;
   if (view === 'processed') return `阈值 ${level().toFixed(2)} · ${fmt(state.procCount)} 个格子在阈值以上`;
   if (view === 'result') return `${fmt(r.faces)} 个面 · ${r.parts} 块 · ${dims(r.extents)} mm`;
   return '';
@@ -707,21 +834,39 @@ function render() {
     ['尺寸', dims(m.extents)],
     ['封闭', yesNo(m.watertight), m.watertight ? 'ok' : 'warn'],
   ] : []);
+  $('values-help').textContent = VALUES_HELP[$('values-select').value];
+  $('lying-hint').hidden = !(m && m.lying);
+  if (m && m.lying) {
+    $('lying-hint').textContent = `这个模型最长的方向是 ${m.lying}，现在是横着的。如果它应该竖着，把上面改成 +${m.lying} 或 −${m.lying}。`;
+  }
 
+  const tiles = g ? g.tiles[segValue('tiling-seg')] : null;
+  const tileText = tiles ? tiles.shape.join('×') : '';
   renderStats('grid-stats', g ? [
     ['实体格子', `${fmt(g.solid)} / ${fmt(g.total)}`],
-    ['量子比特', String(g.qubits)],
     ['每格边长', `${g.voxel_size} 模型单位`],
+    ['Atlas 任务数', tiles.total > 1 ? `${tiles.jobs}（分块 ${tileText}）` : '1（不用分块）'],
   ] : []);
+  $('tiling-field').hidden = mode === 'gaussian' || !tiles || tiles.total === 1;
+  if (tiles) {
+    $('tiling-help').textContent = segValue('tiling-seg') === 'cube'
+      ? `切成 ${tileText} 的块，三个方向都参与模糊，最接近整块计算。有东西的块共 ${tiles.jobs} 个，每个是一次 Atlas 任务。`
+      : `每 ${tiles.shape[2]} 层一块（${tileText}），从下往上一块一块算，共 ${tiles.jobs} 个 Atlas 任务。水平方向完整，竖直方向只在这几层之间模糊。`;
+  }
 
   $('gaussian-params').hidden = mode !== 'gaussian';
   $('quantum-params').hidden = mode === 'gaussian';
   $('atlas-actions').hidden = mode !== 'atlas';
   $('mode-help').textContent = MODE_HELP[mode];
-  $('atlas-size-note').hidden = !(g && g.n === 64);
+  $('atlas-jobs-note').hidden = !(tiles && tiles.total > 1);
+  if (tiles && tiles.total > 1) {
+    $('atlas-jobs-note').textContent = `会提交 ${tiles.jobs} 个任务，大约 ${formatWait(tiles.jobs * 4 + 10)}。`
+      + '已经算过的分块读缓存，中途失败再点一次只会补算剩下的。';
+  }
   setStatusLine('atlas-status', state.atlasStatus);
-  renderStats('process-stats', p ? [
+  renderStats('process-stats', state.partial ? [['当前结果', 'Atlas 计算中，逐块更新']] : p ? [
     ['当前结果', MODE_LABEL[p.mode] + (p.cached ? '（缓存）' : '')],
+    ...(p.tiles && p.tiles.jobs > 1 ? [['分块', `${p.tiles.jobs} 个 ${p.tiles.shape.join('×')}`]] : []),
     ['原始数值范围', `${p.min} – ${p.max}`],
     ...(p.seconds != null ? [['用时', `${p.seconds} 秒`]] : []),
     ...(p.job_id ? [['任务号', p.job_id]] : []),
@@ -737,10 +882,18 @@ function render() {
     ['碎块', r.total_parts > r.parts ? `保留 ${r.parts}，共 ${fmt(r.total_parts)}` : String(r.parts),
       r.parts === 1 ? 'ok' : 'warn'],
     ['面数', fmt(r.faces)],
-    ['一格的边长', `${r.voxel_mm} mm`],
+    ['量子网格一格', `${r.voxel_mm} mm`],
+    ...(r.refine > 1 ? [['细网格一格', `${r.fine_voxel_mm} mm`]] : []),
   ] : []);
+  const method = segValue('method-seg');
+  $('method-help').textContent = METHOD_HELP[method];
+  $('advect-params').hidden = method !== 'advect';
+  syncRefine();
+  const fine = g ? g.n * Number($('refine-select').value) : 0;
+  $('refine-help').textContent = g
+    ? `表面在 ${fine}³ 的网格上取。${fine >= 256 ? '这个大小每次调整要等几秒到十几秒。' : ''}` : '';
   const notes = [];
-  if (state.meshError) notes.push(`${state.meshError}。`);
+  if (state.meshError) notes.push(state.meshError.replace(/。$/, '') + '。');
   if (r && !r.watertight) notes.push('模型不封闭，切片前先用 Meshmixer 的 Inspector 或 Blender 的 3D Print Toolbox 修补。');
   if (r && r.parts > 1) notes.push('有多块互不相连的碎块，悬空的小块打印时会掉下来。');
   $('report-note').hidden = notes.length === 0;
@@ -796,7 +949,12 @@ function bind() {
   const voxelChanged = () => { state.view = 'voxels'; invalidate(STAGE.voxel, 120); };
   bindSeg('n-seg', voxelChanged);
   $('pad-input').addEventListener('change', voxelChanged);
-  $('fill-input').addEventListener('change', voxelChanged);
+  $('fill-select').addEventListener('change', voxelChanged);
+  $('values-select').addEventListener('change', voxelChanged);
+  $('model-select').addEventListener('change', (e) => {
+    const name = e.target.value;
+    if (name) loadModel(() => postJSON('/api/model/open', { name, up: $('up-select').value }));
+  });
 
   const processChanged = () => {
     if (segValue('mode-seg') === 'atlas') {
@@ -808,6 +966,7 @@ function bind() {
     invalidate(STAGE.process, 120);
   };
   bindSeg('mode-seg', processChanged);
+  bindSeg('tiling-seg', processChanged);
   for (const id of ['sigma', 'strength', 'reach']) bindSlider(id, 2, processChanged);
   for (const id of ['style-select', 'shots-input', 'run-input', 'axis-0', 'axis-1', 'axis-2']) {
     $(id).addEventListener('change', processChanged);
@@ -820,10 +979,22 @@ function bind() {
     render();
     invalidate(STAGE.mesh, 120);
   });
-  const meshChanged = () => { state.view = 'result'; invalidate(STAGE.mesh, 120); };
+  const meshChanged = () => { state.view = 'result'; render(); invalidate(STAGE.mesh, 150); };
   bindSlider('smooth', 0, meshChanged);
   bindSeg('keep-seg', meshChanged);
   $('height-input').addEventListener('change', meshChanged);
+  bindSeg('method-seg', (value) => {
+    // 推动表面的意义就在于细网格：第一次切过来时自动选一个细一些的
+    const n = state.grid ? state.grid.n : 32;
+    if (value === 'advect' && $('refine-select').value === '1') {
+      $('refine-select').value = String([4, 2, 1].find((k) => n * k <= 256));
+    }
+    meshChanged();
+  });
+  for (const id of ['amount', 'vwidth', 'grow', 'close']) bindSlider(id, 2, meshChanged);
+  for (const id of ['field-select', 'refine-select', 'vfilter-select']) {
+    $(id).addEventListener('change', meshChanged);
+  }
 
   $('export').addEventListener('click', async () => {
     await idle();
@@ -839,7 +1010,7 @@ function bind() {
   });
 
   bindSeg('view-seg', (value) => { state.view = value; render(); });
-  $('reset-view').addEventListener('click', () => viewer.resetView());
+  $('reset-view').addEventListener('click', () => viewer.focus(currentView()));
 
   bindSeg('slice-source-seg', (value) => { state.slicePref = value; drawSlice(); });
   bindSeg('slice-axis-seg', drawSlice);
@@ -888,17 +1059,20 @@ async function restore(saved) {
   }
   setSeg('n-seg', saved.grid.n);
   $('pad-input').value = saved.grid.pad;
-  $('fill-input').checked = saved.grid.fill;
+  $('fill-select').value = saved.grid.fill;
+  $('values-select').value = saved.grid.values;
   state.grid = saved.grid;
-  state.gridData = new Float32Array((await getBinary('/api/grid/input')).buffer);
+  state.gridData = (await getGrid('/api/grid/input')).data;
   viewer.setGrid(saved.grid.n);
   viewer.setTransform('model', saved.grid.transform);
   viewer.setVoxels('voxels', state.gridData, saved.grid.n, 0.5, false);
+  viewer.focus('voxels');
   syncSliceRange();
 
   const p = saved.processed;
   if (p) {
     setSeg('mode-seg', p.mode);
+    if (p.tiles && p.tiles.mode) setSeg('tiling-seg', p.tiles.mode);
     $('run-input').value = p.run;
     if (p.mode === 'gaussian') {
       $('sigma').value = p.params.sigma;
@@ -925,6 +1099,7 @@ async function init() {
   try {
     const saved = await getJSON('/api/state');
     state.key = saved.key;
+    refreshModels();
     if (saved.model) await restore(saved);
   } catch (e) {
     toast(e.message);

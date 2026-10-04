@@ -13,6 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "app"))
 import atlas      # noqa: E402
 import emulator   # noqa: E402
 import pipeline   # noqa: E402
+import tiling     # noqa: E402
 
 
 class VoxelizeTest(unittest.TestCase):
@@ -57,6 +58,139 @@ class VoxelizeTest(unittest.TestCase):
         grid, _, _ = pipeline.mesh_to_grid(back, n=32)
         self.assertEqual(grid[16, 16, 2], 1)       # 杯底在下
         self.assertEqual(grid[16, 16, 20], 0)      # 杯口敞开
+
+
+class FillTest(unittest.TestCase):
+    """底部敞开的模型（扫描出来的雕像常见）要能填实，杯子不能被填满。"""
+
+    @classmethod
+    def setUpClass(cls):
+        import trimesh
+        dome = trimesh.creation.icosphere(subdivisions=4, radius=30.0)
+        keep = dome.triangles_center[:, 2] > -18            # 切掉底部，留一个敞口
+        dome.update_faces(keep)
+        dome.remove_unreferenced_vertices()
+        cls.dome = dome
+
+    def test_open_bottom_shell_is_only_filled_when_capped(self):
+        self.assertFalse(self.dome.is_watertight)
+        shell = pipeline.mesh_to_grid(self.dome, n=32, fill="none")[0].sum()
+        holes = pipeline.mesh_to_grid(self.dome, n=32, fill="holes")[0].sum()
+        capped, _, _ = pipeline.mesh_to_grid(self.dome, n=32, fill="capped")
+        self.assertLess(holes, shell * 1.05, "敞口的壳用普通填充应该填不进去")
+        self.assertGreater(capped.sum(), shell * 2, "封底之后应该是实心的")
+        self.assertEqual(capped[16, 16, 14], 1, "中心应该被填实")
+        self.assertEqual(capped[:, :, :2].sum(), 0, "垫的板不应该留在留白里")
+
+    def test_capped_fill_keeps_a_cup_hollow(self):
+        cup = pipeline.make_test_cup()
+        holes, _, _ = pipeline.mesh_to_grid(cup, n=32, fill="holes")
+        capped, _, _ = pipeline.mesh_to_grid(cup, n=32, fill="capped")
+        np.testing.assert_array_equal(holes, capped)
+
+    def test_fill_accepts_the_old_boolean_and_rejects_nonsense(self):
+        cup = pipeline.make_test_cup()
+        np.testing.assert_array_equal(pipeline.mesh_to_grid(cup, n=16, fill=True)[0],
+                                      pipeline.mesh_to_grid(cup, n=16, fill="holes")[0])
+        with self.assertRaises(ValueError):
+            pipeline.mesh_to_grid(cup, n=16, fill="solid")
+
+    def test_placement_matches_how_the_binary_voxeliser_places_the_model(self):
+        cup = pipeline.make_test_cup()
+        _, scale, placed = pipeline.mesh_to_grid(cup, n=32, pad=2)
+        scale2, t = pipeline.placement(cup, n=32, pad=2)
+        self.assertAlmostEqual(scale, scale2)
+        np.testing.assert_allclose(t[:3, 3], placed[:3, 3], atol=0.6)
+        low = cup.bounds[0] * scale2 + t[:3, 3]
+        high = cup.bounds[1] * scale2 + t[:3, 3]
+        self.assertAlmostEqual(low[2], 2.0)
+        self.assertAlmostEqual(high[2], 29.0)
+        self.assertAlmostEqual(low[0] + high[0], 31.0)
+        with self.assertRaises(ValueError):
+            pipeline.placement(cup, n=16, pad=7)
+
+    def test_lying_models_are_flagged(self):
+        cup = pipeline.make_test_cup()
+        self.assertIsNone(pipeline.mesh_stats(cup)["lying"])
+        long_y = cup.copy()
+        long_y.apply_scale([1, 3, 1])
+        self.assertEqual(pipeline.mesh_stats(long_y)["lying"], "Y")
+
+
+class TilingTest(unittest.TestCase):
+    def test_tile_shapes(self):
+        self.assertEqual(tiling.tile_shape(32, "cube", 15), (32, 32, 32))
+        self.assertEqual(tiling.tile_shape(32, "layers", 16), (32, 32, 32))
+        self.assertEqual(tiling.tile_shape(64, "cube", 15), (32, 32, 32))
+        self.assertEqual(tiling.tile_shape(64, "cube", 16), (32, 32, 64))
+        self.assertEqual(tiling.tile_shape(64, "layers", 15), (64, 64, 8))
+        self.assertEqual(tiling.tile_shape(128, "layers", 16), (128, 128, 4))
+        self.assertEqual(tiling.tile_shape(256, "layers", 16), (256, 256, 1))
+        for n in (64, 128, 256):
+            for mode in tiling.MODES:
+                for bits in (12, 15, 16):
+                    self.assertLessEqual(int(np.prod(tiling.tile_shape(n, mode, bits))), 2 ** bits)
+        with self.assertRaises(ValueError):
+            tiling.tile_shape(64, "spiral", 15)
+
+    def test_tiles_cover_the_grid_exactly_once(self):
+        grid = np.arange(16 ** 3, dtype=np.float32).reshape(16, 16, 16)
+        seen = np.zeros_like(grid)
+        for tile in tiling.split(grid, (8, 4, 16)):
+            seen[tile.slices] += 1
+            back = np.flip(tile.data, tile.flips) if tile.flips else tile.data
+            np.testing.assert_array_equal(back, grid[tile.slices])
+        self.assertTrue((seen == 1).all())
+
+    def test_place_puts_every_tile_back_on_the_same_scale(self):
+        rng = np.random.default_rng(1)
+        grid = (rng.random((8, 8, 8)) > 0.5).astype(np.float32)
+        out = np.zeros(grid.shape)
+        for tile in tiling.split(grid, (4, 4, 4)):
+            if tile.data.any():
+                tiling.place(out, tile, tile.data / 7.0)      # 引擎把每块按自己的方式缩放过
+        np.testing.assert_allclose(out, grid, atol=1e-6)
+
+    def test_tiled_blur_equals_the_whole_blur_without_its_top_qubits(self):
+        """分块 = 只转每个轴最低的几个量子比特。用 xy 门是为了同时验证奇数块的翻转。"""
+        rng = np.random.default_rng(2)
+        grid = (rng.random((16, 16, 16)) > 0.6).astype(np.float32)
+        params = dict(strength=0.4, reach=0.2, style="xy")
+        tiled = emulator.quantum_blur_tiled(grid, (8, 8, 8), **params)
+
+        original = emulator._qubit_weights
+        emulator._qubit_weights = lambda bits, reach: np.where(np.arange(bits) < 3, original(bits, reach), 0.0)
+        try:
+            whole = emulator.quantum_blur(grid, **params)
+        finally:
+            emulator._qubit_weights = original
+        np.testing.assert_allclose(tiled, whole, atol=1e-5)
+        self.assertFalse(np.allclose(tiled, emulator.quantum_blur(grid, **params), atol=1e-3),
+                         "最高位量子比特的旋转应该带来差别")
+
+    def test_tiled_blur_of_a_grid_that_fits_is_the_plain_blur(self):
+        grid = np.random.default_rng(3).random((8, 8, 8)).astype(np.float32)
+        np.testing.assert_array_equal(emulator.quantum_blur_tiled(grid, (8, 8, 8), strength=0.3),
+                                      emulator.quantum_blur(grid, strength=0.3))
+
+    def test_summary_skips_empty_tiles_and_counts_identical_ones_once(self):
+        grid = np.zeros((16, 16, 16), dtype=np.float32)
+        grid[1, 1, 1] = grid[9, 9, 9] = 1
+        self.assertEqual(tiling.summary(grid, (8, 8, 8)), {"shape": [8, 8, 8], "jobs": 2, "total": 8})
+        grid[:] = 0
+        grid[1, 1, 1] = grid[14, 1, 1] = 1            # 第二块翻转之后和第一块一模一样
+        self.assertEqual(tiling.summary(grid, (8, 8, 8))["jobs"], 1)
+
+    def test_uniform_tiles_are_untouched_by_rx_only(self):
+        full = next(tiling.split(np.ones((8, 8, 8), dtype=np.float32), (8, 8, 8)))
+        mixed = next(tiling.split(np.eye(8, dtype=np.float32)[:, :, None] * np.ones(8, dtype=np.float32), (8, 8, 8)))
+        self.assertTrue(tiling.is_untouched(full, {"style": "x", "shots": None}))
+        self.assertTrue(tiling.is_untouched(full, {"style": "xx", "shots": None}))
+        self.assertFalse(tiling.is_untouched(full, {"style": "xy", "shots": None}))
+        self.assertFalse(tiling.is_untouched(full, {"style": "x", "shots": 1000}))
+        self.assertFalse(tiling.is_untouched(mixed, {"style": "x", "shots": None}))
+        np.testing.assert_allclose(emulator.quantum_blur(full.data, strength=0.7, reach=0.4), full.data, atol=1e-5)
+        self.assertFalse(np.allclose(emulator.quantum_blur(full.data, strength=0.7, style="y"), full.data, atol=1e-3))
 
 
 class EmulatorTest(unittest.TestCase):
