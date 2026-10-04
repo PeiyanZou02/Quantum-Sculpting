@@ -82,6 +82,19 @@ class FillTest(unittest.TestCase):
         self.assertEqual(capped[16, 16, 14], 1, "中心应该被填实")
         self.assertEqual(capped[:, :, :2].sum(), 0, "垫的板不应该留在留白里")
 
+    def test_capped_fill_copes_with_a_ragged_opening(self):
+        """开口不在一个平面上时，垫一块板封不住；这时改用「四周和头顶都有壳」来判断内部。"""
+        x, y, z = np.meshgrid(np.arange(24), np.arange(24), np.arange(24), indexing="ij")
+        r = np.sqrt((x - 11.5) ** 2 + (y - 11.5) ** 2 + (z - 4) ** 2)
+        rim = 4 + (x > 12) * 3                               # 一半的边缘高出 3 格
+        shell = (np.abs(r - 9) < 0.8) & (z >= rim)
+        solid = pipeline.fill_capped(shell)
+        self.assertEqual(solid[12, 12, 8], 1, "罩子里面应该填实")
+        self.assertGreater(solid.sum(), 1.5 * shell.sum())
+        self.assertEqual(solid[12, 12, 20], 0, "罩子上方是空的")
+        self.assertEqual(solid[1, 12, 8], 0, "罩子外面是空的")
+        self.assertEqual(solid[:, :, :4].sum(), 0, "最低一层以下不该有东西")
+
     def test_capped_fill_keeps_a_cup_hollow(self):
         cup = pipeline.make_test_cup()
         holes, _, _ = pipeline.mesh_to_grid(cup, n=32, fill="holes")

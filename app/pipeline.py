@@ -89,7 +89,21 @@ def fill_capped(shell):
     filled = ndimage.binary_fill_holes(capped)
     # 板只留下正上方确实被填实的部分，也就是模型真正的底面
     filled[:, :, z0] = work[:, :, z0] | (filled[:, :, z0 + 1] & plate)
-    return filled[1:-1, 1:-1, 1:-1]
+    if filled.sum() > 1.3 * work.sum():
+        return filled[1:-1, 1:-1, 1:-1]
+
+    # 没填进去：开口的边缘参差不齐（扫描模型切出来的底常这样），板和壳之间有缝。
+    # 换一种不靠「灌水」的判断：一个格子前后、左右都被壳夹着，头顶上也有壳，就算在里面。
+    # 杯子里面头顶没有壳，所以仍然是空的。
+    def bracketed(axis):
+        before = np.maximum.accumulate(work, axis=axis)
+        after = np.flip(np.maximum.accumulate(np.flip(work, axis), axis=axis), axis)
+        return before & after
+
+    roofed = np.flip(np.maximum.accumulate(np.flip(work, 2), axis=2), 2)
+    inside = bracketed(0) & bracketed(1) & roofed
+    inside[:, :, :z0] = False
+    return (inside | ndimage.binary_fill_holes(work))[1:-1, 1:-1, 1:-1]
 
 
 def mesh_to_grid(mesh, n=32, pad=2, fill="holes"):

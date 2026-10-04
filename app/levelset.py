@@ -187,20 +187,25 @@ def from_mesh(mesh, transform, n, refine=1, fill="holes"):
     hi = np.clip(np.ceil(points.max(axis=0)).astype(int) + margin + 1, 0, size)
     shape = tuple(int(v) for v in hi - lo)
 
-    shell = np.zeros(shape, dtype=bool)
+    touched = np.zeros(shape, dtype=bool)
     cell = np.clip(np.rint(points).astype(int) - lo, 0, np.array(shape) - 1)
-    shell[cell[:, 0], cell[:, 1], cell[:, 2]] = True
+    touched[cell[:, 0], cell[:, 1], cell[:, 2]] = True
+    band = ndimage.distance_transform_edt(~touched) <= BAND + 1
+    centers = np.argwhere(band)
+    distance, nearest = cKDTree(points).query(centers + lo, workers=-1)
+    distance = distance.astype(np.float32)
+
+    # 壳 = 中心离表面不到一格的体素。只用「采样点落到的格子」当壳会漏：表面只擦过一个角的格子
+    # 可能一个点都没落到，填充时外面就从这些小孔灌进去了。表面穿过的格子中心离它最多 0.87 格，
+    # 所以按距离取一定是封闭的。
+    shell = np.zeros(shape, dtype=bool)
+    shell[tuple(centers.T)] = distance <= 1.0
     if fill == "holes":
         inside = ndimage.binary_fill_holes(shell)
     elif fill == "capped":
         inside = pipeline.fill_capped(shell)
     else:
         inside = shell
-
-    band = ndimage.distance_transform_edt(~shell) <= BAND
-    centers = np.argwhere(band)
-    distance, nearest = cKDTree(points).query(centers + lo, workers=-1)
-    distance = distance.astype(np.float32)
 
     sdf = _mask_sdf(inside)
     at = tuple(centers.T)

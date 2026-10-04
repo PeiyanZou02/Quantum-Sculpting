@@ -47,6 +47,21 @@ class LevelSetTest(unittest.TestCase):
         mean, spread = radius_of(binary, self.t)
         self.assertGreater(abs(mean - RADIUS) + spread, 0.4 * self.voxel)
 
+    def test_thin_walled_model_keeps_its_volume_at_every_refinement(self):
+        """杯壁只有一格多厚。表面采样留下的小孔曾经让填充失效，丢掉一半体积。"""
+        cup = pipeline.make_test_cup()
+        scale, t = pipeline.placement(cup, 32, pad=2)
+        exact = cup.volume * scale ** 3
+        for refine in (2, 4, 8):
+            ls = levelset.from_mesh(cup, t, 32, refine)
+            inside = float((ls.sdf < 0).sum()) / refine ** 3
+            self.assertAlmostEqual(inside, exact, delta=0.04 * exact, msg=f"refine {refine}")
+            self.assertAlmostEqual(float(levelset.coverage(ls).sum()), exact, delta=0.03 * exact,
+                                   msg=f"refine {refine}")
+            mesh = levelset.to_mesh(ls)
+            self.assertTrue(mesh.is_watertight)
+            self.assertEqual(len(mesh.split(only_watertight=False)), 1, f"refine {refine}: 杯子应该是完整的一块")
+
     def test_only_the_active_box_is_stored(self):
         ls = levelset.from_mesh(trimesh.creation.icosphere(subdivisions=4, radius=10.0),
                                 np.diag([0.5, 0.5, 0.5, 1.0]) + np.array([[0, 0, 0, 16]] * 3 + [[0] * 4]), 32, 4)

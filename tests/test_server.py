@@ -223,7 +223,7 @@ class ServerTest(unittest.TestCase):
         moved = json.loads(self.post("/api/mesh", {"method": "advect", "refine": 4, "amount": 0.5,
                                                    "level": 0.3}).headers["X-Meta"])
         self.assertEqual(moved["field"], "threshold")
-        gone = self.post("/api/mesh", {"method": "advect", "refine": 4, "amount": 8, "level": 0.9}, expect=400)
+        gone = self.post("/api/mesh", {"method": "advect", "refine": 4, "amount": 0.5, "grow": -8}, expect=400)
         self.assertIn("表面消失了", gone.get_json()["error"])
         self.assertGreater(moved["faces"], plain["faces"])
 
