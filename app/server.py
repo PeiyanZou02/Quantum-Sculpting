@@ -1,4 +1,4 @@
-"""量子杯子的本地应用：一个只监听 127.0.0.1 的 Flask 服务 + static/ 里的界面。
+"""Quantum Sculpting 的本地应用：一个只监听 127.0.0.1 的 Flask 服务 + static/ 里的界面。
 
 状态都在内存里（单用户原型）：模型 → 体素网格 → 处理后的网格。
 每一步改动会让它后面的结果失效，*_id 计数器让界面能丢掉过期的响应。
@@ -45,7 +45,13 @@ MIN_BITS = 12
 MAX_FINE = 256          # 水平集的细网格最大边长（量子网格 × 细化倍数）
 
 # main() 可以改写：key 存放的目录（在 OneDrive 之外）和 Atlas 地址
-HOME = Path(os.environ.get("QCUP_HOME") or Path.home() / ".quantum-cup")
+def _default_home():
+    """~/.quantum-sculpting。项目以前叫 Quantum cup：旧目录还在而新目录没有时，接着用旧的。"""
+    new, old = Path.home() / ".quantum-sculpting", Path.home() / ".quantum-cup"
+    return old if old.exists() and not new.exists() else new
+
+
+HOME = Path(os.environ.get("QUANTUM_SCULPTING_HOME") or _default_home())
 ATLAS_BASE = os.environ.get("ATLAS_API_BASE") or atlas.DEFAULT_BASE
 
 app = Flask(__name__, static_folder=str(STATIC), static_url_path="/static")
@@ -764,10 +770,10 @@ def index():
 
 def main():
     global HOME, ATLAS_BASE, INPUT, GRIDS, OUTPUT
-    p = argparse.ArgumentParser(description="量子杯子")
+    p = argparse.ArgumentParser(description="Quantum Sculpting")
     p.add_argument("--port", type=int, default=8765)
     p.add_argument("--open", action="store_true", help="启动后打开浏览器")
-    p.add_argument("--home", help="存放 API key 的目录（默认 ~/.quantum-cup）")
+    p.add_argument("--home", help="存放 API key 的目录（默认 ~/.quantum-sculpting）")
     p.add_argument("--data", help="input/、grids/、output/ 所在的目录（默认是项目文件夹）")
     p.add_argument("--atlas-base", help="Atlas API 地址（测试时指向本地假服务）")
     args = p.parse_args()
@@ -781,7 +787,7 @@ def main():
     for d in (INPUT, GRIDS, OUTPUT):
         d.mkdir(parents=True, exist_ok=True)
     url = f"http://127.0.0.1:{args.port}"
-    print(f"Quantum cup is running at {url}  (Ctrl+C to stop)", flush=True)
+    print(f"Quantum Sculpting is running at {url}  (Ctrl+C to stop)", flush=True)
     if args.open:
         threading.Timer(1.0, webbrowser.open, args=(url,)).start()
     app.run(host="127.0.0.1", port=args.port, threaded=True, debug=False)

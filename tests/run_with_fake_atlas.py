@@ -16,7 +16,7 @@ from fake_atlas import TEST_KEY, FakeAtlas   # noqa: E402
 
 fake = FakeAtlas(port=8799).start()
 fake.polls_needed = 4                        # 配合 2 秒一次的轮询，任务大约跑 6 秒
-scratch = tempfile.mkdtemp(prefix="quantum-cup-test-")
+scratch = tempfile.mkdtemp(prefix="quantum-sculpting-test-")
 print(f"Fake Atlas at {fake.base} | test key: {TEST_KEY} | scratch: {scratch}", flush=True)
 sys.argv = [sys.argv[0], "--port", "8766", "--atlas-base", fake.base, "--home", scratch, "--data", scratch]
 server.main()

@@ -3,12 +3,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Quantum cup</title>
+  <title>Quantum Sculpting</title>
   <script>
     // 先定主题，避免页面闪一下
     (function () {
       var t = null;
-      try { t = localStorage.getItem('qcup-theme'); } catch (e) {}
+      try { t = localStorage.getItem('quantum-sculpting-theme'); } catch (e) {}
       if (t !== 'light' && t !== 'dark') {
         t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
       }
@@ -33,7 +33,7 @@
 
   <header class="topbar">
     <div class="brand">
-      <span class="brand-name">Quantum cup</span>
+      <span class="brand-name">Quantum Sculpting</span>
       <span class="brand-sub">体素 × Quantum Blur Core</span>
     </div>
     <div class="topbar-actions">
@@ -369,7 +369,7 @@
 <dialog class="modal" id="key-modal" aria-labelledby="key-title">
   <form method="dialog" class="modal-body" id="key-form">
     <h2 id="key-title">Atlas API key</h2>
-    <p class="modal-text">key 只保存在这台电脑的用户目录（~/.quantum-cup），不会写进项目文件夹，也不会回显在页面上。</p>
+    <p class="modal-text">key 只保存在这台电脑的用户目录（~/.quantum-sculpting），不会写进项目文件夹，也不会回显在页面上。</p>
     <p class="note warn" id="key-base-note" hidden></p>
     <div class="field">
       <label for="key-input">API key</label>

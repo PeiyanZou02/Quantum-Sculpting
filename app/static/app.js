@@ -1,4 +1,4 @@
-// 量子杯子的界面。流程：模型 → 体素化 → 量子处理 → 转回模型。
+// Quantum Sculpting 的界面。流程：模型 → 体素化 → 量子处理 → 转回模型。
 // 本地的步骤（体素化、高斯替身、本地模拟、marching cubes）在控件变化时自动重算；
 // 只有提交给 Atlas 需要点按钮。
 
@@ -1020,7 +1020,7 @@ function bind() {
   $('theme-button').addEventListener('click', () => {
     const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
     document.documentElement.dataset.theme = next;
-    try { localStorage.setItem('qcup-theme', next); } catch (e) { /* 隐私模式下存不了，不影响使用 */ }
+    try { localStorage.setItem('quantum-sculpting-theme', next); } catch (e) { /* 隐私模式下存不了，不影响使用 */ }
     viewer.applyTheme();
     if (state.gridData) viewer.setVoxels('voxels', state.gridData, state.grid.n, 0.5, false);
     paintProcessed();

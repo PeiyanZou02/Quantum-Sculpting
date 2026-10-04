@@ -1,6 +1,6 @@
 """本地流程的检查：测试杯子 → 体素化 → 模糊 → 转回模型。
 
-运行：  python -m unittest discover -s tests -v   （在项目根目录，用 .quantum-cup 的 venv）
+运行：  python -m unittest discover -s tests -v   （在项目根目录，用 ~/.quantum-sculpting 里的 venv）
 """
 import sys
 import unittest

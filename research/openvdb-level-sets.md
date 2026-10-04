@@ -1,4 +1,4 @@
-# OpenVDB level sets: how they work, and what transfers to Quantum cup
+# OpenVDB level sets: how they work, and what transfers to Quantum Sculpting
 
 > 2026-10-04. Scope: why Houdini's VDB workflow is fast, what its smooth / reshape / advect / combine nodes compute, whether Blender and Rhino really differ, whether OpenVDB can be pip-installed here, and which ideas fit this project's dense-tile cloud pipeline.
 >

@@ -1,4 +1,4 @@
-# Quantum cup
+# Quantum Sculpting
 
 Voxelise a 3D model, hand the voxel grid to Moth Atlas's **Quantum Blur Core** so the whole
 shape is deformed by quantum interference, then turn the result back into a printable STL.
@@ -9,7 +9,7 @@ A local web app prototype: a small Python (Flask) service plus a browser interfa
 ## Start
 
 Double-click `run.bat`. The first run creates a Python environment in
-`%USERPROFILE%\.quantum-cup\venv` and installs the dependencies (a few minutes); after that it
+`%USERPROFILE%\.quantum-sculpting\venv` and installs the dependencies (a few minutes); after that it
 opens <http://127.0.0.1:8765> straight away.
 
 Requirements: Windows, Python 3.10 or newer, and an internet connection (the 3D preview loads
@@ -147,7 +147,7 @@ Observed on the real service: jobs of 32³, 32 × 32 × 64 and 256 × 256 × 1 v
 ## Tests
 
 ```
-%USERPROFILE%\.quantum-cup\venv\Scripts\python.exe -m unittest discover -s tests
+%USERPROFILE%\.quantum-sculpting\venv\Scripts\python.exe -m unittest discover -s tests
 ```
 
 `tests/run_with_fake_atlas.py` starts a fake Atlas server and a copy of the app pointed at it

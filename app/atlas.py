@@ -16,7 +16,7 @@ DEFAULT_BASE = "https://api.mothquantum.com/api/v1"
 ENGINE = "blur-core-v1"
 
 # API 前面的 Cloudflare 会拒绝部分默认 UA，这里如实标明自己
-USER_AGENT = "quantum-cup-prototype/0.1 (python-requests)"
+USER_AGENT = "quantum-sculpting-prototype/0.1 (python-requests)"
 
 RETRY_SCALE = 1.0       # 测试里调小，免得真的等
 

@@ -1,6 +1,6 @@
-# Starts the Quantum cup app. Keep this file ASCII-only (Windows PowerShell 5.1).
+# Starts Quantum Sculpting. Keep this file ASCII-only (Windows PowerShell 5.1).
 #
-# The Python environment lives in %USERPROFILE%\.quantum-cup\venv, outside
+# The Python environment lives in %USERPROFILE%\.quantum-sculpting\venv, outside
 # OneDrive, so thousands of package files are not synced between machines.
 # On a new machine the first run recreates it from requirements.txt.
 param(
@@ -10,7 +10,12 @@ param(
 
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
-$homeDir = Join-Path $env:USERPROFILE ".quantum-cup"
+$homeDir = Join-Path $env:USERPROFILE ".quantum-sculpting"
+$oldHome = Join-Path $env:USERPROFILE ".quantum-cup"
+if ((Test-Path $oldHome) -and -not (Test-Path $homeDir)) {
+    # The project used to be called Quantum cup: carry the environment and the saved key over.
+    Rename-Item $oldHome $homeDir
+}
 $venv = Join-Path $homeDir "venv"
 $py = Join-Path $venv "Scripts\python.exe"
 $req = Join-Path $root "requirements.txt"
