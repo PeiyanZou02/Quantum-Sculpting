@@ -231,6 +231,8 @@ export class Engine {
   /** Dolly and pan (keeping the angle) until what is shown fills `rect` (host px) without spilling:
    *  how Present frames the object in the room its HUD leaves. */
   frameInto(rect: { l: number; r: number; t: number; b: number }) {
+    // the view may have just taken a new frame's shape: project with the camera's current aspect
+    if (this.host.clientHeight && Math.abs(this.camera.aspect - this.host.clientWidth / this.host.clientHeight) > 1e-3) this.resize()
     const t = this.controls.target, cam = this.camera
     const H = this.host.clientHeight
     for (let i = 0; i < 4; i++) {

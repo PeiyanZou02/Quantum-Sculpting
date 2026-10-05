@@ -24,7 +24,7 @@ import { DATA_FAMILIES } from './datamarks'
 import { NAV_FAMILIES } from './navmore'
 import { CONTROL_FAMILIES } from './controls'
 import { EVOLVE_MODULES } from './evolve'
-import { layout, type Slot } from './tidy'
+import { layout, type Pad, type Slot } from './tidy'
 import { usePresent, type Look } from '../present'
 import './composer.css'
 
@@ -114,7 +114,7 @@ const SLOTS = ['tl', 'tr', 'bl', 'br', 'top', 'bottom', 'left', 'right'] as cons
 
 /** Where a piece was put, as fractions of the view: top-left, or its centre when `c`. `auto`: placed by the
  *  view to keep pieces apart (it may move it again); without it, the user put it there. */
-export interface Placement { x: number; y: number; c?: boolean; auto?: boolean; /** auto only: scaled down to fit */ z?: number }
+export interface Placement { x: number; y: number; c?: boolean; auto?: boolean; /** auto only: the layout's scale */ z?: number; /** auto only: left out of this frame for want of room */ out?: boolean }
 export const TIER_OPACITY = { 1: 1, 2: 0.58, 3: 0.3 } as const
 
 const SHAPES = 'line, path, circle, rect, polyline, polygon, ellipse'
@@ -154,11 +154,13 @@ export async function savePng(el: HTMLElement, name: string, scale = 3) {
   const pi = usePresent.getState().pngInk   // as shown, or forced dark (for light grounds) or light (for dark ones)
   const ink = pi === 'auto' ? null : 'ink-' + pi
   if (ink) el.classList.add(ink)   // re-resolves the theme tokens inside the piece for the capture
+  const { inlineSvgPaint } = await import('../screens/capture')
+  const restore = inlineSvgPaint(el)
   const url = await toPng(el, {
     pixelRatio: scale,
     style: { background: 'none', zoom: el.style.zoom, opacity: el.style.opacity },
     filter: (n) => !(n instanceof Element && n.matches('.hud-piece__bar, [data-no-export], canvas, [data-hud^="chrome:"], .stage__drop, .landing')),
-  }).finally(() => { if (ink) el.classList.remove(ink) })
+  }).finally(() => { restore(); if (ink) el.classList.remove(ink) })
   const a = document.createElement('a')
   a.href = url
   a.download = `quantum-sculptor-${name.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-${stamp()}.png`
@@ -218,7 +220,7 @@ function Piece({ k, label, ctx, pos, arrange, edit, live, look, dim, ghost, onMo
   const place = pos ? { left: pos.x * ctx.w, top: pos.y * ctx.h, transform: pos.c ? 'translate(-50%, -50%)' : undefined } : undefined
   const zoom = (look?.size ?? 1) * (pos?.z ?? 1)
   return (
-    <div className={cls} data-hud={k} style={place} onPointerDown={edit && !live ? start : undefined}>
+    <div className={cls} data-hud={k} data-out={pos?.out ? '' : undefined} style={pos?.out ? { ...place, visibility: 'hidden' } : place} onPointerDown={edit && !live ? start : undefined}>
       {(arrange || edit) && (
         <div className="hud-piece__bar" data-qs-probe-ui>
           <button className="hud-piece__handle" onPointerDown={start} onDoubleClick={() => onMove?.(k, null)}
@@ -334,7 +336,7 @@ const fixedBlockers = () => [...document.querySelectorAll('.present-bar')].map((
 export function settle(root: HTMLElement, model: Rect | null, onMove: (k: string, p: Placement) => void, fixed: (k: string) => boolean, scaleOf: (k: string) => number = () => 1, skip: string | null = null) {
   const view = root.getBoundingClientRect()
   const pieces = [...root.querySelectorAll<HTMLElement>('.hud-piece[data-hud]')]
-    .filter((p) => !p.parentElement?.closest('.hud-piece'))
+    .filter((p) => !p.parentElement?.closest('.hud-piece') && p.dataset.out == null)
     .map((p) => ({ k: p.dataset.hud!, r: boxOf(p) }))
     .filter((p) => p.r.width > 0 && p.k !== skip)   // a piece only previewed from the library takes no part
   const stays = (k: string) => k.startsWith('chrome:') || fixed(k)
@@ -364,19 +366,27 @@ export function settle(root: HTMLElement, model: Rect | null, onMove: (k: string
 
 /** Lays every piece out afresh for the view's shape (hud/tidy.ts): measures each at its natural size,
  *  then places it on the grid around the object. Object and full-view marks stay as they are. */
-export function composeLayout(root: HTMLElement, onMove: (k: string, p: Placement) => void, slotOf: (k: string) => Slot, scaleOf: (k: string) => number, reserve: number): Rect | null {
+export function composeLayout(root: HTMLElement, onMove: (k: string, p: Placement) => void, slotOf: (k: string) => Slot, scaleOf: (k: string) => number, reserve: number, pad?: Pad): { hero: Rect; out: number } {
   const view = root.getBoundingClientRect()
   const boxes = [...root.querySelectorAll<HTMLElement>('.hud-piece[data-hud]')]
     .filter((p) => !p.parentElement?.closest('.hud-piece') && !p.dataset.hud!.startsWith('chrome:'))
     .map((p) => { const r = boxOf(p), z = scaleOf(p.dataset.hud!); return { k: p.dataset.hud!, w: r.width / z, h: r.height / z, slot: slotOf(p.dataset.hud!) } })
     .filter((b) => b.w > 0 && b.h > 0)
-  const { placed, hero } = layout(boxes, view.width, view.height, reserve)
-  for (const q of placed) onMove(q.k, { x: q.x / view.width, y: q.y / view.height, auto: true, z: q.z < 0.999 ? q.z : undefined })
-  return hero
+  const { placed, hero } = layout(boxes, view.width, view.height, reserve, pad)
+  for (const q of placed) onMove(q.k, { x: q.x / view.width, y: q.y / view.height, auto: true, z: Math.abs(q.z - 1) > 0.001 ? q.z : undefined, out: q.out || undefined })
+  return { hero, out: placed.filter((q) => q.out).length }
+}
+
+/** Room the object's own marks need beside it: the extents' dimension lines and labels. */
+function padOf(chosen: HudModule[]): Pad {
+  const on = (f: string, id: string) => chosen.some((m) => m.family === f && m.id === id)
+  if (on('bounds', 'v2')) return { l: 0, r: 72, t: 0, b: 40 }
+  if (on('bounds', 'v3')) return { l: 0, r: 48, t: 0, b: 0 }
+  return { l: 0, r: 0, t: 0, b: 0 }
 }
 
 /** Draws the chosen modules over the view. `chrome` lets the host put its own controls into slots. */
-export function HudLayer({ ctx, compose, chrome, positions = {}, arrange = false, edit, looks = {}, hl = null, ghost = null, texts = [], autoArrange = false, onCrowded, tidyKey = 0, reserve = 0, onHero, onMove, onText }: {
+export function HudLayer({ ctx, compose, chrome, positions = {}, arrange = false, edit, looks = {}, hl = null, ghost = null, texts = [], autoArrange = false, onCrowded, onLeftOut, tidyKey = 0, reserve = 0, onHero, onMove, onText }: {
   ctx: HudCtx; compose: Composition; chrome?: Partial<Record<(typeof SLOTS)[number], ReactNode>>
   positions?: Record<string, Placement>; arrange?: boolean; edit?: Edit; looks?: Record<string, Look>; hl?: string | null
   /** The piece being previewed from the library (outlined, the rest dimmed). */
@@ -385,6 +395,8 @@ export function HudLayer({ ctx, compose, chrome, positions = {}, arrange = false
   autoArrange?: boolean
   /** After settling: how many pieces found no room even at 55 %. */
   onCrowded?: (n: number) => void
+  /** After a layout: how many pieces the frame had no room for at a readable size (left out of it). */
+  onLeftOut?: (n: number) => void
   /** Bump to lay every piece out afresh for the view (pieces the user placed move too). */
   tidyKey?: number
   /** Room kept free at the bottom when laying out (the present bar). */
@@ -431,8 +443,9 @@ export function HudLayer({ ctx, compose, chrome, positions = {}, arrange = false
         if (!el) return
         const ready = [...el.querySelectorAll<HTMLElement>('.hud-piece[data-hud]')].filter((p) => !p.dataset.hud!.startsWith('chrome:') && boxOf(p).width > 0).length
         if (ready < want && ++tries < 12) { setTimeout(go, 60); return }
-        const hero = composeLayout(el, onMove, slotOf, () => 1, reserve)
-        if (hero) onHero?.(hero)
+        const { hero, out } = composeLayout(el, onMove, slotOf, () => 1, reserve, padOf(chosen))
+        onHero?.(hero)
+        onLeftOut?.(out)
         setTimeout(() => { if (root.current) onCrowded?.(settle(root.current, ctx.rect, onMove, () => true, (k) => positions[k]?.z ?? 1, ghost).stuck) }, 160)
       }
       requestAnimationFrame(() => requestAnimationFrame(go))

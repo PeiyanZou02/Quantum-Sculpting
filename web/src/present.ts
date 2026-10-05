@@ -10,7 +10,7 @@ import { useStore } from './store'
 export type Mode = 'lab' | 'present'
 export interface Shot { az: number; el: number; dist: number }
 /** Fractions of the view: the piece's top-left, or its centre when `c` (where a dragged component was dropped). */
-export interface Pos { x: number; y: number; c?: boolean; auto?: boolean; z?: number }
+export interface Pos { x: number; y: number; c?: boolean; auto?: boolean; z?: number; out?: boolean }
 /** How one component is drawn: emphasis tier (1 primary, 2 secondary, 3 tertiary), line weight and dash
  *  spacing as multiples of its own, size (corner and edge pieces), and whether it is hidden. */
 export interface Look { tier?: 1 | 2 | 3; weight?: number; dash?: number; size?: number; hidden?: boolean }
@@ -59,6 +59,9 @@ interface P {
   /** Pieces that found no free room on the view, even scaled down. */
   crowded: number
   setCrowded: (n: number) => void
+  /** Pieces the last layout left out of this frame: no room for them at a readable size. */
+  leftOut: number
+  setLeftOut: (n: number) => void
   /** Bumped by a tidy: the view lays every piece out again for the frame (see hud/tidy.ts). */
   tidyKey: number
   tidyUp: () => void
@@ -190,6 +193,8 @@ export const usePresent = create<P>()((set, get) => {
     toggleOpened: (f) => up({ opened: get().opened.includes(f) ? get().opened.filter((x) => x !== f) : [...get().opened, f] }),
     crowded: 0,
     setCrowded: (n) => { if (n !== get().crowded) set({ crowded: n }) },
+    leftOut: 0,
+    setLeftOut: (n) => { if (n !== get().leftOut) set({ leftOut: n }) },
     tidyKey: 0,
     tidyUp: () => set({ tidyKey: get().tidyKey + 1 }),
     tidy: (level) => {

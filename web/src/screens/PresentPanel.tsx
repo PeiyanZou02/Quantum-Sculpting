@@ -158,6 +158,7 @@ function LayersPage() {
         <Group>
           <LayerList />
           {p.crowded > 0 && <p className="pd-warn">{p.crowded === 1 ? 'One piece has' : `${p.crowded} pieces have`} no free room left and overlap others. Remove some, or make them smaller.</p>}
+          {p.leftOut > 0 && <p className="pd-warn">{p.leftOut === 1 ? 'One piece is' : `${p.leftOut} pieces are`} left out of this frame: there is no room for {p.leftOut === 1 ? 'it' : 'them'} at a readable size. A larger frame shows {p.leftOut === 1 ? 'it' : 'them'}.</p>}
           {on > 0 && <TidyRow />}
         </Group>
       ) : <Compositions />}
