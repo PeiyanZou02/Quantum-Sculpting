@@ -6,11 +6,26 @@ import type { Fill, Field as FieldKind, UpAxis, Values, VFilter } from '../api'
 import { QPill } from '../qs/QPill'
 import { Segmented, AxisToggle } from '../qs/Segmented'
 import { Slider, Select, Input } from '../qs/Slider'
-import { ScrollArea } from '../qs/ScrollArea'
+import { ScrollArea, type ScrollIndex } from '../qs/ScrollArea'
 import { Dot, Spinner, fmt } from './parts'
 
 export const MODEL_EXT = ['.stl', '.obj', '.ply', '.glb', '.off']
-const MARKERS = [{ id: 'in-01', label: '01' }, { id: 'in-02', label: '02' }, { id: 'in-03', label: '03' }, { id: 'in-04', label: '04' }]
+const MARKERS = [{ id: 'in-01', label: 'Model' }, { id: 'in-02', label: 'Voxelise' }, { id: 'in-03', label: 'Quantum' }, { id: 'in-04', label: 'Mesh' }]
+
+/** A vertical bar with one knot per step: click a knot to go to the step. No numbers, no scrollbar. */
+export function Knots({ markers, active, go, frac }: ScrollIndex) {
+  return (
+    <div className="knots" aria-label="Steps">
+      <span className="knots__line" />
+      {markers.map((mk) => (
+        <button key={mk.id} className={'knots__k' + (active === mk.id ? ' knots__k--on' : '')} style={{ top: `calc(${(frac(mk.id) * 100).toFixed(2)}% + 14px)` }}
+          onClick={() => go(mk.id)} aria-label={mk.label}>
+          <span className="knots__tip">{mk.label}</span>
+        </button>
+      ))}
+    </div>
+  )
+}
 
 function useFold() {
   const [open, setOpen] = useState<Record<string, boolean>>(() => {
@@ -24,15 +39,14 @@ function useFold() {
   return { isOpen: (id: string) => open[id] !== false, toggle }
 }
 
-function Step({ id, no, title, summary, state, off, fold, children }: {
-  id: string; no: string; title: string; summary: ReactNode; state?: ReactNode; off?: boolean
+function Step({ id, title, summary, state, off, fold, children }: {
+  id: string; no?: string; title: string; summary: ReactNode; state?: ReactNode; off?: boolean
   fold: ReturnType<typeof useFold>; children: ReactNode
 }) {
   const open = fold.isOpen(id)
   return (
     <section className={'sec' + (off ? ' sec--off' : '') + (open ? '' : ' sec--folded')} data-mark={id}>
       <button className="sec__head" onClick={() => fold.toggle(id)} aria-expanded={open}>
-        <span className="sec__no">{no}</span>
         <span className="sec__title">{title}</span>
         <span className="sec__state">{state}</span>
         <span className={'sec__chev' + (open ? ' sec__chev--open' : '')} />
@@ -47,7 +61,7 @@ export function InputPane() {
   return (
     <aside className="side" aria-label="Input">
       <div className="pane-head"><span className="qs-label">Input</span><span className="pane-head__note">parameters</span></div>
-      <ScrollArea markers={MARKERS} className="pane-scroll">
+      <ScrollArea markers={MARKERS} className="pane-scroll pane-scroll--knots" bar={false} renderIndex={(ix) => <Knots {...ix} />}>
         <ModelIn fold={fold} />
         <VoxIn fold={fold} />
         <QuantumIn fold={fold} />

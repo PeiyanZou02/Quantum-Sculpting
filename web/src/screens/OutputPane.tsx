@@ -5,23 +5,39 @@ import { Segmented } from '../qs/Segmented'
 import { Slider } from '../qs/Slider'
 import { QReadout } from '../qs/QReadout'
 import { QPill } from '../qs/QPill'
-import { ScrollArea } from '../qs/ScrollArea'
+import { ScrollArea, type ScrollIndex } from '../qs/ScrollArea'
+import { IconButton } from '../qs/Icon'
 import { LevelHistogram } from '../qs/LevelHistogram'
 import { histogram, solidPerLayer, type Axis } from '../qs/grid'
 import { SectionMap } from './SectionMap'
 import { fmt } from './parts'
 
 const MARKERS = [
-  { id: 'out-model', label: 'M' }, { id: 'out-grid', label: 'G' }, { id: 'out-slice', label: 'S' },
-  { id: 'out-quantum', label: 'Q' }, { id: 'out-print', label: 'P' }, { id: 'out-export', label: 'E' },
+  { id: 'out-model', label: 'Model', icon: 'model' }, { id: 'out-grid', label: 'Grid', icon: 'grid' },
+  { id: 'out-slice', label: 'Slice', icon: 'slice' }, { id: 'out-quantum', label: 'Quantum result', icon: 'quantum' },
+  { id: 'out-print', label: 'Print check', icon: 'print' }, { id: 'out-export', label: 'Export', icon: 'export' },
 ]
 
-function Blk({ id, label, note, children }: { id: string; label: string; note?: ReactNode; children: ReactNode }) {
+/** Blender-style property tabs: one icon per output section, the active one inverted. */
+function Tabs({ markers, active, go }: ScrollIndex) {
+  return (
+    <nav className="tabs" aria-label="Output sections">
+      {markers.map((mk) => (
+        <IconButton key={mk.id} name={mk.icon ?? 'grid'} title={mk.label} on={active === mk.id} onClick={() => go(mk.id)} />
+      ))}
+    </nav>
+  )
+}
+
+function Blk({ id, label, note, tools, children }: { id: string; label: string; note?: ReactNode; tools?: ReactNode; children: ReactNode }) {
   return (
     <div className="blk" data-mark={id}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', minHeight: 22 }}>
         <span className="qs-label">{label}</span>
-        {note != null && <span className="qs-mono" style={{ color: 'var(--qs-ink3)' }}>{note}</span>}
+        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {note != null && <span className="qs-mono" style={{ color: 'var(--qs-ink3)' }}>{note}</span>}
+          {tools}
+        </span>
       </div>
       {children}
     </div>
@@ -34,7 +50,7 @@ export function OutputPane() {
   return (
     <aside className="insp" aria-label="Output">
       <div className="pane-head"><span className="qs-label">Output</span><span className="pane-head__note">results</span></div>
-      <ScrollArea markers={MARKERS} className="pane-scroll">
+      <ScrollArea markers={MARKERS} className="pane-scroll pane-scroll--tabs" bar={false} renderIndex={(ix) => <Tabs {...ix} />}>
         <ModelOut />
         <GridOut />
         <SliceOut />
@@ -47,12 +63,19 @@ export function OutputPane() {
   )
 }
 
+/** A show/hide toggle for something this panel draws in the workspace. */
+function Shows({ on, what, set }: { on: boolean; what: string; set: (v: boolean) => void }) {
+  return <IconButton size={22} name={on ? 'eye' : 'eyeOff'} title={`${on ? 'Hide' : 'Show'} ${what} in the view`} on={on} onClick={() => set(!on)} />
+}
+
 function ModelOut() {
   const model = useStore((s) => s.model)
+  const dims = useStore((s) => s.hud.dims)
+  const setHud = useStore((s) => s.setHud)
   if (!model) return <Blk id="out-model" label="Model"><Empty>No model yet.</Empty></Blk>
   const max = Math.max(...model.extents)
   return (
-    <Blk id="out-model" label="Model" note={model.builtin ? 'built-in' : model.file}>
+    <Blk id="out-model" label="Model" note={model.builtin ? 'built-in' : model.file} tools={<Shows on={dims} what="size marks" set={(v) => setHud({ dims: v })} />}>
       <QReadout w="100%" kw={92} rows={[
         { k: 'Faces', v: fmt.int(model.faces) },
         { k: 'Vertices', v: fmt.int(model.vertices) },
@@ -103,7 +126,7 @@ function GridOut() {
 
 function SliceOut() {
   const st = useStore()
-  const { slice, gridData, procData, m } = st
+  const { slice, gridData, procData, m, hud, view, scan } = st
   const [src, setSrc] = useState<'input' | 'processed'>('input')
   const g = src === 'processed' && procData ? procData : gridData
   const n = g?.n ?? 32
@@ -117,18 +140,40 @@ function SliceOut() {
   useEffect(() => { setSrc(procData ? 'processed' : 'input') }, [!!procData]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (slice.index > n - 1) st.setSlice({ index: Math.floor(n / 2) }) }, [n]) // eslint-disable-line react-hooks/exhaustive-deps
   const level = src === 'processed' ? m.level : 0.5
+  const scanning = view === 'scan'
+  const canScan = !!procData && !!gridData
+  const live = st.job?.status === 'running'
+  const sweep = () => {
+    if (!scanning) st.setView('scan')
+    st.setSlice({ axis: 'z', index: slice.index >= n - 1 || !scanning ? 0 : slice.index })
+    st.setScan({ playing: true })
+  }
   return (
-    <Blk id="out-slice" label="Slice" note={`${slice.axis} ${slice.index} / ${n - 1}`}>
+    <Blk id="out-slice" label="Slice" note={`${slice.axis} ${slice.index} / ${n - 1}`}
+      tools={<Shows on={hud.slice} what="the cutting plane" set={(v) => st.setHud({ slice: v })} />}>
       <div ref={box} style={{ width: '100%' }}>
         {g ? <SectionMap size={w} grid={g} input={src === 'processed' ? gridData : null} axis={slice.axis} index={slice.index} level={level} onIndex={(i) => st.setSlice({ index: i })} />
           : <Empty>Voxelise to slice the grid.</Empty>}
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 14 }}>
         <Segmented size="s" options={[{ value: 'input', label: 'Input' }, { value: 'processed', label: 'Processed', disabled: !procData }]} value={src} onChange={(v) => setSrc(v as 'input' | 'processed')} />
-        <Segmented<Axis> size="s" options={[{ value: 'x', label: 'X' }, { value: 'y', label: 'Y' }, { value: 'z', label: 'Z' }]} value={slice.axis} onChange={(a) => st.setSlice({ axis: a })} />
+        <Segmented<Axis> size="s" options={(['x', 'y', 'z'] as Axis[]).map((a) => ({ value: a, label: a.toUpperCase(), disabled: scanning && a !== 'z' }))} value={slice.axis} onChange={(a) => st.setSlice({ axis: a })} />
       </div>
-      <Slider label="Position" value={slice.index} min={0} max={n - 1} step={1} ticks={8} onChange={(v) => st.setSlice({ index: v })}
+      <Slider label="Cutting plane" value={slice.index} min={0} max={n - 1} step={1} ticks={8} disabled={scanning && live}
+        onChange={(v) => { st.setScan({ playing: false }); st.setSlice({ index: v }) }}
         format={(v) => `${v} · ${(v * (st.grid?.voxel_size ?? 0)).toFixed(1)} mm`} />
+      <div className="row" style={{ justifyContent: 'space-between' }}>
+        <div className="row" style={{ gap: 4 }}>
+          <IconButton name={scan.playing ? 'pause' : slice.index >= n - 1 && scanning ? 'replay' : 'play'} disabled={!canScan || live}
+            title={scan.playing ? 'Pause the sweep' : 'Sweep the plane bottom to top: result below, original above'}
+            on={scan.playing} onClick={() => (scan.playing ? st.setScan({ playing: false }) : sweep())} />
+          <IconButton name="scan" title={scanning ? 'Leave the scan view' : 'Scan view: result below the plane, original above'} on={scanning} disabled={!canScan}
+            onClick={() => (scanning ? st.setView('processed') : st.setView('scan'))} />
+        </div>
+        <span className="qs-mono" style={{ color: 'var(--qs-ink3)' }}>
+          {live && st.job?.frontier != null ? 'following the Atlas run' : scanning ? 'scan · linked to the plane' : hud.slice ? 'plane shown in the view' : ''}
+        </span>
+      </div>
     </Blk>
   )
 }
@@ -138,11 +183,13 @@ function QuantumOut() {
   const procData = useStore((s) => s.procData)
   const level = useStore((s) => s.m.level)
   const setM = useStore((s) => s.setM)
+  const legend = useStore((s) => s.hud.legend)
+  const setHud = useStore((s) => s.setHud)
   const bins = useMemo(() => (procData ? histogram(procData, 48) : new Array(48).fill(0)), [procData])
   if (!proc) return <Blk id="out-quantum" label="Quantum result"><Empty>Run the quantum step to see the result.</Empty></Blk>
   const src = proc.mode === 'atlas' ? (proc.cached ? 'Atlas · cache' : 'Atlas') : proc.mode === 'emulator' ? 'emulation' : 'gaussian'
   return (
-    <Blk id="out-quantum" label="Quantum result" note={proc.run}>
+    <Blk id="out-quantum" label="Quantum result" note={proc.run} tools={<Shows on={legend} what="value scale" set={(v) => setHud({ legend: v })} />}>
       <QReadout w="100%" kw={92} rows={[
         { k: 'Source', v: src },
         { k: 'Time', v: proc.seconds != null ? `${proc.seconds} s` : '—' },

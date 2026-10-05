@@ -1,5 +1,6 @@
 // Typed client for Peiyan's Flask service (app/server.py). Every route is documented there.
 import type { Grid } from './qs/grid'
+import { en } from './i18n'
 
 export type UpAxis = '+z' | '-z' | '+y' | '-y' | '+x' | '-x'
 export type Fill = 'holes' | 'capped' | 'none'
@@ -174,7 +175,7 @@ async function request(path: string, init?: RequestInit): Promise<Response> {
       msg = data.error ?? msg
       superseded = !!data.superseded
     } catch { /* not JSON */ }
-    throw new ApiError(res.status, superseded ? 'Superseded by a newer request.' : msg, superseded)
+    throw new ApiError(res.status, superseded ? 'Superseded by a newer request.' : en(msg), superseded)
   }
   return res
 }
@@ -276,7 +277,10 @@ export const api = {
 
   process: (p: ProcessParams, signal?: AbortSignal) =>
     postJSON<{ status: 'done'; meta: ProcMeta } | { status: 'missing' } | JobView>('/api/process', p, signal),
-  job: (id: string) => getJSON<JobView>(`/api/process/${id}`),
+  job: async (id: string) => {
+    const j = await getJSON<JobView>(`/api/process/${id}`)
+    return { ...j, error: j.error && en(j.error), note: j.note && en(j.note) }
+  },
   jobPreview: (id: string) => compactGrid<{ n: number; box: [number, number][]; version: number; frontier: number | null }>(`/api/process/${id}/preview`),
 
   atlasJobs: (limit = 50, cursor?: string) =>

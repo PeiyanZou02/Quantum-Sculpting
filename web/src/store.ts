@@ -183,7 +183,7 @@ export const useStore = create<S>()((set, get) => {
             const { grid, meta } = await api.jobPreview(id)
             set({ procData: grid })
             // layer-tiled runs: the scan plane follows the real progress
-            if (meta.frontier != null) set({ view: 'scan', scan: { z: meta.frontier, playing: false } })
+            if (meta.frontier != null) set({ view: 'scan', scan: { z: meta.frontier, playing: false }, slice: { axis: 'z', index: Math.max(0, meta.frontier - 1) } })
           } catch { /* preview not ready */ }
         }
         if (job.status === 'done') {

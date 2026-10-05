@@ -46,6 +46,8 @@ export interface ProbeHit {
   z: number
   /** Two-line flag text. */
   lines: [string, string]
+  /** Optional exact hit point (grid coordinates), used by the host to anchor pins. */
+  p?: [number, number, number]
 }
 
 export interface ProbePin {
@@ -245,12 +247,14 @@ export interface QProbeProps {
    * camera orbits. Re-render QProbe on camera change for this to update. Return null to hide.
    */
   project?: (hit: ProbeHit) => { x: number; y: number } | null
+  /** Hide the built-in `Clear N pins` pill (the host draws its own control). */
+  hideClear?: boolean
 }
 
 const noPick = () => null
 const n1 = (v: number) => +v.toFixed(1)
 
-export function QProbe({ w, h, n, pick, enabled, maxPins, mmPerCell = 3.2, onPointer, probe, project }: QProbeProps) {
+export function QProbe({ w, h, n, pick, enabled, maxPins, mmPerCell = 3.2, onPointer, probe, project, hideClear }: QProbeProps) {
   const own = useProbe({ pick: pick ?? noPick, enabled, maxPins })
   const p = probe ?? own
   const auto = !probe
@@ -514,7 +518,7 @@ export function QProbe({ w, h, n, pick, enabled, maxPins, mmPerCell = 3.2, onPoi
         </span>
       ))}
 
-      {pins.length > 0 && (
+      {pins.length > 0 && !hideClear && (
         <span
           data-qs-probe-ui=""
           role="button"

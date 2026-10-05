@@ -145,6 +145,38 @@ export class Engine {
     this.tween = { from, to, t0: performance.now() }
   }
 
+  /** Navigation from the icon buttons: drag deltas in px. */
+  nudge({ orbit, pan, zoom }: { orbit?: [number, number]; pan?: [number, number]; zoom?: number }) {
+    const t = this.controls.target, cam = this.camera
+    const off = cam.position.clone().sub(t)
+    if (orbit) {
+      const sph = new THREE.Spherical().setFromVector3(new THREE.Vector3(off.x, off.z, -off.y))
+      sph.theta -= orbit[0] * 0.01
+      sph.phi = Math.min(Math.PI - 0.01, Math.max(0.01, sph.phi - orbit[1] * 0.01))
+      const v = new THREE.Vector3().setFromSpherical(sph)
+      off.set(v.x, -v.z, v.y)
+    }
+    if (zoom) off.multiplyScalar(Math.exp(zoom * 0.005))
+    if (pan) {
+      const k = off.length() * 0.0015
+      const right = new THREE.Vector3().setFromMatrixColumn(cam.matrixWorld, 0)
+      const up = new THREE.Vector3().setFromMatrixColumn(cam.matrixWorld, 1)
+      const d = right.multiplyScalar(-pan[0] * k).add(up.multiplyScalar(pan[1] * k))
+      t.add(d)
+    }
+    cam.position.copy(t).add(off)
+    cam.lookAt(t)
+    this.controls.update()
+    this.dirty = true
+    this.onChange?.()
+  }
+
+  /** Back to the starting view, centred on the grid. */
+  home() {
+    this.controls.target.set(0, 0, 0.42)
+    this.orbitTo(35, 22)
+  }
+
   /** Current azimuth / elevation in degrees, for the readout. */
   angles() {
     const d = this.camera.position.clone().sub(this.controls.target)
@@ -353,7 +385,7 @@ export class Engine {
   /** The slice plane in the voxel views; null hides it. */
   setSlice(s: { axis: Axis; index: number } | null) {
     const p = this.plane
-    p.visible = !!s && (this.view === 'voxels' || this.view === 'processed')
+    p.visible = !!s && this.view !== 'scan'
     if (!s) return void (this.dirty = true)
     const n = this.n, c = (n - 1) / 2
     p.scale.set(n, n, 1)
@@ -417,6 +449,7 @@ export class Engine {
 
   /** Project a grid-space point to host pixels (for marks that follow the model). */
   project(p: THREE.Vector3): [number, number] {
+    this.camera.updateMatrixWorld()
     this.root.updateMatrixWorld(true)
     const v = p.clone().applyMatrix4(this.root.matrixWorld).project(this.camera)
     return [(v.x + 1) / 2 * this.host.clientWidth, (1 - v.y) / 2 * this.host.clientHeight]

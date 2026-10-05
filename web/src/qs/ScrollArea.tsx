@@ -3,10 +3,15 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import './scroll.css'
 
-export interface ScrollMarker { id: string; label: string }
+export interface ScrollMarker { id: string; label: string; icon?: string }
+export interface ScrollIndex { markers: ScrollMarker[]; active: string | null; go: (id: string) => void; pos: Record<string, number>; frac: (id: string) => number }
 
-export function ScrollArea({ children, markers, className, style, follow, onActive }: {
+export function ScrollArea({ children, markers, className, style, follow, onActive, bar = true, renderIndex }: {
   children: ReactNode
+  /** Draw the scrollbar rail and thumb (default true). */
+  bar?: boolean
+  /** Draw the section index yourself (knots, icon tabs); the built-in labelled markers are skipped. */
+  renderIndex?: (index: ScrollIndex) => ReactNode
   /** Section anchors: elements inside with data-mark="<id>". */
   markers?: ScrollMarker[]
   className?: string
@@ -35,7 +40,7 @@ export function ScrollArea({ children, markers, className, style, follow, onActi
         p[mk.id] = t.offsetTop
         if (t.offsetTop - 40 <= el.scrollTop) cur = mk.id
       }
-      if (el.scrollTop + el.clientHeight >= el.scrollHeight - 2 && markers.length) cur = markers[markers.length - 1].id
+      if (el.scrollTop > 0 && el.scrollTop + el.clientHeight >= el.scrollHeight - 2 && markers.length) cur = markers[markers.length - 1].id
       setPos(p)
       cur ??= markers[0]?.id ?? null
       setActive((a) => {
@@ -76,6 +81,7 @@ export function ScrollArea({ children, markers, className, style, follow, onActi
   const th = Math.max(24, (m.h / m.sh) * m.h)
   const ty = scrollable ? (m.top / (m.sh - m.h)) * (m.h - th) : 0
   const go = (id: string) => box.current?.scrollTo({ top: Math.max(0, (pos[id] ?? 0) - 4), behavior: 'smooth' })
+  const frac = (id: string) => (pos[id] ?? 0) / Math.max(1, m.sh)
 
   return (
     <div className={'qs-scroll' + (className ? ` ${className}` : '')} style={style}>
@@ -90,7 +96,8 @@ export function ScrollArea({ children, markers, className, style, follow, onActi
       >
         {children}
       </div>
-      <div className={'qs-scroll__rail' + (scrollable ? '' : ' qs-scroll__rail--idle') + (markers ? ' qs-scroll__rail--index' : '')}
+      {renderIndex && markers && renderIndex({ markers, active, go, pos, frac })}
+      {bar && <div className={'qs-scroll__rail' + (scrollable ? '' : ' qs-scroll__rail--idle') + (markers && !renderIndex ? ' qs-scroll__rail--index' : '')}
         onPointerDown={(e) => {
           if (e.target !== e.currentTarget) return
           const r = e.currentTarget.getBoundingClientRect()
@@ -106,7 +113,7 @@ export function ScrollArea({ children, markers, className, style, follow, onActi
             onPointerDown={(e) => { e.preventDefault(); setDrag({ y: e.clientY, top: box.current!.scrollTop }) }}
           />
         )}
-        {markers?.map((mk) => pos[mk.id] != null && (
+        {!renderIndex && markers?.map((mk) => pos[mk.id] != null && (
           <button
             key={mk.id}
             className={'qs-scroll__mark' + (active === mk.id ? ' qs-scroll__mark--on' : '')}
@@ -117,7 +124,7 @@ export function ScrollArea({ children, markers, className, style, follow, onActi
             <span>{mk.label}</span>
           </button>
         ))}
-      </div>
+      </div>}
     </div>
   )
 }

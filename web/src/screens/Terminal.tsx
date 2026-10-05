@@ -7,6 +7,7 @@ import { api, type AtlasJobRow } from '../api'
 import { Segmented } from '../qs/Segmented'
 import { QPill } from '../qs/QPill'
 import { ScrollArea } from '../qs/ScrollArea'
+import { IconButton } from '../qs/Icon'
 import { Dot, Spinner } from './parts'
 
 type Tab = 'runtime' | 'atlas'
@@ -23,7 +24,7 @@ function usePref<T>(key: string, init: T): [T, (v: T) => void] {
 
 export function Terminal() {
   const st = useStore()
-  const { job, log, q, key, busy } = st
+  const { job, log, q, busy } = st
   const [open, setOpen] = usePref('qs-term-open', true)
   const [height, setHeight] = usePref('qs-term-h', 220)
   const [tab, setTab] = useState<Tab>('runtime')
@@ -46,7 +47,7 @@ export function Terminal() {
     <section className="term">
       <div className="term__grip" onPointerDown={startDrag} title="Drag to resize" />
       <div className="term__bar">
-        <QPill kind="ghost" size="s" label={open ? '▾' : '▸'} title={open ? 'Collapse' : 'Expand'} onClick={() => setOpen(!open)} />
+        <IconButton name={open ? 'chevDown' : 'chevRight'} title={open ? 'Collapse the terminal' : 'Expand the terminal'} onClick={() => setOpen(!open)} />
         <Segmented<Tab> size="s" value={tab} onChange={(t) => { setTab(t); setOpen(true) }} options={[
           { value: 'runtime', label: 'Runtime' },
           { value: 'atlas', label: running ? 'Atlas · live' : 'Atlas', disabled: !atlasOn },
@@ -62,7 +63,6 @@ export function Terminal() {
           {anyBusy && <Spinner />}
           {last && <span style={{ color: last.level === 'info' ? 'var(--qs-ink2)' : 'var(--qs-ink)' }}>{last.level !== 'info' ? '! ' : ''}{last.text}</span>}
         </span>
-        {!key?.set && <QPill kind="ghost" size="s" dot="off" label="No Atlas key" onClick={() => st.set({ keyOpen: true })} />}
       </div>
       {open && (
         <div className="term__body" style={{ height }}>
@@ -90,7 +90,7 @@ function Runtime({ log }: { log: LogLine[] }) {
         ]} />
         <span style={{ flex: 1 }} />
         <span className="qs-mono" style={{ color: 'var(--qs-ink3)' }}>{lines.length} lines</span>
-        <QPill kind="ghost" size="s" label="Clear" onClick={clear} />
+        <IconButton name="clear" size={24} title="Clear the log" onClick={clear} />
       </div>
       <ScrollArea follow className="term__scroll">
         <div className="term__log">

@@ -1,6 +1,7 @@
 // Top bar, kept quiet: mark and name, then Atlas status, theme and help.
 import { useStore } from '../store'
 import { QPill } from '../qs/QPill'
+import { IconButton } from '../qs/Icon'
 
 export function Mark({ size = 18 }: { size?: number }) {
   const o = [0.22, 0.5, 0.22, 0.5, 1, 0.5, 0.22, 0.5, 0.22]
@@ -32,8 +33,8 @@ export function TopBar() {
       <span style={{ flex: 1 }} />
       <div className="top__actions">
         <QPill kind={rejected ? 'line' : 'ghost'} size="s" dot={dot} label={label} title="Atlas API key" onClick={() => useStore.setState({ keyOpen: true })} />
-        <QPill kind="ghost" size="s" label={themePref === 'system' ? 'Auto' : themePref === 'light' ? 'Light' : 'Dark'} title="Theme: auto, light or dark" onClick={() => setTheme(NEXT[themePref])} />
-        <QPill kind="ghost" size="s" label="Help" onClick={() => window.open('https://github.com/madebyrayz/quantum-sculptor#readme', '_blank')} />
+        <IconButton name={themePref === 'system' ? 'auto' : themePref === 'light' ? 'sun' : 'moon'} title={`Theme: ${themePref === 'system' ? 'follows the system' : themePref} · click to change`} onClick={() => setTheme(NEXT[themePref])} />
+        <IconButton name="help" title="Help · README" onClick={() => window.open('https://github.com/madebyrayz/quantum-sculptor#readme', '_blank')} />
       </div>
     </header>
   )
