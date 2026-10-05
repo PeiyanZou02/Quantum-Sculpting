@@ -73,7 +73,7 @@ export function Stage() {
   const present = pr.mode === 'present'
   const labCompose = Object.keys(st.compose).length ? st.compose : (PRESETS.find((p) => p.id === 'clean')!.set() as Record<string, string>)
   // a component previewed from the library is drawn on top of the composition as it is now
-  const pv = present && pr.preview ? pr.preview.split(':') : null
+  const pv = present && pr.preview && !pr.preview.startsWith('guide:') ? pr.preview.split(':') : null
   const shown: Record<string, string> = !present ? labCompose
     : pv && !variantsOf(pr.compose, pv[0]).includes(pv[1]) ? { ...pr.compose, [pv[0]]: toggleVariant(pr.compose, pv[0], pv[1]) } : pr.compose
   const { model, modelMesh, grid, gridData, procData, resultMesh, view, slice, m, hud, scan, theme, tool, shading, shade, layers } = st
@@ -106,7 +106,11 @@ export function Stage() {
   useEffect(() => { engine?.setMesh('result', resultMesh) }, [engine, resultMesh])
   useEffect(() => { engine?.show(view as ViewName) }, [engine, view, gridData, procData, resultMesh, modelMesh])
   useEffect(() => { engine?.setGhosts((Object.keys(layers) as Layer[]).filter((k) => layers[k].visible)) }, [engine, layers, gridData, procData, resultMesh, modelMesh])
-  useEffect(() => { engine?.setFrame({ bounds: hud.bounds, floor: hud.floor }) }, [engine, hud.bounds, hud.floor, grid])
+  // the bounding box and print grid: Lab's guides, or the present composition's
+  const guides = present
+    ? { ...pr.guides, box: pr.guides.box || pr.preview === 'guide:box', floor: pr.guides.floor || pr.preview === 'guide:floor' }
+    : { box: hud.bounds, floor: hud.floor, div: 4 }
+  useEffect(() => { engine?.setFrame({ bounds: guides.box, floor: guides.floor, divisions: guides.div }) }, [engine, guides.box, guides.floor, guides.div, grid])
   const planeOn = hud.slice || tool === 'slice' || (present && (pr.sweep || (shown.slicecard ?? 'off') !== 'off'))
   useEffect(() => { engine?.setSlice(planeOn ? slice : null) }, [engine, slice, view, planeOn])
   useEffect(() => { if (engine && view === 'scan') engine.setScan(slice.axis === 'z' ? slice.index + 1 : 0) }, [engine, view, slice, grid])
@@ -533,7 +537,7 @@ export function ComposeMenu({ compose, setCompose, guides = true, align = 'right
         </div>
       </PopSection>
       <PopSection label="Marks · several per family">
-        <MarkLibrary compose={compose} tile={160} onToggle={(f, id) => setCompose({ [f]: toggleVariant(compose, f, id) })} />
+        <MarkLibrary compose={compose} onToggle={(f, id) => setCompose({ [f]: toggleVariant(compose, f, id) })} />
       </PopSection>
       {guides && <PopSection label="Guides">
         <Check label="Grid box" note="dashed n³ outline" checked={hud.bounds} onChange={(v) => st.setHud({ bounds: v })} />

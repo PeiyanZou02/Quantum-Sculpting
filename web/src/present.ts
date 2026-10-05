@@ -13,7 +13,10 @@ export interface Pos { x: number; y: number; c?: boolean }
 export interface Look { tier?: 1 | 2 | 3; weight?: number; dash?: number; size?: number; hidden?: boolean }
 export interface TextNote { id: string; text: string }
 /** A saved composition: what is on, where it was put, how it looks. Positions are keyed by piece. */
-export interface Saved { id: string; name: string; compose: Record<string, string>; pos: Record<string, Pos>; looks: Record<string, Look>; texts: TextNote[] }
+/** Guides drawn in the scene itself: the grid volume's bounding box and the print grid on its floor
+ *  (`div` cells a side). */
+export interface Guides { box: boolean; floor: boolean; div: number }
+export interface Saved { id: string; name: string; compose: Record<string, string>; pos: Record<string, Pos>; looks: Record<string, Look>; texts: TextNote[]; guides?: Guides }
 
 interface P {
   mode: Mode
@@ -84,6 +87,8 @@ interface P {
   texts: TextNote[]
   addText: (at?: { x: number; y: number }) => void
   setText: (id: string, text: string | null) => void
+  guides: Guides
+  setGuides: (g: Partial<Guides>) => void
   /** Ink of exported PNGs (see savePng). */
   pngInk: 'auto' | 'dark' | 'light'
   setPngInk: (i: 'auto' | 'dark' | 'light') => void
@@ -111,7 +116,7 @@ const keep = (s: P) => {
   try {
     localStorage.setItem(KEY, JSON.stringify({
       v: VERSION, mode: s.mode, compose: s.compose, pos: s.pos, shots: s.shots, spin: s.spin, reelSec: s.reelSec, spinSpeed: s.spinSpeed,
-      cycleSec: s.cycleSec, drawer: s.drawer, looks: s.looks, spinDir: s.spinDir, texts: s.texts, pngInk: s.pngInk, saved: s.saved, current: s.current,
+      cycleSec: s.cycleSec, drawer: s.drawer, looks: s.looks, spinDir: s.spinDir, texts: s.texts, pngInk: s.pngInk, saved: s.saved, current: s.current, guides: s.guides,
     }))
   } catch { /* per-viewer only */ }
 }
@@ -130,7 +135,7 @@ export const usePresent = create<P>()((set, get) => {
   const up = (p: Partial<P>) => { set(p); keep(get()) }
   const snap = (): Omit<Saved, 'id' | 'name'> => {
     const s = get()
-    return { compose: { ...s.compose }, pos: strip(s.pos), looks: { ...s.looks }, texts: [...s.texts] }
+    return { compose: { ...s.compose }, pos: strip(s.pos), looks: { ...s.looks }, texts: [...s.texts], guides: { ...s.guides } }
   }
   return {
     mode: (saved.mode as Mode) ?? 'lab',
@@ -160,7 +165,7 @@ export const usePresent = create<P>()((set, get) => {
       const compose = cur.includes(id) ? s.compose : { ...s.compose, [family]: [...cur, id].join(',') }
       const pos = { ...s.pos }
       if (at) pos[`${PRE}${family}:${id}`] = { x: at.x, y: at.y, c: true }
-      up({ compose, pos, sel: `${family}:${id}` })
+      up({ compose, pos, sel: at ? `${family}:${id}` : s.sel })   // a drop selects what was dropped; a click from the library does not
     },
     removePiece: (key) => {
       const s = get()
@@ -223,6 +228,8 @@ export const usePresent = create<P>()((set, get) => {
         up({ texts: get().texts.filter((t) => t.id !== id), pos })
       } else up({ texts: get().texts.map((t) => (t.id === id ? { ...t, text } : t)) })
     },
+    guides: { box: false, floor: false, div: 4, ...saved.guides },
+    setGuides: (g) => up({ guides: { ...get().guides, ...g } }),
     pngInk: saved.pngInk ?? 'auto',
     setPngInk: (i) => up({ pngInk: i }),
     saved: saved.saved ?? [],
@@ -242,18 +249,18 @@ export const usePresent = create<P>()((set, get) => {
       const s = get()
       const c = s.saved.find((x) => x.id === id)
       if (!c) return
-      up({ compose: { ...c.compose }, pos: withOthers(s.pos, c.pos), looks: { ...c.looks }, texts: [...c.texts], current: id, sel: null })
+      up({ compose: { ...c.compose }, pos: withOthers(s.pos, c.pos), looks: { ...c.looks }, texts: [...c.texts], guides: c.guides ?? s.guides, current: id, sel: null })
     },
     rename: (id, name) => up({ saved: get().saved.map((x) => (x.id === id ? { ...x, name } : x)) }),
     removeSaved: (id) => up({ saved: get().saved.filter((x) => x.id !== id), current: get().current === id ? null : get().current }),
-    clear: () => up({ compose: {}, pos: withOthers(get().pos, {}), looks: {}, texts: [], current: null, sel: null }),
+    clear: () => up({ compose: {}, pos: withOthers(get().pos, {}), looks: {}, texts: [], guides: { ...get().guides, box: false, floor: false }, current: null, sel: null }),
   }
 })
 
 /** Whether what is on the view differs from the saved composition it came from (or anything is on, if none). */
-export function isDirty(s: Pick<P, 'saved' | 'current' | 'compose' | 'pos' | 'looks' | 'texts'>): boolean {
+export function isDirty(s: Pick<P, 'saved' | 'current' | 'compose' | 'pos' | 'looks' | 'texts' | 'guides'>): boolean {
   const cur = s.saved.find((x) => x.id === s.current)
-  if (!cur) return Object.values(s.compose).some((v) => variants(v).length > 0) || s.texts.length > 0
+  if (!cur) return Object.values(s.compose).some((v) => variants(v).length > 0) || s.texts.length > 0 || s.guides.box || s.guides.floor
   const norm = (o: object) => JSON.stringify(o, (_, v) => (v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).filter(([, x]) => x !== 'off').sort()) : v))
-  return norm({ compose: s.compose, pos: strip(s.pos), looks: s.looks, texts: s.texts }) !== norm({ compose: cur.compose, pos: cur.pos, looks: cur.looks, texts: cur.texts })
+  return norm({ compose: s.compose, pos: strip(s.pos), looks: s.looks, texts: s.texts, guides: s.guides }) !== norm({ compose: cur.compose, pos: cur.pos, looks: cur.looks, texts: cur.texts, guides: cur.guides ?? s.guides })
 }

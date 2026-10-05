@@ -1,8 +1,8 @@
-// The component library and the layer list. Components are grouped (frames, camera, data, pointers);
-// each tile is a live preview of the mark, drawn from the current view and cropped to where it sits.
-// Hovering a tile shows the component on the view; a click turns it on, another click turns it off.
-// In Present a tile can also be dragged onto the view. The layer list is what is on the view, with
-// visibility, emphasis, line weight, dash spacing and size for each.
+// The component library and the layer list, as compact rows. Library rows are grouped (frames and
+// guides, camera and orbit, data, pointers and scan); each has a small live preview of the mark.
+// Hovering a row shows it on the view with everything else dimmed; a click turns it on or off; in
+// Present a row can be dragged onto the view to put it exactly there. The layer list is what is on the
+// view: visibility, remove, and when opened its emphasis, line weight, dash spacing and size.
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useStore } from '../store'
 import { usePresent, type Look } from '../present'
@@ -18,7 +18,7 @@ export const cap = (s: string) => (s ? s[0].toUpperCase() + s.slice(1) : s)
 export const familyOf = (id: string) => FAMILIES.find((f) => f.id === id)
 export const nameOf = (m: HudModule) => `${familyOf(m.family)?.title ?? m.family} · ${cap(m.label)}`
 
-/** The MIME type a dragged library tile carries: "family:variant", or "text". */
+/** The MIME type a dragged library row carries: "family:variant", or "text". */
 export const MARK_MIME = 'application/x-qs-mark'
 
 export const GROUPS: { id: string; title: string; fams: string[] }[] = [
@@ -70,81 +70,77 @@ export const TIERS: { v: 1 | 2 | 3; t: string; d: string }[] = [
   { v: 3, t: 'Tertiary', d: 'Faint: structure and context.' },
 ]
 
-/** Every component as a preview tile, grouped. Hover a tile to see it on the view (one already on is
- *  singled out instead); click to turn it on, click again to turn it off. In Present a tile can also be
- *  dragged onto the view to put it exactly there. */
-export function MarkLibrary({ compose, looks = {}, cols = 2, tile = 146, drag = false, onToggle, onPreview, onDragStart, extra }: {
-  compose: Record<string, string>; looks?: Record<string, Look>; cols?: number; tile?: number; drag?: boolean
+const ROW = 34
+/** One library row: a small preview, the name, and a dot when it is on. */
+export function LibRow({ on, thumb, name, note, drag, onToggle, onHover, onDragStart }: {
+  on: boolean; thumb: ReactNode; name: string; note?: string; drag?: string
+  onToggle: () => void; onHover?: (h: boolean) => void; onDragStart?: () => void
+}) {
+  return (
+    <div role="switch" tabIndex={0} aria-checked={on} aria-label={name} className={'mk-row' + (on ? ' mk-row--on' : '') + (drag ? ' mk-row--drag' : '')}
+      draggable={!!drag}
+      onDragStart={(e) => {
+        if (!drag) return
+        onHover?.(false)
+        e.dataTransfer.setData(MARK_MIME, drag)
+        e.dataTransfer.effectAllowed = 'copy'
+        onDragStart?.()
+      }}
+      onClick={onToggle}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle() } }}
+      onPointerEnter={() => onHover?.(true)} onFocus={() => onHover?.(true)} onPointerLeave={() => onHover?.(false)} onBlur={() => onHover?.(false)}>
+      {thumb}
+      <span className="mk-row__t">{name}{note && <em>{note}</em>}</span>
+      <span className="mk-dot" aria-hidden />
+    </div>
+  )
+}
+
+/** Every component as a row, grouped. Hover: see it on the view, the rest dimmed (one already on is
+ *  singled out). Click: on, click again: off. Present: drag a row onto the view to put it there. */
+export function MarkLibrary({ compose, looks = {}, drag = false, onToggle, onPreview, onDragStart, guides, extra }: {
+  compose: Record<string, string>; looks?: Record<string, Look>; drag?: boolean
   onToggle: (fam: string, id: string, on: boolean) => void
-  /** Hovering: the tile's key and whether it is on already; null when the pointer leaves. */
+  /** Hovering: the row's key and whether it is on already; null when the pointer leaves. */
   onPreview?: (key: string | null, on: boolean) => void
   onDragStart?: () => void
-  /** Tiles that are not marks (Present: free text), shown first. */
+  /** Rows at the top of "Frames and guides" (Present: the bounding box and print grid). */
+  guides?: ReactNode
+  /** Rows after the groups (Present: free text). */
   extra?: ReactNode
 }) {
   const { ctx, bg, refresh } = useSnap()
-  const th = Math.round(tile * 0.62)
-  const jump = (id: string) => document.getElementById(`mk-g-${id}`)?.scrollIntoView({ block: 'start', behavior: 'smooth' })
   return (
     <div className="mk" onPointerEnter={refresh} onPointerLeave={() => onPreview?.(null, false)}>
-      <div className="mk-groups" role="navigation" aria-label="Library groups">
-        {GROUPS.map((g) => <button key={g.id} className="pd-chip pd-chip--s" onClick={() => jump(g.id)}>{g.title}</button>)}
-      </div>
-      {extra}
       {GROUPS.map((g) => (
-        <div key={g.id} id={`mk-g-${g.id}`} className="mk-group">
+        <div key={g.id} className="mk-group">
           <span className="mk-group__t">{g.title}</span>
+          {g.id === 'frame' && guides}
           {g.fams.map((fid) => {
             const f = familyOf(fid)
             if (!f) return null
             const on = variantsOf(compose, f.id)
             return (
               <div key={f.id} className="mk-fam">
-                <div className="mk-fam__head">
-                  <span className="mk-fam__t">{f.title}</span>
-                  <span className="mk-fam__d">{on.length ? `${on.length} on` : f.desc}</span>
-                </div>
-                <Lazy h={Math.ceil(f.modules.length / cols) * (th + 30)}>
-                  <div className="mk-tiles" style={{ gridTemplateColumns: `repeat(${cols}, ${tile}px)` }}>
-                    {f.modules.map((m) => {
-                      const isOn = on.includes(m.id)
-                      const tier = looks[keyOf(m)]?.tier ?? 1
-                      const click = () => { onToggle(f.id, m.id, !isOn); onPreview?.(isOn ? null : keyOf(m), !isOn) }
-                      return (
-                        <div key={m.id} role="switch" tabIndex={0} aria-checked={isOn} aria-label={nameOf(m)}
-                          className={'mk-tile' + (isOn ? ' mk-tile--on mk-tile--t' + tier : '') + (drag ? ' mk-tile--drag' : '')}
-                          draggable={drag}
-                          onDragStart={(e) => {
-                            onPreview?.(null, false)
-                            e.dataTransfer.setData(MARK_MIME, keyOf(m))
-                            e.dataTransfer.effectAllowed = 'copy'
-                            const img = e.currentTarget.querySelector('.mini')
-                            if (img) e.dataTransfer.setDragImage(img, tile / 2, th / 2)
-                            onDragStart?.()
-                          }}
-                          onClick={click}
-                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); click() } }}
-                          onPointerEnter={() => onPreview?.(keyOf(m), isOn)}
-                          onFocus={() => onPreview?.(keyOf(m), isOn)}
-                          onPointerLeave={() => onPreview?.(null, false)}>
-                          {ctx ? <MarkThumb m={m} ctx={ctx} bg={bg} w={tile} h={th} look={looks[keyOf(m)]} /> : <span className="mini mk-tile__empty" style={{ width: tile, height: th }}>Open a model to preview</span>}
-                          <span className="mk-tile__t">
-                            <span className="mk-tile__name">{cap(m.label)}</span>
-                            <span className={'mk-tile__state' + (isOn ? ' mk-tile__state--on' : '')}>
-                              <span className="mk-tile__is">{isOn ? 'On' : ''}</span>
-                              <span className="mk-tile__act">{isOn ? 'Turn off' : drag ? 'Click or drag' : 'Turn on'}</span>
-                            </span>
-                          </span>
-                        </div>
-                      )
-                    })}
-                  </div>
+                <span className="mk-fam__t">{f.title}{on.length > 0 && <em>{on.length} on</em>}</span>
+                <Lazy h={f.modules.length * ROW}>
+                  {f.modules.map((m) => {
+                    const isOn = on.includes(m.id)
+                    return (
+                      <LibRow key={m.id} on={isOn} name={cap(m.label)} drag={drag ? keyOf(m) : undefined}
+                        thumb={ctx ? <MarkThumb m={m} ctx={ctx} bg={bg} w={44} h={28} look={looks[keyOf(m)]} /> : <span className="mini" style={{ width: 44, height: 28 }} />}
+                        onToggle={() => { onToggle(f.id, m.id, !isOn); onPreview?.(keyOf(m), !isOn) }}
+                        onHover={(h) => onPreview?.(h ? keyOf(m) : null, isOn)}
+                        onDragStart={onDragStart} />
+                    )
+                  })}
                 </Lazy>
               </div>
             )
           })}
         </div>
       ))}
+      {extra}
     </div>
   )
 }
@@ -153,41 +149,55 @@ export function MarkLibrary({ compose, looks = {}, cols = 2, tile = 146, drag = 
 const pieceEl = (k: string) =>
   document.querySelector<HTMLElement>(`.stage__view .hud-layer > [data-hud="${k}"], .stage__view [data-hud="${k}"] > .hud-piece__body`)
 
-/** What is on the view, as layers. A row selects its piece (and a piece selected on the view opens its
- *  row): visibility, emphasis, line weight, dash spacing, size, back to its place, PNG, remove. */
+/** The print grid's cell size: lines across the floor, shown in mm when the grid is known. */
+export function FloorSize() {
+  const p = usePresent()
+  const grid = useStore((s) => s.grid)
+  const side = grid ? grid.n * grid.voxel_size : null
+  return (
+    <Slider label="Cell size" value={p.guides.div} min={1} max={32} step={1} ticks={8}
+      format={(v) => (side ? `${(side / v).toFixed(side / v < 10 ? 1 : 0)} mm` : `${v} a side`)}
+      onChange={(v) => p.setGuides({ div: v })} />
+  )
+}
+
+/** What is on the view, as rows. Click a row to open its settings (a piece selected on the view opens
+ *  its row too): emphasis, line weight, dash spacing, size, back to its place, PNG. */
 export function LayerList() {
   const p = usePresent()
   const { ctx, bg } = useSnap()
-  const row = useRef<Record<string, HTMLDivElement | null>>({})
-  useEffect(() => { if (p.sel) row.current[p.sel]?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }) }, [p.sel])
   const mods = chosenOf(p.compose)
-  const items: { k: string; title: string; sub: string; m?: HudModule; text?: string }[] = [
+  const items: { k: string; title: string; sub: string; m?: HudModule; text?: string; guide?: 'box' | 'floor' }[] = [
+    ...(p.guides.box ? [{ k: 'guide:box', title: 'Bounding box', sub: 'the grid volume', guide: 'box' as const }] : []),
+    ...(p.guides.floor ? [{ k: 'guide:floor', title: 'Print grid', sub: `${p.guides.div} cells a side`, guide: 'floor' as const }] : []),
     ...mods.map((m) => ({ k: keyOf(m), title: familyOf(m.family)?.title ?? m.family, sub: cap(m.label), m })),
     ...p.texts.map((t) => ({ k: `text:${t.id}`, title: 'Text', sub: t.text, text: t.text })),
   ]
-  if (!items.length) return <span className="pd-empty">Nothing on the view yet. Drag components from the library below, or add text.</span>
+  if (!items.length) return <span className="pd-empty">Nothing on the view yet. Turn components on in the library.</span>
   return (
     <div className="ly" onPointerLeave={() => p.setHl(null)}>
-      {items.map(({ k, title, sub, m, text }) => {
+      {items.map(({ k, title, sub, m, text, guide }) => {
         const look = p.looks[k] ?? {}
         const open = p.sel === k
         const moved = !!p.pos[`present|${k}`]
-        const sized = !m || (m.slot !== 'object' && m.slot !== 'full')
+        const sized = !guide && (!m || (m.slot !== 'object' && m.slot !== 'full'))
         const changed = ['tier', 'weight', 'dash', 'size'].some((x) => look[x as keyof Look] != null)
+        const remove = () => (guide ? p.setGuides({ [guide]: false }) : p.removePiece(k))
+        const hasProps = !guide || guide === 'floor'
         return (
-          <div key={k} ref={(el) => { row.current[k] = el }} className={'ly-row' + (open ? ' ly-row--open' : '') + (look.hidden ? ' ly-row--hidden' : '')}
-            onPointerEnter={() => p.setHl(k)}>
+          <div key={k} className={'ly-row' + (open ? ' ly-row--open' : '') + (look.hidden ? ' ly-row--hidden' : '')} onPointerEnter={() => p.setHl(k)}>
             <div className="ly-row__main" role="button" tabIndex={0} aria-expanded={open}
-              onClick={() => { p.setSel(open ? null : k); if (!open) p.setComposing(true) }}
-              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); p.setSel(open ? null : k) } }}>
-              {m && ctx ? <MarkThumb m={m} ctx={ctx} bg={bg} w={52} h={34} look={look} /> : <span className="mini ly-row__txt" style={{ width: 52, height: 34 }}>Aa</span>}
-              <span className="ly-row__t">{title}<span className="ly-row__s">{sub}{changed ? ' · adjusted' : ''}{moved ? ' · moved' : ''}</span></span>
+              onClick={() => hasProps && p.setSel(open ? null : k)}
+              onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && hasProps) { e.preventDefault(); p.setSel(open ? null : k) } }}>
+              {m && ctx ? <MarkThumb m={m} ctx={ctx} bg={bg} w={40} h={26} look={look} /> : <span className="mini ly-row__txt" style={{ width: 40, height: 26 }}>{guide ? (guide === 'box' ? '⬚' : '#') : 'Aa'}</span>}
+              <span className="ly-row__t">{title}<em>{sub}{changed ? ' · adjusted' : ''}{moved ? ' · moved' : ''}</em></span>
               <span className="ly-row__tools" onClick={(e) => e.stopPropagation()}>
-                <IconButton name={look.hidden ? 'eyeOff' : 'eye'} size={24} dim={look.hidden} title={look.hidden ? 'Show' : 'Hide'} desc="Keep it in the composition but leave it off the view." onClick={() => p.setLook(k, { hidden: !look.hidden })} />
-                <IconButton name="clear" size={24} title="Remove" desc="Take it off the view." onClick={() => p.removePiece(k)} />
+                {!guide && <IconButton name={look.hidden ? 'eyeOff' : 'eye'} size={22} dim={look.hidden} title={look.hidden ? 'Show' : 'Hide'} desc="Keep it in the composition but leave it off the view." onClick={() => p.setLook(k, { hidden: !look.hidden })} />}
+                <IconButton name="clear" size={22} title="Remove" desc="Take it off the view." onClick={remove} />
               </span>
             </div>
-            {open && (
+            {open && guide === 'floor' && <div className="ly-props"><FloorSize /></div>}
+            {open && !guide && (
               <div className="ly-props">
                 {text != null && (
                   <label className="pd-field"><span className="pd-k">Text</span>
@@ -205,7 +215,7 @@ export function LayerList() {
                   {moved && m && <button className="pd-chip pd-chip--s" onClick={() => p.setPos(`present|${k}`, null)}>Back to its place</button>}
                   <button className="pd-chip pd-chip--s" onClick={() => { const el = pieceEl(k); if (el) savePng(el, m ? nameOf(m) : 'text').catch(() => {}) }}>Save PNG</button>
                   <span className="pd-grow" />
-                  <button className="pd-chip pd-chip--s" disabled={!changed} onClick={() => p.setLook(k, { tier: undefined, weight: undefined, dash: undefined, size: undefined })}>Reset look</button>
+                  {changed && <button className="pd-chip pd-chip--s" onClick={() => p.setLook(k, { tier: undefined, weight: undefined, dash: undefined, size: undefined })}>Reset</button>}
                 </div>
               </div>
             )}

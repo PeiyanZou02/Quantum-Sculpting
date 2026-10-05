@@ -1,7 +1,7 @@
 // Present mode's compose panel, docked at the side so the view stays visible. Present is where you
-// photograph and diagram the lab result. It starts clean: enter compose mode, drag components from the
-// library onto the view, move and tune them, drag them back onto this panel to take them off, and save
-// the composition by name. The icon row at the top jumps between sections, as in Lab's Properties.
+// photograph and diagram the lab result. It starts clean: turn components on from the library (hover a
+// row to see it on the view), arrange them in compose mode, and save the composition by name. Sections
+// are compact rows; the icon rail on the left jumps between them.
 import { useState, type ReactNode } from 'react'
 import { useStore, type Layer, type Shading, type Tool, type View } from '../store'
 import { isDirty, usePresent } from '../present'
@@ -13,7 +13,7 @@ import { Check } from '../qs/Popover'
 import { ScrollArea } from '../qs/ScrollArea'
 import { useLive } from '../live'
 import { renderStill, screenshot, toggleRecording } from './capture'
-import { LayerList, MARK_MIME, MarkLibrary, useSnap } from './MarkLibrary'
+import { FloorSize, LayerList, LibRow, MarkLibrary, useSnap } from './MarkLibrary'
 import { SectionTabs } from './SectionTabs'
 
 const SHADES: { id: Shading; icon: string; t: string }[] = [
@@ -40,17 +40,17 @@ const MARKERS = [
   { id: 'pd-capture', label: 'Capture', icon: 'frame' },
 ]
 
-/** A section tile, as in Lab's panels. */
-function Blk({ id, label, note, children }: { id: string; label: string; note?: ReactNode; children: ReactNode }) {
+/** A section: a title and its rows, no tile around it. */
+function Sec({ id, label, note, children }: { id: string; label: string; note?: ReactNode; children: ReactNode }) {
   return (
-    <div className="blk pd-blk" data-mark={id}>
-      <div className="pd-blk__head"><span className="blk__title">{label}</span>{note != null && <span className="pd-blk__n">{note}</span>}</div>
+    <section className="pd-sec" data-mark={id}>
+      <header className="pd-sec__head"><span className="pd-sec__t">{label}</span>{note != null && <span className="pd-sec__n">{note}</span>}</header>
       {children}
-    </div>
+    </section>
   )
 }
 
-/** The composition on the view (name, save, start clean) and the saved ones, as previews. */
+/** The composition on the view (name, save, start clean) and the saved ones, one row each. */
 function Compositions() {
   const p = usePresent()
   const { ctx, bg, refresh } = useSnap()
@@ -58,41 +58,39 @@ function Compositions() {
   const dirty = isDirty(p)
   const [name, setName] = useState<string | null>(null)
   const [ask, setAsk] = useState(false)
-  const shown = name ?? cur?.name ?? ''
   const startClean = () => { if (dirty && !ask) { setAsk(true); return } setAsk(false); p.clear() }
   return (
-    <Blk id="pd-saved" label="Compositions" note={p.saved.length ? `${p.saved.length} saved` : undefined}>
+    <Sec id="pd-saved" label="Compositions" note={cur ? (dirty ? 'changed' : 'saved') : dirty ? 'not saved' : 'clean'}>
       <div className="pd-now">
-        <input className="pd-in pd-now__name" value={shown} placeholder="Untitled composition" aria-label="Composition name"
+        <input className="pd-in" value={name ?? cur?.name ?? ''} placeholder="Untitled composition" aria-label="Composition name"
           onChange={(e) => setName(e.target.value)}
           onBlur={() => { if (name != null && cur && name.trim()) p.rename(cur.id, name.trim()); if (cur || !name?.trim()) setName(null) }}
           onKeyDown={(e) => { if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur() }} />
-        <span className="pd-now__state">{cur ? (dirty ? 'changed' : 'saved') : dirty ? 'not saved' : 'clean'}</span>
-      </div>
-      <div className="pd-row">
         <button className="pd-chip pd-chip--ink" disabled={!dirty} onClick={() => { p.save(name ?? undefined); setName(null) }}
-          data-tip={cur ? 'Save' : 'Save as a new composition'} data-tip-desc="Keeps what is on the view, where you put it and how it looks.">{cur ? 'Save' : 'Save composition'}</button>
-        {cur && <button className="pd-chip" onClick={() => { p.saveNew(`${cur.name} copy`); setName(null) }}>Save as new</button>}
-        <span className="pd-grow" />
-        {ask
-          ? <><span className="pd-ask">Discard the unsaved changes?</span><button className="pd-chip pd-chip--s" onClick={startClean}>Discard</button><button className="pd-chip pd-chip--s" onClick={() => setAsk(false)}>Keep</button></>
-          : <button className="pd-chip" onClick={startClean} data-tip="Start clean" data-tip-desc="Nothing on the view. Saved compositions stay.">Start clean</button>}
+          data-tip={cur ? 'Save' : 'Save as a new composition'} data-tip-desc="Keeps what is on the view, where you put it and how it looks.">Save</button>
       </div>
       {p.saved.length > 0 && (
-        <div className="pd-saved" onPointerEnter={refresh}>
+        <div className="pd-list" onPointerEnter={refresh}>
           {p.saved.map((c, i) => (
             <div key={c.id} role="button" tabIndex={0} className={'pd-save' + (c.id === p.current ? ' pd-save--on' : '')}
-              onClick={() => p.load(c.id)} onKeyDown={(e) => { if (e.key === 'Enter') p.load(c.id) }}
-              data-tip={c.name} data-tip-desc="Click to put it on the view." data-tip-key={i < 9 ? String(i + 1) : undefined}>
-              {ctx ? <CompThumb compose={c.compose} positions={c.pos} looks={c.looks} texts={c.texts} ctx={ctx} bg={bg} w={146} h={90} /> : <span className="mini" style={{ width: 146, height: 90 }} />}
-              <span className="pd-save__t"><span className="pd-save__n">{i + 1}</span>{c.name}</span>
-              <button className="pd-save__x" aria-label={`Delete ${c.name}`} onClick={(e) => { e.stopPropagation(); p.removeSaved(c.id) }} data-tip="Delete this composition">×</button>
+              onClick={() => p.load(c.id)} onKeyDown={(e) => { if (e.key === 'Enter') p.load(c.id) }}>
+              {ctx ? <CompThumb compose={c.compose} positions={c.pos} looks={c.looks} texts={c.texts} ctx={ctx} bg={bg} w={44} h={28} /> : <span className="mini" style={{ width: 44, height: 28 }} />}
+              <span className="pd-save__t">{c.name}</span>
+              {i < 9 && <span className="pd-save__n">{i + 1}</span>}
+              <span onClick={(e) => e.stopPropagation()}><IconButton name="clear" size={22} title="Delete this composition" onClick={() => p.removeSaved(c.id)} /></span>
             </div>
           ))}
         </div>
       )}
-      {p.saved.length > 1 && <Check label="Cycle" note={`through the saved, every ${p.cycleSec} s`} checked={p.cycle} onChange={p.setCycle} />}
-    </Blk>
+      <div className="pd-row">
+        {cur && <button className="pd-chip pd-chip--s" onClick={() => { p.saveNew(`${cur.name} copy`); setName(null) }}>Save as new</button>}
+        {p.saved.length > 1 && <button className={'pd-chip pd-chip--s' + (p.cycle ? ' pd-chip--on' : '')} onClick={() => p.setCycle(!p.cycle)} data-tip={`Step through the saved every ${p.cycleSec} s`}>Cycle</button>}
+        <span className="pd-grow" />
+        {ask
+          ? <><span className="pd-ask">Discard changes?</span><button className="pd-chip pd-chip--s" onClick={startClean}>Discard</button><button className="pd-chip pd-chip--s" onClick={() => setAsk(false)}>Keep</button></>
+          : <button className="pd-chip pd-chip--s" onClick={startClean} data-tip="Start clean" data-tip-desc="Nothing on the view. Saved compositions stay.">Start clean</button>}
+      </div>
+    </Sec>
   )
 }
 
@@ -102,21 +100,12 @@ function Annotate() {
   const pins = lv.probe?.pins ?? []
   const rename = (i: number, t: string) => lv.probe?.setPins(pins.map((q, j) => (j === i ? { ...q, hit: { ...q.hit, lines: [t, q.hit.lines[1]] as [string, string] } } : q)))
   return (
-    <Blk id="pd-annotate" label="Annotate" note="pins stay on the geometry">
-      <div className="pd-chips" role="radiogroup" aria-label="Tool">
-        {PRESENT_TOOLS.map((t) => (
-          <button key={t.id} role="radio" aria-checked={st.tool === t.id} className={'pd-chip' + (st.tool === t.id ? ' pd-chip--on' : '')}
-            onClick={() => st.setTool(t.id)} data-tip={t.t} data-tip-desc={t.d} data-tip-key={t.key}>
-            <Icon name={t.icon} size={14} />{t.t}
-          </button>
-        ))}
-      </div>
+    <Sec id="pd-annotate" label="Annotate" note="pins stay on the geometry">
       <div className="pd-row">
-        <button className="pd-chip" disabled={!st.gridData} onClick={() => { lv.autoAnnotate?.() }}
-          data-tip="Auto-annotate" data-tip-desc="Pins the peak value, the top, the widest layer, the base and the most changed cell of the last result.">
-          <Icon name="auto" size={14} />Auto-annotate
-        </button>
-        {pins.length > 0 && <button className="pd-chip" onClick={() => lv.probe?.clear()}>Clear pins</button>}
+        <Segmented<Tool> size="s" value={st.tool} onChange={st.setTool} options={PRESENT_TOOLS.map((t) => ({ value: t.id, label: t.t }))} />
+        <span className="pd-grow" />
+        <IconButton name="auto" size={26} title="Auto-annotate" desc="Pins the peak value, the top, the widest layer, the base and the most changed cell of the last result." disabled={!st.gridData} onClick={() => { lv.autoAnnotate?.() }} />
+        {pins.length > 0 && <IconButton name="clear" size={26} title="Clear the pins" onClick={() => lv.probe?.clear()} />}
       </div>
       {pins.length > 0 && (
         <ol className="pd-notes">
@@ -132,7 +121,7 @@ function Annotate() {
           ))}
         </ol>
       )}
-    </Blk>
+    </Sec>
   )
 }
 
@@ -145,134 +134,112 @@ export function PresentPanel() {
     const el = document.querySelector<HTMLElement>('.stage__view')
     if (el) savePng(el, 'hud', 2).catch(() => {})
   }
-  const on = Object.values(p.compose).filter((v) => v && v !== 'off').reduce((n, v) => n + v.split(',').length, 0) + p.texts.length
+  // hovering a library row: it shows on the view and everything else dims
+  const hover = (k: string | null, on: boolean) => { p.setPreview(k && !on ? k : null); p.setHl(k) }
+  const guide = (g: 'box' | 'floor', name: string, note: string) => (
+    <LibRow on={p.guides[g]} name={name} note={note} thumb={<span className="mini mk-row__glyph" style={{ width: 44, height: 28 }}>{g === 'box' ? '⬚' : '#'}</span>}
+      onToggle={() => { p.setGuides({ [g]: !p.guides[g] }); hover(`guide:${g}`, !p.guides[g]) }}
+      onHover={(h) => hover(h ? `guide:${g}` : null, p.guides[g])} />
+  )
+  const on = Object.values(p.compose).filter((v) => v && v !== 'off').reduce((n, v) => n + v.split(',').length, 0) + p.texts.length + +p.guides.box + +p.guides.floor
   return (
     <aside className={'pd' + (p.composing ? ' pd--composing' : '')} aria-label="Compose the present view" onPointerLeave={() => { p.setHl(null); p.setPreview(null) }}>
       <header className="pd__head">
         <span className="pd__title">Compose</span>
         <button className={'pd-mode' + (p.composing ? ' pd-mode--on' : '')} onClick={() => p.setComposing(!p.composing)} aria-pressed={p.composing}
-          data-tip={p.composing ? 'Done composing' : 'Compose mode'} data-tip-key="C"
-          data-tip-desc={p.composing ? 'Pieces stay where they are.' : 'Drag components onto the view, move pieces, select and remove them.'}>
-          <Icon name="drag" size={14} />{p.composing ? 'Done' : 'Compose mode'}
+          data-tip={p.composing ? 'Done arranging' : 'Arrange'} data-tip-key="C"
+          data-tip-desc={p.composing ? 'Pieces stay where they are.' : 'Drag pieces around the view, select and remove them, drop rows from the library onto the view.'}>
+          <Icon name="drag" size={14} />{p.composing ? 'Done' : 'Arrange'}
         </button>
         <IconButton name="clear" size={26} title="Close the panel" desc="Bring it back from the bar at the bottom." onClick={() => p.setDrawer(false)} side="left" />
       </header>
-      {p.composing && <p className="pd-hint pd-hint--mode">Drag components onto the view. Drag a piece onto this panel, or press ⌫, to take it off.</p>}
-      <ScrollArea markers={MARKERS} className="pane-scroll pane-scroll--tabs pd-scroll" bar={false} renderIndex={(ix) => <SectionTabs {...ix} label="Compose sections" />}>
+      <ScrollArea markers={MARKERS} className="pd-scroll" bar={false} renderIndex={(ix) => <SectionTabs {...ix} label="Compose sections" />}>
         <Compositions />
 
-        <Blk id="pd-layers" label="Layers" note={on ? `${on} on the view` : undefined}>
+        <Sec id="pd-layers" label="Layers" note={on ? `${on} on the view` : undefined}>
           <LayerList />
-        </Blk>
+        </Sec>
 
-        <Blk id="pd-library" label="Component library" note="hover to preview · click to turn on or off">
+        <Sec id="pd-library" label="Component library" note="hover to see it">
           <MarkLibrary compose={p.compose} looks={p.looks} drag
-            onToggle={(f, id, on) => (on ? p.place(f, id) : p.removePiece(`${f}:${id}`))}
-            onPreview={(k, on) => {
-              // hovering shows the component on the view; one already on is singled out instead
-              p.setPreview(k && !on ? k : null)
-              p.setHl(k && on ? k : null)
-            }}
-            onDragStart={() => { p.setPreview(null); p.setComposing(true) }}
-            extra={
-              <div className="mk-extra">
-                <div role="button" tabIndex={0} className="mk-text" draggable
-                  onDragStart={(e) => { e.dataTransfer.setData(MARK_MIME, 'text'); e.dataTransfer.effectAllowed = 'copy'; p.setComposing(true) }}
-                  onClick={() => { p.addText(); p.setComposing(true) }} onKeyDown={(e) => { if (e.key === 'Enter') p.addText() }}
-                  data-tip="Text" data-tip-desc="A title or caption. Drag it onto the view, then double-click it to edit.">
-                  <span className="mk-text__aa">Aa</span><span>Text<em>title or caption</em></span>
-                </div>
-              </div>
-            } />
-        </Blk>
+            onToggle={(f, id, now) => (now ? p.place(f, id) : p.removePiece(`${f}:${id}`))}
+            onPreview={hover}
+            onDragStart={() => { p.setPreview(null); p.setHl(null); p.setComposing(true) }}
+            guides={<div className="mk-fam">
+              <span className="mk-fam__t">Scene guides</span>
+              {guide('box', 'Bounding box', 'the grid volume')}
+              {guide('floor', 'Print grid', `${p.guides.div} cells a side`)}
+              {p.guides.floor && <div className="mk-sub"><FloorSize /></div>}
+            </div>}
+            extra={<div className="mk-group">
+              <span className="mk-group__t">Text</span>
+              <LibRow on={false} name="Text" note="title or caption" drag="text"
+                thumb={<span className="mini mk-row__glyph" style={{ width: 44, height: 28 }}>Aa</span>}
+                onToggle={() => { p.addText(); p.setComposing(true) }} onDragStart={() => p.setComposing(true)} />
+            </div>} />
+        </Sec>
 
-        <Blk id="pd-view" label="View" note="what the photo shows">
-          <div className="pd-field"><span className="pd-k">Show</span>
-            <Segmented<View> size="s" value={st.view} onChange={st.setView} options={[
-              { value: 'model', label: 'Model', disabled: !avail.model }, { value: 'voxels', label: 'Voxels', disabled: !avail.voxels },
-              { value: 'processed', label: 'Quantum', disabled: !avail.processed }, { value: 'result', label: 'Mesh', disabled: !avail.result },
-              { value: 'scan', label: 'Scan', disabled: !avail.scan },
-            ]} />
+        <Sec id="pd-view" label="View" note="what the photo shows">
+          <Segmented<View> size="s" value={st.view} onChange={st.setView} options={[
+            { value: 'model', label: 'Model', disabled: !avail.model }, { value: 'voxels', label: 'Voxels', disabled: !avail.voxels },
+            { value: 'processed', label: 'Quantum', disabled: !avail.processed }, { value: 'result', label: 'Mesh', disabled: !avail.result },
+            { value: 'scan', label: 'Scan', disabled: !avail.scan },
+          ]} />
+          <div className="pd-checks">
+            {GHOSTS.map((g) => {
+              const main = g.id === (st.view === 'scan' ? 'processed' : st.view)
+              const has = avail[g.id as View]
+              return <Check key={g.id} label={g.t} note={main ? 'shown' : has ? 'faint overlay' : 'not computed'} checked={main || st.layers[g.id].visible} disabled={main || !has} onChange={(v) => st.setLayer(g.id, { visible: v })} />
+            })}
           </div>
-          <div className="pd-field"><span className="pd-k">Overlay</span>
-            <div className="pd-checks">
-              {GHOSTS.map((g) => {
-                const main = g.id === (st.view === 'scan' ? 'processed' : st.view)
-                const has = avail[g.id as View]
-                return <Check key={g.id} label={g.t} note={main ? 'shown' : has ? 'faint, over the view' : 'not computed'} checked={main || st.layers[g.id].visible} disabled={main || !has} onChange={(v) => st.setLayer(g.id, { visible: v })} />
-              })}
-            </div>
+          <div className="pd-line"><span className="pd-k">Shading</span>
+            <div className="pd-chips">{SHADES.map((s) => <button key={s.id} className={'pd-chip pd-chip--s' + (st.shading === s.id ? ' pd-chip--on' : '')} onClick={() => st.setShading(s.id)}>{s.t}</button>)}</div>
           </div>
-          <div className="pd-field"><span className="pd-k">Shading</span>
-            <div className="pd-chips">
-              {SHADES.map((s) => (
-                <button key={s.id} className={'pd-chip' + (st.shading === s.id ? ' pd-chip--on' : '')} onClick={() => st.setShading(s.id)} data-tip={`${s.t} shading`}>
-                  <Icon name={s.icon} size={14} />{s.t}
-                </button>
-              ))}
-            </div>
+          <div className="pd-line"><span className="pd-k">Light</span>
+            <div className="pd-chips">{LIGHTS.map((l) => <button key={l.id} className={'pd-chip pd-chip--s' + (st.shade.light === l.id ? ' pd-chip--on' : '')} onClick={() => st.setShading(st.shading, { light: l.id })}>{l.t}</button>)}</div>
           </div>
-          <div className="pd-field"><span className="pd-k">Light</span>
-            <div className="pd-chips">{LIGHTS.map((l) => <button key={l.id} className={'pd-chip' + (st.shade.light === l.id ? ' pd-chip--on' : '')} onClick={() => st.setShading(st.shading, { light: l.id })}>{l.t}</button>)}</div>
+          <div className="pd-line"><span className="pd-k">Backdrop</span>
+            <div className="pd-chips">{BACKDROPS.map((b) => <button key={b.id} className={'pd-chip pd-chip--s' + (st.shade.backdrop === b.id ? ' pd-chip--on' : '')} onClick={() => st.setShading(st.shading, { backdrop: b.id })}>{b.t}</button>)}</div>
           </div>
-          <div className="pd-field"><span className="pd-k">Backdrop</span>
-            <div className="pd-chips">{BACKDROPS.map((b) => <button key={b.id} className={'pd-chip' + (st.shade.backdrop === b.id ? ' pd-chip--on' : '')} onClick={() => st.setShading(st.shading, { backdrop: b.id })}>{b.t}</button>)}</div>
-          </div>
-        </Blk>
+        </Sec>
 
         <Annotate />
 
-        <Blk id="pd-motion" label="Motion" note="for recordings">
-          <div className="pd-field"><span className="pd-k">Shots</span>
+        <Sec id="pd-motion" label="Motion" note="for recordings">
+          <div className="pd-line"><span className="pd-k">Shots</span>
             <div className="pd-chips">
               {p.shots.map((_, i) => (
-                <button key={i} className={'pd-shot' + (p.shot === i ? ' pd-shot--on' : '')} onClick={() => p.setShot(i)} data-tip={`Shot ${i + 1}`} data-tip-desc="Fly to this camera position.">{i + 1}</button>
+                <button key={i} className={'pd-shot pd-shot--s' + (p.shot === i ? ' pd-shot--on' : '')} onClick={() => p.setShot(i)} data-tip={`Shot ${i + 1}`}>{i + 1}</button>
               ))}
-              <button className="pd-chip" disabled={p.shots.length >= 10} onClick={() => { const e = lv.engine; if (!e) return; const a = e.angles(), l = e.lens(); p.addShot({ az: a.az, el: a.el, dist: l.dist }) }}
+              <button className="pd-chip pd-chip--s" disabled={p.shots.length >= 10} onClick={() => { const e = lv.engine; if (!e) return; const a = e.angles(), l = e.lens(); p.addShot({ az: a.az, el: a.el, dist: l.dist }) }}
                 data-tip="Capture this angle" data-tip-desc="Save the camera as a shot (up to 10).">+ Shot</button>
-              {p.shots.length > 0 && <IconButton name="clear" size={24} title="Remove the current shot" onClick={() => p.removeShot(p.shot)} />}
+              {p.shots.length > 0 && <IconButton name="clear" size={22} title="Remove the current shot" onClick={() => p.removeShot(p.shot)} />}
             </div>
           </div>
           <div className="pd-checks">
             <Check label="Reel" note={p.shots.length < 2 ? 'needs two shots' : `${p.reelSec} s per shot`} checked={p.reel} disabled={p.shots.length < 2} onChange={p.setReel} />
-            <Check label="Turntable" note="the camera circles the model" checked={p.spin} onChange={p.setSpin} />
+            <Check label="Turntable" note={p.spinDir === 1 ? 'counter-clockwise' : 'clockwise'} checked={p.spin} onChange={p.setSpin} />
             <Check label="Slice sweep" note="the cutting plane rises and falls" checked={p.sweep} disabled={!st.gridData} onChange={p.setSweep} />
           </div>
-          <div className="pd-field"><span className="pd-k">Turntable direction</span>
-            <div className="pd-chips">
-              <button className={'pd-chip pd-chip--s' + (p.spinDir === 1 ? ' pd-chip--on' : '')} onClick={() => p.setSpinDir(1)}>↺ Counter-clockwise</button>
-              <button className={'pd-chip pd-chip--s' + (p.spinDir === -1 ? ' pd-chip--on' : '')} onClick={() => p.setSpinDir(-1)}>↻ Clockwise</button>
-            </div>
+          <div className="pd-line"><span className="pd-k">Direction</span>
+            <Segmented<string> size="s" value={String(p.spinDir)} onChange={(v) => p.setSpinDir(+v as 1 | -1)} options={[{ value: '1', label: '↺ Counter' }, { value: '-1', label: '↻ Clockwise' }]} />
           </div>
           <Slider label="Turntable speed" value={p.spinSpeed} min={2} max={45} step={1} ticks={9} format={(v) => `${v}°/s`} onChange={(v) => p.setMotion({ spinSpeed: v })} />
           <Slider label="Seconds per shot" value={p.reelSec} min={2} max={12} step={1} ticks={10} format={(v) => `${v} s`} onChange={(v) => p.setMotion({ reelSec: v })} />
           <Slider label="Seconds per composition" value={p.cycleSec} min={3} max={20} step={1} ticks={9} format={(v) => `${v} s`} onChange={(v) => p.setMotion({ cycleSec: v })} />
-        </Blk>
+        </Sec>
 
-        <Blk id="pd-capture" label="Capture" note="files go to your downloads">
-          <div className="pd-capture">
-            <button className="pd-cap" onClick={() => screenshot().catch(() => {})} data-tip="Screenshot" data-tip-desc="A PNG of exactly what the view shows, HUD included. The browser asks to share this tab.">
-              <Icon name="frame" size={18} /><span>Screenshot</span>
-            </button>
-            <button className={'pd-cap' + (p.recording ? ' pd-cap--on' : '')} onClick={() => toggleRecording().catch(() => {})} data-tip={p.recording ? 'Stop recording' : 'Record'} data-tip-desc="A WebM video of the view with its motion. Esc or the browser's Stop sharing ends it.">
-              <span className="pd-rec" /><span>{p.recording ? 'Stop' : 'Record'}</span>
-            </button>
-            <button className="pd-cap" onClick={() => renderStill(lv.engine, 3)} data-tip="Render the geometry" data-tip-desc="The geometry alone at three times the view's resolution, on a transparent background.">
-              <Icon name="export" size={18} /><span>Geometry</span>
-            </button>
-            <button className="pd-cap" onClick={hudPng} data-tip="Save the HUD" data-tip-desc="Every piece, pin and note without the geometry, as a transparent PNG at 2×.">
-              <Icon name="layers" size={18} /><span>HUD only</span>
-            </button>
+        <Sec id="pd-capture" label="Capture" note="to your downloads">
+          <div className="pd-chips">
+            <button className="pd-chip" onClick={() => screenshot().catch(() => {})} data-tip="Screenshot" data-tip-desc="A PNG of exactly what the view shows, HUD included. The browser asks to share this tab."><Icon name="frame" size={14} />Screenshot</button>
+            <button className={'pd-chip' + (p.recording ? ' pd-chip--on' : '')} onClick={() => toggleRecording().catch(() => {})} data-tip={p.recording ? 'Stop recording' : 'Record'} data-tip-desc="A WebM video of the view with its motion. Esc or the browser's Stop sharing ends it."><span className="pd-rec" />{p.recording ? 'Stop' : 'Record'}</button>
+            <button className="pd-chip" onClick={() => renderStill(lv.engine, 3)} data-tip="Render the geometry" data-tip-desc="The geometry alone at three times the view's resolution, on a transparent background."><Icon name="export" size={14} />Geometry</button>
+            <button className="pd-chip" onClick={hudPng} data-tip="Save the HUD" data-tip-desc="Every piece, pin and note without the geometry, as a transparent PNG at 2×."><Icon name="layers" size={14} />HUD only</button>
           </div>
-          <div className="pd-field"><span className="pd-k">PNG ink</span>
-            <div className="pd-chips">
-              {([['auto', 'As shown'], ['dark', 'Dark, for light grounds'], ['light', 'Light, for dark grounds']] as const).map(([v, t]) => (
-                <button key={v} className={'pd-chip pd-chip--s' + (p.pngInk === v ? ' pd-chip--on' : '')} onClick={() => p.setPngInk(v)}>{t}</button>
-              ))}
-            </div>
+          <div className="pd-line"><span className="pd-k">PNG ink</span>
+            <Segmented<string> size="s" value={p.pngInk} onChange={(v) => p.setPngInk(v as 'auto' | 'dark' | 'light')} options={[{ value: 'auto', label: 'As shown' }, { value: 'dark', label: 'Dark' }, { value: 'light', label: 'Light' }]} />
           </div>
-          <span className="pd-hint">A single piece saves on its own from its layer, or from its handle in compose mode.</span>
-        </Blk>
+        </Sec>
         <div style={{ height: 40 }} />
       </ScrollArea>
     </aside>

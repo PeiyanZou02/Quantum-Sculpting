@@ -55,7 +55,7 @@ export function PresentBar() {
       <button className="present-bar__mode" onClick={() => p.setMode('lab')} data-tip="Back to the lab" data-tip-desc="Parameters, panels and the research tools.">Lab</button>
       <span className="present-bar__sep" />
       <IconButton name="layers" title={p.drawer ? 'Close the compose panel' : 'Compose panel'} desc="Compositions, layers, the component library, view, annotations, motion and capture." on={p.drawer} onClick={() => p.setDrawer(!p.drawer)} side="top" />
-      <IconButton name="drag" title={p.composing ? 'Done composing' : 'Compose mode'} desc={p.composing ? 'Pieces stay where they are.' : 'Drag components onto the view, move pieces, select and remove them.'} hotkey="C" on={p.composing} onClick={() => p.setComposing(!p.composing)} side="top" />
+      <IconButton name="drag" title={p.composing ? 'Done arranging' : 'Arrange'} desc={p.composing ? 'Pieces stay where they are.' : 'Drag pieces around the view, select and remove them.'} hotkey="C" on={p.composing} onClick={() => p.setComposing(!p.composing)} side="top" />
       {p.saved.length > 0 && (
         <div className="present-bar__comp">
           <button className="present-bar__arrow present-bar__arrow--l" onClick={() => step(-1)} data-tip="Previous saved composition" data-tip-key="[" aria-label="Previous saved composition" />

@@ -83,6 +83,8 @@ export class Engine {
   private floor: THREE.Object3D | null = null
   private showBounds = true
   private showFloor = true
+  /** Cells of the print grid along each side of the floor. */
+  private floorDiv = 4
   view: ViewName = 'model'
   private lineMat = new THREE.LineBasicMaterial({ color: INK4, transparent: true, opacity: 0.9 })
   private dashMat = new THREE.LineDashedMaterial({ color: INK3, dashSize: 0.6, gapSize: 0.9 })
@@ -384,12 +386,8 @@ export class Engine {
     outline.computeLineDistances()
     outline.scale.setScalar(1)
     outline.position.set(c, c, c)
-    const floor = new THREE.GridHelper(n, 4)
-    floor.material = this.lineMat
-    floor.rotation.x = Math.PI / 2
-    floor.position.set(c, c, -0.5)
+    const floor = this.makeFloor()
     outline.visible = this.showBounds
-    floor.visible = this.showFloor
     this.outline = outline
     this.floor = floor
     this.frame.add(outline, floor)
@@ -559,9 +557,29 @@ export class Engine {
     this.dirty = true
   }
 
-  setFrame(p: { bounds?: boolean; floor?: boolean }) {
+  /** The print grid under the model: the floor of the grid volume in `floorDiv` cells a side. */
+  private makeFloor() {
+    const n = this.n, c = (n - 1) / 2
+    const floor = new THREE.GridHelper(n, this.floorDiv)
+    floor.material = this.lineMat
+    floor.rotation.x = Math.PI / 2
+    floor.position.set(c, c, -0.5)
+    floor.visible = this.showFloor
+    return floor
+  }
+
+  setFrame(p: { bounds?: boolean; floor?: boolean; divisions?: number }) {
     if (p.bounds != null) this.showBounds = p.bounds
     if (p.floor != null) this.showFloor = p.floor
+    if (p.divisions != null && p.divisions !== this.floorDiv) {
+      this.floorDiv = Math.max(1, Math.round(p.divisions))
+      if (this.floor) {
+        this.frame.remove(this.floor)
+        ;(this.floor as THREE.LineSegments).geometry.dispose()
+        this.floor = this.makeFloor()
+        this.frame.add(this.floor)
+      }
+    }
     if (this.outline) this.outline.visible = this.showBounds
     if (this.floor) this.floor.visible = this.showFloor
     this.dirty = true
