@@ -1,28 +1,45 @@
 // Lab / Present. Lab is the research workspace (parameters, algorithms, panels). Present is the
-// display: the geometry full-window inside a composed HUD, for screenshots and recordings, with no
-// parameters. Present keeps its own composition, the positions you drag HUD pieces to, and a reel
-// of camera shots.
+// display: the geometry full-window inside a HUD you compose yourself, for screenshots, recordings and
+// diagrams. It starts clean. In compose mode you drag components from the library onto the view, move
+// them, tune them and drag them off again; compositions you like are saved by name.
 import { create } from 'zustand'
 
 export type Mode = 'lab' | 'present'
 export interface Shot { az: number; el: number; dist: number }
-export interface Pos { x: number; y: number }   // fractions of the view, top-left of the piece
-/** How one mark is drawn: emphasis tier (1 primary, 2 secondary, 3 tertiary), line weight and dash
- *  spacing as multiples of its own, and size (corner and edge pieces). */
-export interface Look { tier?: 1 | 2 | 3; weight?: number; dash?: number; size?: number }
+/** Fractions of the view: the piece's top-left, or its centre when `c` (where a dragged component was dropped). */
+export interface Pos { x: number; y: number; c?: boolean }
+/** How one component is drawn: emphasis tier (1 primary, 2 secondary, 3 tertiary), line weight and dash
+ *  spacing as multiples of its own, size (corner and edge pieces), and whether it is hidden. */
+export interface Look { tier?: 1 | 2 | 3; weight?: number; dash?: number; size?: number; hidden?: boolean }
 export interface TextNote { id: string; text: string }
+/** A saved composition: what is on, where it was put, how it looks. Positions are keyed by piece. */
+export interface Saved { id: string; name: string; compose: Record<string, string>; pos: Record<string, Pos>; looks: Record<string, Look>; texts: TextNote[] }
 
 interface P {
   mode: Mode
   setMode: (m: Mode) => void
-  /** Present-mode composition: family → variant id or 'off'. */
+  /** Present composition: family → variant ids, comma-separated, or 'off'. Empty is clean. */
   compose: Record<string, string>
   setCompose: (c: Record<string, string>) => void
-  /** Dragged positions per HUD piece key ("family:variant" or a chrome key), per mode. */
+  /** Dragged positions per piece key ("family:variant", "text:<id>" or a chrome key), prefixed by mode. */
   pos: Record<string, Pos>
   setPos: (key: string, p: Pos | null) => void
+  /** Lab only: drag the lab readouts around. */
   arrange: boolean
   setArrange: (v: boolean) => void
+  /** Present compose mode: pieces can be dragged, selected, deleted, and components dropped in. */
+  composing: boolean
+  setComposing: (v: boolean) => void
+  /** The selected piece (compose mode). */
+  sel: string | null
+  setSel: (k: string | null) => void
+  /** The piece whose layer row is hovered: the others dim so you can see which is which. */
+  hl: string | null
+  setHl: (k: string | null) => void
+  /** Put a component on the view: at a point (centre, fractions of the view) or in its usual place. */
+  place: (family: string, id: string, at?: { x: number; y: number }) => void
+  /** Take a piece off the view. */
+  removePiece: (key: string) => void
   /** Hide every control (H) for clean screenshots. */
   bare: boolean
   setBare: (v: boolean) => void
@@ -38,62 +55,84 @@ interface P {
   setSpin: (v: boolean) => void
   reel: boolean
   setReel: (v: boolean) => void
-  /** Seconds per shot in the reel, and turntable speed (degrees per second). */
+  /** Seconds per shot in the reel, turntable speed (degrees per second), seconds per saved composition. */
   reelSec: number
   spinSpeed: number
+  cycleSec: number
   setMotion: (p: Partial<Pick<P, 'reelSec' | 'spinSpeed' | 'cycleSec'>>) => void
-  /** The compose drawer at the side, and a composition shown while hovering a choice. */
+  /** Turntable direction: 1 counter-clockwise seen from above, -1 clockwise. */
+  spinDir: 1 | -1
+  setSpinDir: (d: 1 | -1) => void
+  /** The compose panel at the side. */
   drawer: boolean
   setDrawer: (v: boolean) => void
-  preview: Record<string, string> | null
-  setPreview: (c: Record<string, string> | null) => void
-  /** Cycle the present compositions automatically. */
+  /** Step through the saved compositions on their own. */
   cycle: boolean
-  cycleSec: number
   setCycle: (v: boolean) => void
   /** Sweep the cutting plane up and down through the grid. */
   sweep: boolean
   setSweep: (v: boolean) => void
   recording: boolean
   setRecording: (v: boolean) => void
-  /** Per-mark looks, keyed "family:variant". */
+  /** Per-piece looks, keyed like positions but without the mode. */
   looks: Record<string, Look>
   setLook: (key: string, l: Partial<Look> | null) => void
-  /** The mark whose layer row is hovered: the others dim so you can see which is which. */
-  hl: string | null
-  setHl: (k: string | null) => void
-  /** Turntable direction: 1 counter-clockwise seen from above, -1 clockwise. */
-  spinDir: 1 | -1
-  setSpinDir: (d: 1 | -1) => void
-  /** Free text placed anywhere on the view (titles, captions). Positions live in `pos` under text:<id>. */
+  /** Free text placed anywhere on the view. */
   texts: TextNote[]
+  addText: (at?: { x: number; y: number }) => void
+  setText: (id: string, text: string | null) => void
   /** Ink of exported PNGs (see savePng). */
   pngInk: 'auto' | 'dark' | 'light'
   setPngInk: (i: 'auto' | 'dark' | 'light') => void
-  addText: () => void
-  setText: (id: string, text: string | null) => void
+  /** Saved compositions, and the one on screen (null: not saved yet). */
+  saved: Saved[]
+  current: string | null
+  save: (name?: string) => void
+  saveNew: (name?: string) => void
+  load: (id: string) => void
+  rename: (id: string, name: string) => void
+  removeSaved: (id: string) => void
+  /** Start clean: nothing on the view. */
+  clear: () => void
 }
 
 const KEY = 'qs-present'
-const load = (): Partial<P> => { try { return JSON.parse(localStorage.getItem(KEY) ?? '{}') } catch { return {} } }
-const saved = load()
+const VERSION = 2   // v2: compositions start clean and are saved by name; the old presets are gone
+const read = (): Partial<P> & { v?: number } => { try { return JSON.parse(localStorage.getItem(KEY) ?? '{}') } catch { return {} } }
+const raw = read()
+const saved: Partial<P> = raw.v === VERSION ? raw : {
+  mode: raw.mode, shots: raw.shots, spin: raw.spin, reelSec: raw.reelSec, spinSpeed: raw.spinSpeed,
+  cycleSec: raw.cycleSec, drawer: raw.drawer, pngInk: raw.pngInk, spinDir: raw.spinDir,
+}
 const keep = (s: P) => {
   try {
-    localStorage.setItem(KEY, JSON.stringify({ mode: s.mode, compose: s.compose, pos: s.pos, shots: s.shots, spin: s.spin, reelSec: s.reelSec, spinSpeed: s.spinSpeed, cycleSec: s.cycleSec, drawer: s.drawer, looks: s.looks, spinDir: s.spinDir, texts: s.texts, pngInk: s.pngInk }))
+    localStorage.setItem(KEY, JSON.stringify({
+      v: VERSION, mode: s.mode, compose: s.compose, pos: s.pos, shots: s.shots, spin: s.spin, reelSec: s.reelSec, spinSpeed: s.spinSpeed,
+      cycleSec: s.cycleSec, drawer: s.drawer, looks: s.looks, spinDir: s.spinDir, texts: s.texts, pngInk: s.pngInk, saved: s.saved, current: s.current,
+    }))
   } catch { /* per-viewer only */ }
 }
 
-export const PRESENT_DEFAULT: Record<string, string> = {
-  frame: 'v1', meta: 'v3', steps: 'off', orbit: 'v1', camera: 'off', dial: 'off', bounds: 'off',
-  focus: 'off', selection: 'off', callout: 'off', scan: 'off', captures: 'v1', slicecard: 'off', cards: 'v1',
-}
+const PRE = 'present|'
+const variants = (v: string | undefined) => (v ?? 'off').split(',').filter((x) => x && x !== 'off')
+const uid = () => Math.random().toString(36).slice(2, 8)
+/** Present positions without the mode prefix, and back. */
+const strip = (pos: Record<string, Pos>) => Object.fromEntries(Object.entries(pos).filter(([k]) => k.startsWith(PRE)).map(([k, v]) => [k.slice(PRE.length), v]))
+const withOthers = (pos: Record<string, Pos>, mine: Record<string, Pos>) => ({
+  ...Object.fromEntries(Object.entries(pos).filter(([k]) => !k.startsWith(PRE))),
+  ...Object.fromEntries(Object.entries(mine).map(([k, v]) => [PRE + k, v])),
+})
 
 export const usePresent = create<P>()((set, get) => {
   const up = (p: Partial<P>) => { set(p); keep(get()) }
+  const snap = (): Omit<Saved, 'id' | 'name'> => {
+    const s = get()
+    return { compose: { ...s.compose }, pos: strip(s.pos), looks: { ...s.looks }, texts: [...s.texts] }
+  }
   return {
     mode: (saved.mode as Mode) ?? 'lab',
-    setMode: (m) => up({ mode: m, arrange: false, bare: false }),
-    compose: { ...PRESENT_DEFAULT, ...(saved.compose ?? {}) },
+    setMode: (m) => up({ mode: m, arrange: false, bare: false, composing: false, sel: null }),
+    compose: saved.compose ?? {},
     setCompose: (c) => up({ compose: { ...get().compose, ...c } }),
     pos: saved.pos ?? {},
     setPos: (key, p) => {
@@ -104,6 +143,31 @@ export const usePresent = create<P>()((set, get) => {
     },
     arrange: false,
     setArrange: (v) => set({ arrange: v }),
+    composing: false,
+    setComposing: (v) => set({ composing: v, sel: v ? get().sel : null }),
+    sel: null,
+    setSel: (k) => set({ sel: k }),
+    hl: null,
+    setHl: (k) => set({ hl: k }),
+    place: (family, id, at) => {
+      const s = get()
+      const cur = variants(s.compose[family])
+      const compose = cur.includes(id) ? s.compose : { ...s.compose, [family]: [...cur, id].join(',') }
+      const pos = { ...s.pos }
+      if (at) pos[`${PRE}${family}:${id}`] = { x: at.x, y: at.y, c: true }
+      up({ compose, pos, sel: `${family}:${id}` })
+    },
+    removePiece: (key) => {
+      const s = get()
+      if (key.startsWith('text:')) { s.setText(key.slice(5), null); set({ sel: null }); return }
+      const [family, id] = key.split(':')
+      const left = variants(s.compose[family]).filter((v) => v !== id)
+      const pos = { ...s.pos }
+      delete pos[PRE + key]
+      const looks = { ...s.looks }
+      delete looks[key]
+      up({ compose: { ...s.compose, [family]: left.length ? left.join(',') : 'off' }, pos, looks, sel: s.sel === key ? null : s.sel })
+    },
     bare: false,
     setBare: (v) => set({ bare: v }),
     shots: saved.shots ?? [],
@@ -120,10 +184,10 @@ export const usePresent = create<P>()((set, get) => {
     spinSpeed: saved.spinSpeed ?? 8,
     cycleSec: saved.cycleSec ?? 6,
     setMotion: (p) => up(p),
+    spinDir: saved.spinDir ?? 1,
+    setSpinDir: (d) => up({ spinDir: d }),
     drawer: saved.drawer ?? true,
     setDrawer: (v) => up({ drawer: v }),
-    preview: null,
-    setPreview: (c) => set({ preview: c }),
     cycle: false,
     setCycle: (v) => set({ cycle: v }),
     sweep: false,
@@ -137,24 +201,54 @@ export const usePresent = create<P>()((set, get) => {
       else delete looks[key]
       up({ looks })
     },
-    hl: null,
-    setHl: (k) => set({ hl: k }),
-    spinDir: saved.spinDir ?? 1,
-    setSpinDir: (d) => up({ spinDir: d }),
     texts: saved.texts ?? [],
-    pngInk: saved.pngInk ?? 'auto',
-    setPngInk: (i) => up({ pngInk: i }),
-    addText: () => {
-      const id = Math.random().toString(36).slice(2, 8)
+    addText: (at) => {
+      const id = uid()
       const n = get().texts.length
-      up({ texts: [...get().texts, { id, text: 'Note' }], pos: { ...get().pos, [`present|text:${id}`]: { x: 0.42, y: 0.12 + 0.06 * (n % 8) } } })
+      up({
+        texts: [...get().texts, { id, text: 'Note' }],
+        pos: { ...get().pos, [`${PRE}text:${id}`]: at ? { ...at, c: true } : { x: 0.42, y: 0.12 + 0.06 * (n % 8) } },
+        sel: `text:${id}`,
+      })
     },
     setText: (id, text) => {
       if (text === null) {
         const pos = { ...get().pos }
-        delete pos[`present|text:${id}`]
+        delete pos[`${PRE}text:${id}`]
         up({ texts: get().texts.filter((t) => t.id !== id), pos })
       } else up({ texts: get().texts.map((t) => (t.id === id ? { ...t, text } : t)) })
     },
+    pngInk: saved.pngInk ?? 'auto',
+    setPngInk: (i) => up({ pngInk: i }),
+    saved: saved.saved ?? [],
+    current: saved.current ?? null,
+    save: (name) => {
+      const s = get()
+      const cur = s.saved.find((x) => x.id === s.current)
+      if (!cur) return s.saveNew(name)
+      up({ saved: s.saved.map((x) => (x.id === cur.id ? { ...x, ...snap(), name: name ?? x.name } : x)) })
+    },
+    saveNew: (name) => {
+      const s = get()
+      const id = uid()
+      up({ saved: [...s.saved, { id, name: name?.trim() || `Composition ${s.saved.length + 1}`, ...snap() }], current: id })
+    },
+    load: (id) => {
+      const s = get()
+      const c = s.saved.find((x) => x.id === id)
+      if (!c) return
+      up({ compose: { ...c.compose }, pos: withOthers(s.pos, c.pos), looks: { ...c.looks }, texts: [...c.texts], current: id, sel: null })
+    },
+    rename: (id, name) => up({ saved: get().saved.map((x) => (x.id === id ? { ...x, name } : x)) }),
+    removeSaved: (id) => up({ saved: get().saved.filter((x) => x.id !== id), current: get().current === id ? null : get().current }),
+    clear: () => up({ compose: {}, pos: withOthers(get().pos, {}), looks: {}, texts: [], current: null, sel: null }),
   }
 })
+
+/** Whether what is on the view differs from the saved composition it came from (or anything is on, if none). */
+export function isDirty(s: Pick<P, 'saved' | 'current' | 'compose' | 'pos' | 'looks' | 'texts'>): boolean {
+  const cur = s.saved.find((x) => x.id === s.current)
+  if (!cur) return Object.values(s.compose).some((v) => variants(v).length > 0) || s.texts.length > 0
+  const norm = (o: object) => JSON.stringify(o, (_, v) => (v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).filter(([, x]) => x !== 'off').sort()) : v))
+  return norm({ compose: s.compose, pos: strip(s.pos), looks: s.looks, texts: s.texts }) !== norm({ compose: cur.compose, pos: cur.pos, looks: cur.looks, texts: cur.texts })
+}

@@ -400,7 +400,7 @@ export function QCam({ value, onChange, home = QCAM_HOME, bare = false }: QCamPr
 function CamReadout({ rows }: { rows: [string, string, string][] }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10, width: 150 }}>
-      <span style={{ font: `600 10px/1 ${MONO}`, letterSpacing: '.04em', textTransform: 'uppercase', color: INK }}>Camera</span>
+      <span style={{ font: '600 11.5px/1 var(--qs-sans)', color: INK }}>Camera</span>
       <div
         style={{
           display: 'grid',

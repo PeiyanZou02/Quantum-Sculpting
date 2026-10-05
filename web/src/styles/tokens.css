@@ -91,7 +91,7 @@ button, input, select { font: inherit; color: inherit; }
 .qs-small  { font: 400 10px/1 var(--qs-mono); font-variant-numeric: tabular-nums; }
 .qs-field  { font: 400 13px/1 var(--qs-mono); font-variant-numeric: tabular-nums; }
 .qs-hero   { font: 400 40px/1 var(--qs-mono); font-variant-numeric: tabular-nums; }
-.qs-label  { font: 600 10px/1 var(--qs-mono); letter-spacing: .04em; text-transform: uppercase; }
+.qs-label  { font: 600 11.5px/1 var(--qs-sans); letter-spacing: 0; }
 .qs-rule   { height: 1px; background: var(--qs-line); border: 0; margin: 0; }
 
 /* forced inks for PNG exports (see savePng) */

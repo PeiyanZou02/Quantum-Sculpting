@@ -35,7 +35,7 @@
 .sec__no { font: 400 11px/1 var(--qs-mono); color: var(--qs-ink3); }
 .sec__title { font: 400 18px/1.1 var(--qs-sans); }
 .sec__state { margin-left: auto; font: 400 10px/1 var(--qs-mono); color: var(--qs-ink3); display: flex; align-items: center; gap: 6px; }
-.sub { font: 600 10px/1 var(--qs-mono); letter-spacing: .04em; text-transform: uppercase; padding-top: 4px; }
+.sub { font: 600 11.5px/1 var(--qs-sans); letter-spacing: 0; padding-top: 4px; }
 .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: end; }
 .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .seg-block .qs-seg { display: flex; width: 100%; }

@@ -56,14 +56,18 @@
   font: 500 10.5px/22px var(--qs-sans); cursor: pointer; box-sizing: border-box; display: inline-flex; align-items: center;
 }
 .hud-piece__btn:hover { border-color: var(--qs-ink); }
-/* Present: pieces are picked up directly; the bar appears on hover */
-.hud-layer--grab .hud-piece { pointer-events: auto; cursor: grab; border-radius: 6px; }
-.hud-layer--grab .hud-piece.hud-mod--live { cursor: auto; }
-.hud-layer--grab .hud-piece::before { content: ''; position: absolute; inset: -34px -8px -8px -8px; }
-.hud-layer--grab .hud-piece:hover { outline: 1px dashed var(--qs-ink3); outline-offset: 6px; }
-.hud-piece--grab > .hud-piece__bar { opacity: 0; transition: opacity .12s; }
-.hud-piece--grab:hover > .hud-piece__bar, .hud-piece--dragging > .hud-piece__bar { opacity: 1; }
+/* Present compose mode: pieces are picked up, selected and removed; the bar shows on hover or selection */
+.hud-layer--edit .hud-piece { pointer-events: auto; cursor: grab; border-radius: 6px; }
+.hud-layer--edit .hud-piece.hud-mod--live { cursor: auto; }
+.hud-layer--edit .hud-piece::before { content: ''; position: absolute; inset: -34px -8px -8px -8px; }
+.hud-layer--edit .hud-piece { outline: 1px dashed var(--qs-ink4); outline-offset: 6px; }
+.hud-layer--edit .hud-piece:hover { outline-color: var(--qs-ink3); }
+.hud-piece--sel { outline: 1.5px solid var(--qs-ink) !important; outline-offset: 6px; }
+.hud-piece--edit > .hud-piece__bar { opacity: 0; transition: opacity .12s; }
+.hud-piece--edit:hover > .hud-piece__bar, .hud-piece--sel > .hud-piece__bar, .hud-piece--dragging > .hud-piece__bar { opacity: 1; }
 .hud-piece--dragging { cursor: grabbing !important; }
+.hud-piece--out { opacity: .35; }
+.hud-piece__btn--x { width: 22px; padding: 0; justify-content: center; font-size: 13px; }
 
 /* free text */
 .hud-text { display: inline-block; min-width: 24px; font: 500 22px/1.15 var(--qs-sans); color: var(--qs-ink); outline: none; white-space: pre-wrap; max-width: 520px; }

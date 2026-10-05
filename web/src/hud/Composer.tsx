@@ -76,97 +76,9 @@ export const PRESETS: { id: string; title: string; desc: string; set: () => Comp
   },
 ]
 
-/** Present-mode compositions: display-first, for screenshots and recordings. `sketch` draws the thumbnail. */
-export interface PresentPreset { id: string; title: string; desc: string; set: () => Composition; sketch: string[] }
-export const PRESENT_PRESETS: PresentPreset[] = [
-  {
-    id: 'sheet', title: 'Lab sheet', desc: 'Registration frame, history and scene, the gimbal ring, the four stages and the result',
-    set: () => ({ frame: pick('frame', 0), meta: pick('meta', 2), orbit: pick('orbit', 0), stages: pick('stages', 0), cards: pick('cards', 0) }),
-    sketch: ['dots', 'tl-wide', 'ring', 'bottom-stages', 'br-card'],
-  },
-  {
-    id: 'orbit', title: 'Orbit study', desc: 'Camera stations, the az / el chart and a tick ring',
-    set: () => ({ frame: pick('frame', 1), meta: pick('meta', 1), orbit: pick('orbit', 2), camera: pick('camera', 3), dial: pick('dial', 0), focus: pick('focus', 0), steps: 'off', bounds: 'off', selection: 'off', callout: 'off', scan: 'off', captures: 'off' }),
-    sketch: ['brackets', 'tr-block', 'tr-chart', 'ring-stations', 'br-dial'],
-  },
-  {
-    id: 'measure', title: 'Measure', desc: 'Extents in mm, edge rulers, numbered callouts',
-    set: () => ({ frame: pick('frame', 3), meta: pick('meta', 0), bounds: pick('bounds', 1), focus: pick('focus', 0), dial: pick('dial', 2), callout: pick('callout', 2), selection: pick('selection', 2), cards: pick('cards', 1) }),
-    sketch: ['safe', 'tl-block', 'extents', 'rulers', 'br-card'],
-  },
-  {
-    id: 'quantum', title: 'Quantum readout', desc: 'Qubit settings, the slice index, run scatter',
-    set: () => ({ frame: pick('frame', 0), meta: pick('meta', 3), steps: pick('steps', 1), slicecard: pick('slicecard', 2), cards: pick('cards', 0), bounds: pick('bounds', 2), selection: pick('selection', 3), captures: pick('captures', 3) }),
-    sketch: ['dots', 'top-rail', 'tr-block', 'bl-card', 'br-card', 'footprint', 'bottom-dots'],
-  },
-  {
-    id: 'scan', title: 'Scan', desc: 'Layer stack, the cutting plane and a focus frame',
-    set: () => ({ frame: pick('frame', 2), meta: pick('meta', 1), scan: pick('scan', 2), focus: pick('focus', 1), slicecard: pick('slicecard', 1) }),
-    sketch: ['brackets', 'tr-block', 'right-stack', 'focus-frame', 'bl-card'],
-  },
-  {
-    id: 'clean', title: 'Clean', desc: 'Just the object; an orbit ring appears only while it turns',
-    set: () => ({ orbit: pick('orbit', 3), focus: pick('focus', 3) }),
-    sketch: ['ring-faint'],
-  },
-]
-
 /** Every family set: the preset's choices, everything else off. */
 export function full(c: Composition): Record<string, string> {
   return Object.fromEntries(FAMILIES.map((f) => [f.id, c[f.id] ?? 'off']))
-}
-
-/** Which present preset a composition equals, or null. */
-export function presentPresetOf(c: Composition): string | null {
-  for (const p of PRESENT_PRESETS) {
-    const want = p.set()
-    if (FAMILIES.every((f) => same(want[f.id], c[f.id]))) return p.id
-  }
-  return null
-}
-
-/** A schematic thumbnail of a composition: frame, object, and where its pieces sit. */
-export function Sketch({ parts, w = 112, h = 70 }: { parts: string[]; w?: number; h?: number }) {
-  const has = (k: string) => parts.includes(k)
-  const ink = 'var(--qs-ink)', ink3 = 'var(--qs-ink3)', ink4 = 'var(--qs-ink4)'
-  const cx = w / 2, cy = h / 2 + 2
-  const block = (x: number, y: number, bw: number, rows = 3) => (
-    <g>{Array.from({ length: rows }, (_, i) => <line key={i} x1={x} x2={x + (i ? bw : bw * 0.5)} y1={y + i * 4} y2={y + i * 4} stroke={i ? ink3 : ink} strokeWidth={1.2} />)}</g>
-  )
-  return (
-    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="sketch" aria-hidden>
-      <rect x={0.5} y={0.5} width={w - 1} height={h - 1} rx={8} fill="var(--qs-faint)" stroke="var(--qs-line)" />
-      {has('dots') && Array.from({ length: 9 }, (_, i) => (
-        <g key={i}><rect x={8 + i * 12} y={4} width={1.5} height={1.5} fill={ink3} /><rect x={8 + i * 12} y={h - 6} width={1.5} height={1.5} fill={ink3} /></g>
-      ))}
-      {(has('brackets') || has('dots')) && [[6, 6], [w - 6, 6], [6, h - 6], [w - 6, h - 6]].map(([x, y], i) => (
-        <path key={i} d={`M${x} ${y + (y < h / 2 ? 5 : -5)}V${y}H${x + (x < w / 2 ? 5 : -5)}`} fill="none" stroke={has('brackets') ? ink : ink4} />
-      ))}
-      {has('safe') && <rect x={w * 0.1} y={h * 0.1} width={w * 0.8} height={h * 0.8} fill="none" stroke={ink3} strokeDasharray="2 2" />}
-      {/* the object */}
-      <ellipse cx={cx} cy={cy + 10} rx={10} ry={3} fill="none" stroke={ink4} />
-      <rect x={cx - 10} y={cy - 12} width={20} height={22} rx={2} fill="var(--qs-ink4)" opacity={0.55} />
-      {has('ring') && <ellipse cx={cx} cy={cy + 8} rx={26} ry={8} fill="none" stroke={ink} />}
-      {has('ring-faint') && <ellipse cx={cx} cy={cy + 8} rx={26} ry={8} fill="none" stroke={ink4} strokeDasharray="2 2" />}
-      {has('ring-stations') && <g><ellipse cx={cx} cy={cy + 8} rx={26} ry={8} fill="none" stroke={ink3} />{Array.from({ length: 8 }, (_, i) => { const a = i / 8 * Math.PI * 2; return <circle key={i} cx={cx + Math.cos(a) * 26} cy={cy + 8 + Math.sin(a) * 8} r={1.4} fill={ink} /> })}</g>}
-      {has('focus-frame') && <rect x={cx - 16} y={cy - 17} width={32} height={32} fill="none" stroke={ink3} strokeDasharray="2 2" />}
-      {has('extents') && <g stroke={ink}><line x1={cx - 10} x2={cx + 10} y1={cy - 17} y2={cy - 17} /><line x1={cx + 15} x2={cx + 15} y1={cy - 12} y2={cy + 10} /></g>}
-      {has('footprint') && <ellipse cx={cx} cy={cy + 11} rx={16} ry={4} fill="none" stroke={ink} strokeDasharray="2 2" />}
-      {has('rulers') && <g stroke={ink3}>{Array.from({ length: 14 }, (_, i) => <line key={i} x1={14 + i * 6} x2={14 + i * 6} y1={h - 9} y2={h - (i % 4 ? 11 : 13)} />)}{Array.from({ length: 7 }, (_, i) => <line key={'r' + i} x1={w - 9} x2={w - (i % 3 ? 11 : 13)} y1={14 + i * 6} y2={14 + i * 6} />)}</g>}
-      {has('tl-wide') && <g>{block(10, 12, 18)}{block(32, 12, 18)}</g>}
-      {has('tl-block') && block(10, 12, 20)}
-      {has('tr-block') && block(w - 30, 12, 20)}
-      {has('tr-chart') && <rect x={w - 30} y={26} width={20} height={12} fill="none" stroke={ink3} />}
-      {has('br-dial') && <circle cx={w - 18} cy={h - 18} r={7} fill="none" stroke={ink3} strokeDasharray="1 1.5" />}
-      {has('br-cube') && <path d={`M${w - 26} ${h - 14}h12v-10h-12zM${w - 26} ${h - 24}l4 -3h12l-4 3M${w - 14} ${h - 14}l4 -3v-10`} fill="none" stroke={ink3} />}
-      {has('right-stack') && Array.from({ length: 6 }, (_, i) => <line key={i} x1={w - 18} x2={w - (i === 3 ? 6 : 12)} y1={22 + i * 5} y2={22 + i * 5} stroke={i === 3 ? ink : ink3} />)}
-      {has('top-rail') && <g><line x1={cx - 22} x2={cx + 22} y1={9} y2={9} stroke={ink3} />{[0, 1, 2, 3].map((i) => <circle key={i} cx={cx - 22 + i * 14.6} cy={9} r={1.6} fill={i < 3 ? ink : 'var(--qs-bg)'} stroke={ink} />)}</g>}
-      {has('bl-card') && <rect x={8} y={h - 26} width={24} height={18} rx={3} fill="none" stroke={ink3} />}
-      {has('br-card') && <g><rect x={w - 32} y={h - 30} width={24} height={22} rx={3} fill="none" stroke={ink3} /><line x1={w - 28} x2={w - 18} y1={h - 24} y2={h - 24} stroke={ink} strokeWidth={1.4} />{[0, 1, 2, 3, 4].map((i) => <line key={i} x1={w - 28 + i * 4} x2={w - 28 + i * 4} y1={h - 12} y2={h - 12 - (5 - i) * 1.6} stroke={ink3} />)}</g>}
-      {has('bottom-stages') && [0, 1, 2, 3].map((i) => <rect key={'st' + i} x={cx - 30 + i * 15.5} y={h - 16} width={13} height={9} rx={2} fill="none" stroke={i === 2 ? ink : ink3} />)}
-      {has('bottom-dots') && [0, 1, 2, 3, 4].map((i) => <circle key={i} cx={cx - 12 + i * 6} cy={h - 12} r={1.8} fill={i < 2 ? ink3 : 'none'} stroke={ink3} />)}
-    </svg>
-  )
 }
 
 export const DEFAULT_COMPOSITION = (): Composition => PRESETS[0].set()
@@ -182,7 +94,7 @@ export function presetOf(c: Composition): string | null {
 
 const SLOTS = ['tl', 'tr', 'bl', 'br', 'top', 'bottom', 'left', 'right'] as const
 
-export interface Placement { x: number; y: number }
+export interface Placement { x: number; y: number; c?: boolean }
 export const TIER_OPACITY = { 1: 1, 2: 0.58, 3: 0.3 } as const
 
 const SHAPES = 'line, path, circle, rect, polyline, polygon, ellipse'
@@ -233,47 +145,69 @@ export async function savePng(el: HTMLElement, name: string, scale = 3) {
   a.click()
 }
 
+/** What compose mode can do to the pieces (Present). Without it, pieces stay where they are. */
+export interface Edit { sel: string | null; onSelect: (k: string | null) => void; onRemove: (k: string) => void }
+
 interface PieceProps {
-  k: string; label: string; ctx: HudCtx; pos?: Placement; arrange: boolean; grab?: boolean; live?: boolean; slot?: string
+  k: string; label: string; ctx: HudCtx; pos?: Placement; arrange: boolean; edit?: Edit; live?: boolean
   look?: Look; dim?: boolean; onMove?: (k: string, p: Placement | null) => void; children: ReactNode
 }
-/** A piece in a slot or at a dragged position. In arrange mode every piece shows its handle; in grab
- *  mode (Present) a piece shows it on hover and can be dragged by its body, or saved as a PNG. */
-function Piece({ k, label, ctx, pos, arrange, grab, live, look, dim, onMove, children }: PieceProps) {
+/** A piece in a slot or at a dragged position. In Lab's arrange mode every piece shows its handle. In
+ *  compose mode a piece is selected by a click, dragged by its body or handle, saved as a PNG, deleted
+ *  with ×, or dragged onto the compose panel to take it off. */
+function Piece({ k, label, ctx, pos, arrange, edit, live, look, dim, onMove, children }: PieceProps) {
   const body = useRef<HTMLDivElement>(null)
   useStrokes(body, look)
   const start = (e: React.PointerEvent<HTMLElement>) => {
-    if (!onMove || e.button !== 0) return
+    if (e.button !== 0) return
     e.preventDefault()
     e.stopPropagation()
+    edit?.onSelect(k)
+    if (!onMove) return
     const el = (e.currentTarget.closest('.hud-piece') as HTMLElement)
     const view = el.closest('.hud-layer') as HTMLElement
     const vr = view.getBoundingClientRect(), r = el.getBoundingClientRect()
-    const dx = e.clientX - r.left, dy = e.clientY - r.top
-    el.classList.add('hud-piece--dragging')
+    const dx = e.clientX - r.left, dy = e.clientY - r.top, x0 = e.clientX, y0 = e.clientY
+    const panel = edit ? document.querySelector<HTMLElement>('.pd') : null
+    let moved = false, out = false
     const move = (ev: PointerEvent) => {
+      if (!moved && Math.hypot(ev.clientX - x0, ev.clientY - y0) < 3) return
+      moved = true
+      el.classList.add('hud-piece--dragging')
+      const pr = panel?.getBoundingClientRect()
+      out = !!pr && ev.clientX >= pr.left && ev.clientX <= pr.right && ev.clientY >= pr.top && ev.clientY <= pr.bottom
+      panel?.classList.toggle('pd--drop', out)
+      el.classList.toggle('hud-piece--out', out)
       const x = Math.max(0, Math.min(vr.width - r.width, ev.clientX - vr.left - dx)) / vr.width
       const y = Math.max(0, Math.min(vr.height - r.height, ev.clientY - vr.top - dy)) / vr.height
       onMove(k, { x, y })
     }
-    const up = () => { el.classList.remove('hud-piece--dragging'); window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up) }
+    const up = () => {
+      el.classList.remove('hud-piece--dragging', 'hud-piece--out')
+      panel?.classList.remove('pd--drop')
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
+      if (out) edit?.onRemove(k)
+    }
     window.addEventListener('pointermove', move)
     window.addEventListener('pointerup', up)
   }
   const tier = look?.tier ?? 1
-  const cls = 'hud-piece' + (live ? ' hud-mod--live' : '') + (arrange ? ' hud-piece--arrange' : '') + (grab && !arrange ? ' hud-piece--grab' : '') + (pos ? ' hud-piece--placed' : '')
-  const bar = arrange || grab
+  const sel = edit?.sel === k
+  const cls = 'hud-piece' + (live ? ' hud-mod--live' : '') + (arrange ? ' hud-piece--arrange' : '') + (edit ? ' hud-piece--edit' : '') + (sel ? ' hud-piece--sel' : '') + (pos ? ' hud-piece--placed' : '')
+  const place = pos ? { left: pos.x * ctx.w, top: pos.y * ctx.h, transform: pos.c ? 'translate(-50%, -50%)' : undefined } : undefined
   return (
-    <div className={cls} data-hud={k} style={pos ? { left: pos.x * ctx.w, top: pos.y * ctx.h } : undefined}
-      onPointerDown={grab && !live && !arrange ? start : undefined}>
-      {bar && (
+    <div className={cls} data-hud={k} style={place} onPointerDown={edit && !live ? start : undefined}>
+      {(arrange || edit) && (
         <div className="hud-piece__bar" data-qs-probe-ui>
           <button className="hud-piece__handle" onPointerDown={start} onDoubleClick={() => onMove?.(k, null)}
-            data-tip={`Drag ${label}`} data-tip-desc={pos ? 'Drag to place it. Double-click to send it back to its corner.' : 'Drag to place it anywhere.'}>
+            data-tip={`Drag ${label}`} data-tip-desc={edit ? 'Drag it anywhere, or onto the compose panel to take it off. Double-click to send it back to its usual place.' : 'Drag to place it. Double-click to send it back.'}>
             <span className="hud-piece__grip" />{label}
           </button>
-          <button className="hud-piece__btn" onClick={() => body.current && savePng(body.current, label)}
-            data-tip="Save as PNG" data-tip-desc="This piece alone, transparent, at 3×, to place over anything.">PNG</button>
+          {edit && <button className="hud-piece__btn" onClick={() => body.current && savePng(body.current, label)}
+            data-tip="Save as PNG" data-tip-desc="This piece alone, transparent, at 3×, to place over anything.">PNG</button>}
+          {edit && <button className="hud-piece__btn hud-piece__btn--x" onClick={() => edit.onRemove(k)} aria-label={`Remove ${label}`}
+            data-tip="Remove" data-tip-key="⌫">×</button>}
         </div>
       )}
       <div ref={body} className="hud-piece__body" style={{ opacity: TIER_OPACITY[tier] * (dim ? 0.16 : 1), zoom: look?.size && look.size !== 1 ? look.size : undefined }}>
@@ -294,26 +228,25 @@ function Free({ k, live, look, dim, children }: { k: string; live?: boolean; loo
   )
 }
 
-/** Free text on the view: double-click to edit, drag to place. */
-function TextPiece({ id, text, ctx, pos, onMove, onText, grab }: {
-  id: string; text: string; ctx: HudCtx; pos: Placement; grab: boolean
+/** Free text on the view: in compose mode, double-click to edit and drag to place. */
+function TextPiece({ id, text, ctx, pos, look, dim, edit, onMove, onText }: {
+  id: string; text: string; ctx: HudCtx; pos: Placement; look?: Look; dim?: boolean; edit?: Edit
   onMove?: (k: string, p: Placement | null) => void; onText?: (id: string, t: string | null) => void
 }) {
-  const [edit, setEdit] = useState(false)
+  const [typing, setTyping] = useState(false)
   const ref = useRef<HTMLSpanElement>(null)
   useLayoutEffect(() => {
-    if (!edit || !ref.current) return
+    if (!typing || !ref.current) return
     ref.current.focus()
     document.getSelection()?.selectAllChildren(ref.current)
-  }, [edit])
-  const k = `text:${id}`
+  }, [typing])
   return (
-    <Piece k={k} label="Text" ctx={ctx} pos={pos} arrange={false} grab={grab && !edit} onMove={onMove} live={edit}>
-      <span ref={ref} className={'hud-text' + (edit ? ' hud-text--edit' : '')} contentEditable={edit} suppressContentEditableWarning
-        onDoubleClick={() => grab && setEdit(true)}
-        onBlur={(e) => { setEdit(false); const t = e.currentTarget.textContent?.trim() ?? ''; onText?.(id, t || null) }}
+    <Piece k={`text:${id}`} label="Text" ctx={ctx} pos={pos} arrange={false} edit={edit && !typing ? edit : undefined} onMove={onMove} live={typing} look={look} dim={dim}>
+      <span ref={ref} className={'hud-text' + (typing ? ' hud-text--edit' : '')} contentEditable={typing} suppressContentEditableWarning
+        onDoubleClick={() => edit && setTyping(true)}
+        onBlur={(e) => { setTyping(false); onText?.(id, e.currentTarget.textContent?.trim() || null) }}
         onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); (e.currentTarget as HTMLElement).blur() } if (e.key === 'Escape') (e.currentTarget as HTMLElement).blur() }}
-        data-tip={grab && !edit ? 'Double-click to edit' : undefined}>{text}</span>
+        data-tip={edit && !typing ? 'Double-click to edit' : undefined}>{text}</span>
     </Piece>
   )
 }
@@ -347,20 +280,20 @@ function fitStrips(el: HTMLElement | null) {
 }
 
 /** Draws the chosen modules over the view. `chrome` lets the host put its own controls into slots. */
-export function HudLayer({ ctx, compose, chrome, positions = {}, arrange = false, grab = false, looks = {}, hl = null, texts = [], onMove, onText }: {
+export function HudLayer({ ctx, compose, chrome, positions = {}, arrange = false, edit, looks = {}, hl = null, texts = [], onMove, onText }: {
   ctx: HudCtx; compose: Composition; chrome?: Partial<Record<(typeof SLOTS)[number], ReactNode>>
-  positions?: Record<string, Placement>; arrange?: boolean; grab?: boolean; looks?: Record<string, Look>; hl?: string | null
+  positions?: Record<string, Placement>; arrange?: boolean; edit?: Edit; looks?: Record<string, Look>; hl?: string | null
   texts?: { id: string; text: string }[]
   onMove?: (k: string, p: Placement | null) => void; onText?: (id: string, t: string | null) => void
 }) {
-  const chosen = chosenOf(compose)
   const key = keyOf
+  const chosen = chosenOf(compose).filter((m) => !looks[key(m)]?.hidden)
   const free = chosen.filter((m) => m.slot === 'object' || m.slot === 'full')
   const placed = chosen.filter((m) => m.slot !== 'object' && m.slot !== 'full' && positions[key(m)])
   const slotted = (s: string) => chosen.filter((m) => m.slot === s && !positions[key(m)])
-  const dim = (m: HudModule) => !!hl && hl !== key(m)
+  const dim = (k: string) => !!hl && hl !== k
   const piece = (m: HudModule, pos?: Placement) => (
-    <Piece key={key(m)} k={key(m)} label={m.label} ctx={ctx} pos={pos} arrange={arrange} grab={grab} onMove={onMove} live={m.interactive} look={looks[key(m)]} dim={dim(m)}>{m.render(ctx)}</Piece>
+    <Piece key={key(m)} k={key(m)} label={m.label} ctx={ctx} pos={pos} arrange={arrange} edit={edit} onMove={onMove} live={m.interactive} look={looks[key(m)]} dim={dim(key(m))}>{m.render(ctx)}</Piece>
   )
   const chromeAt = (s: (typeof SLOTS)[number]) => (chrome?.[s] && !positions[`chrome:${s}`] ? (
     <Piece k={`chrome:${s}`} label="controls" ctx={ctx} arrange={arrange} onMove={onMove} live>{chrome[s]}</Piece>
@@ -368,8 +301,8 @@ export function HudLayer({ ctx, compose, chrome, positions = {}, arrange = false
   const root = useRef<HTMLDivElement>(null)
   useLayoutEffect(() => fitStrips(root.current))
   return (
-    <div ref={root} className={'hud-layer' + (arrange ? ' hud-layer--arrange' : '') + (grab ? ' hud-layer--grab' : '')}>
-      {free.map((m) => <Free key={key(m)} k={key(m)} live={m.interactive} look={looks[key(m)]} dim={dim(m)}>{m.render(ctx)}</Free>)}
+    <div ref={root} className={'hud-layer' + (arrange ? ' hud-layer--arrange' : '') + (edit ? ' hud-layer--edit' : '')}>
+      {free.map((m) => <Free key={key(m)} k={key(m)} live={m.interactive} look={looks[key(m)]} dim={dim(key(m))}>{m.render(ctx)}</Free>)}
       {SLOTS.map((s) => {
         const mods = slotted(s)
         const c = chromeAt(s)
@@ -387,8 +320,9 @@ export function HudLayer({ ctx, compose, chrome, positions = {}, arrange = false
         )
       })}
       {placed.map((m) => piece(m, positions[key(m)]))}
-      {texts.map((t) => (
-        <TextPiece key={t.id} id={t.id} text={t.text} ctx={ctx} pos={positions[`text:${t.id}`] ?? { x: 0.42, y: 0.12 }} grab={grab || arrange} onMove={onMove} onText={onText} />
+      {texts.filter((t) => !looks[`text:${t.id}`]?.hidden).map((t) => (
+        <TextPiece key={t.id} id={t.id} text={t.text} ctx={ctx} pos={positions[`text:${t.id}`] ?? { x: 0.42, y: 0.12 }} look={looks[`text:${t.id}`]} dim={dim(`text:${t.id}`)}
+          edit={edit} onMove={onMove} onText={onText} />
       ))}
       {SLOTS.filter((s) => chrome?.[s] && positions[`chrome:${s}`]).map((s) => (
         <Piece key={s} k={`chrome:${s}`} label="controls" ctx={ctx} pos={positions[`chrome:${s}`]} arrange={arrange} onMove={onMove} live>{chrome![s]}</Piece>
@@ -452,11 +386,14 @@ export function MarkThumb({ m, ctx, bg, w = 148, h = 92, look }: { m: HudModule;
   return <Mini ctx={ctx} bg={bg} w={w} h={h} crop={crop}>{node}</Mini>
 }
 
-/** A live preview of a whole composition. */
-export function CompThumb({ compose, ctx, bg, w = 148, h = 92 }: { compose: Composition; ctx: HudCtx; bg?: string | null; w?: number; h?: number }) {
+/** A live preview of a whole composition, with its positions, looks and text. */
+export function CompThumb({ compose, ctx, bg, w = 148, h = 92, positions, looks, texts }: {
+  compose: Composition; ctx: HudCtx; bg?: string | null; w?: number; h?: number
+  positions?: Record<string, Placement>; looks?: Record<string, Look>; texts?: { id: string; text: string }[]
+}) {
   return (
     <Mini ctx={ctx} bg={bg} w={w} h={h} crop="frame">
-      <HudLayer ctx={ctx} compose={compose} />
+      <HudLayer ctx={ctx} compose={compose} positions={positions} looks={looks} texts={texts} />
     </Mini>
   )
 }

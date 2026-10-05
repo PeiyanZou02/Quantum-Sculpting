@@ -518,7 +518,7 @@ export function QSlice({
     >
       {layout === 'inspector' && (
         <div style={{ order: 0, width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-          <span style={{ font: `600 10px/1 ${MONO}`, letterSpacing: '.04em', textTransform: 'uppercase' }}>{title}</span>
+          <span style={{ font: '600 11.5px/1 var(--qs-sans)' }}>{title}</span>
           <span style={{ font: `400 11px/1 ${MONO}`, color: INK3 }}>
             {has ? `${tag ?? 'input'} · ${ax} ${k} of ${N - 1}` : `${tag ?? 'input'} · no grid`}
           </span>
@@ -548,7 +548,7 @@ const tabStyle: CSSProperties = {
 function LayerReadout({ rows, w }: { rows: [string, string][]; w: number }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10, width: w }}>
-      <span style={{ font: `600 10px/1 ${MONO}`, letterSpacing: '.04em', textTransform: 'uppercase', color: INK }}>Layer</span>
+      <span style={{ font: '600 11.5px/1 var(--qs-sans)', color: INK }}>Layer</span>
       <div
         style={{
           display: 'grid',

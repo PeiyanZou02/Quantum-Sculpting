@@ -63,7 +63,7 @@
 .rt-row--head {
   position: sticky; top: 0; z-index: 1; border-radius: 0; margin: 0 -8px 4px; padding: 9px 16px 7px;
   background: var(--qs-bg); border-bottom: 1px solid var(--qs-line);
-  font: 600 10px/1 var(--qs-mono); letter-spacing: .04em; text-transform: uppercase; color: var(--qs-ink3);
+  font: 600 11.5px/1 var(--qs-sans); letter-spacing: 0; color: var(--qs-ink3);
 }
 .rt-row--head .rt-st, .rt-row--head .rt-dur { white-space: nowrap; }
 
@@ -168,7 +168,7 @@
 .aj-row--head {
   position: sticky; top: 0; z-index: 1; min-height: 0; border-radius: 0; margin: 0 -8px 4px; padding: 9px 16px 7px;
   background: var(--qs-bg); border-bottom: 1px solid var(--qs-line);
-  font: 600 10px/1 var(--qs-mono); letter-spacing: .04em; text-transform: uppercase; color: var(--qs-ink3);
+  font: 600 11.5px/1 var(--qs-sans); letter-spacing: 0; color: var(--qs-ink3);
 }
 .aj-row--head > span { font: inherit !important; color: inherit !important; }
 

@@ -15,17 +15,17 @@
 .qs-lab-meta { display: flex; flex-direction: column; gap: 7px; min-width: 176px; color: var(--qs-ink); font-variant-numeric: tabular-nums; }
 .qs-lab-meta__title {
   display: flex; align-items: baseline; gap: 8px; padding-bottom: 7px; border-bottom: 1px solid var(--qs-line);
-  font: 500 10.5px/1 var(--qs-sans); letter-spacing: .09em; text-transform: uppercase;
+  font: 600 11.5px/1 var(--qs-sans); letter-spacing: 0;
 }
 .qs-lab-meta__title i { font-style: normal; color: var(--qs-ink3); letter-spacing: 0; }
 .qs-lab-meta__row { display: grid; grid-template-columns: 64px minmax(0, 1fr); column-gap: 12px; align-items: baseline; }
-.qs-lab-meta__k { font: 400 10px/1.2 var(--qs-mono); letter-spacing: .04em; text-transform: uppercase; color: var(--qs-ink3); }
+.qs-lab-meta__k { font: 400 11.5px/1.2 var(--qs-sans); letter-spacing: 0; color: var(--qs-ink3); }
 .qs-lab-meta__v { font: 400 10px/1.2 var(--qs-mono); color: var(--qs-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px; }
 .qs-lab-meta__v--dim { color: var(--qs-ink3); }
 .qs-lab-meta-pair { display: flex; gap: 40px; align-items: flex-start; }
 
 /* small label used across families */
-.qs-lab-label { font: 500 10.5px/1 var(--qs-sans); letter-spacing: .09em; text-transform: uppercase; color: var(--qs-ink); }
+.qs-lab-label { font: 600 11.5px/1 var(--qs-sans); letter-spacing: 0; color: var(--qs-ink); }
 .qs-lab-small { font: 400 10px/1 var(--qs-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
 
 /* pills (index tabs, active items) */

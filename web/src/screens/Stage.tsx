@@ -13,8 +13,8 @@ import { Icon, IconButton } from '../qs/Icon'
 import { Popover, PopSection, Check } from '../qs/Popover'
 import { Slider } from '../qs/Slider'
 import { Spinner } from './parts'
-import { HudLayer, FAMILIES, PRESETS, presetOf, full, PRESENT_PRESETS, presentPresetOf, toggleVariant, variantsOf } from '../hud/Composer'
-import { MarkLibrary } from './MarkLibrary'
+import { HudLayer, FAMILIES, PRESETS, presetOf, full, toggleVariant, variantsOf } from '../hud/Composer'
+import { MARK_MIME, MarkLibrary } from './MarkLibrary'
 import { usePresent } from '../present'
 import { PresentChrome } from './PresentBar'
 import type { HudCtx, Vec3 } from '../hud/types'
@@ -66,12 +66,13 @@ export function Stage() {
   const [engine, setEngine] = useState<Engine | null>(null)
   const [tick, setTick] = useState(0)
   const [over, setOver] = useState(false)
+  const [markOver, setMarkOver] = useState(false)
   const [tables, setTables] = useState<ShaderTables[]>([])
   const st = useStore()
   const pr = usePresent()
   const present = pr.mode === 'present'
   const labCompose = Object.keys(st.compose).length ? st.compose : (PRESETS.find((p) => p.id === 'clean')!.set() as Record<string, string>)
-  const shown: Record<string, string> = present ? (pr.preview ?? pr.compose) : labCompose
+  const shown: Record<string, string> = present ? pr.compose : labCompose
   const { model, modelMesh, grid, gridData, procData, resultMesh, view, slice, m, hud, scan, theme, tool, shading, shade, layers } = st
 
   useEffect(() => {
@@ -103,7 +104,7 @@ export function Stage() {
   useEffect(() => { engine?.show(view as ViewName) }, [engine, view, gridData, procData, resultMesh, modelMesh])
   useEffect(() => { engine?.setGhosts((Object.keys(layers) as Layer[]).filter((k) => layers[k].visible)) }, [engine, layers, gridData, procData, resultMesh, modelMesh])
   useEffect(() => { engine?.setFrame({ bounds: hud.bounds, floor: hud.floor }) }, [engine, hud.bounds, hud.floor, grid])
-  const planeOn = hud.slice || tool === 'slice' || (present && (pr.sweep || ((pr.preview ?? pr.compose).slicecard ?? 'off') !== 'off'))
+  const planeOn = hud.slice || tool === 'slice' || (present && (pr.sweep || (pr.compose.slicecard ?? 'off') !== 'off'))
   useEffect(() => { engine?.setSlice(planeOn ? slice : null) }, [engine, slice, view, planeOn])
   useEffect(() => { if (engine && view === 'scan') engine.setScan(slice.axis === 'z' ? slice.index + 1 : 0) }, [engine, view, slice, grid])
   useEffect(() => { if (view === 'scan' && slice.axis !== 'z') st.setSlice({ axis: 'z' }) }, [view]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -160,9 +161,10 @@ export function Stage() {
   useEffect(() => {
     if (!present || !pr.cycle) return
     const t = setInterval(() => {
-      const p = usePresent.getState()
-      const i = PRESENT_PRESETS.findIndex((x) => x.id === presentPresetOf(p.compose))
-      p.setCompose(full(PRESENT_PRESETS[(i + 1) % PRESENT_PRESETS.length].set()))
+      const p = usePresent.getState()   // step through the saved compositions
+      if (p.saved.length < 2) return
+      const i = p.saved.findIndex((x) => x.id === p.current)
+      p.load(p.saved[(i + 1) % p.saved.length].id)
     }, pr.cycleSec * 1000)
     return () => clearInterval(t)
   }, [present, pr.cycle, pr.cycleSec])
@@ -402,14 +404,39 @@ export function Stage() {
 
       <div
         ref={host}
-        className={'stage__view stage__view--' + tool + (model ? ' backdrop--' + shade.backdrop : '')}
+        className={'stage__view stage__view--' + tool + (model ? ' backdrop--' + shade.backdrop : '') + (markOver ? ' stage__view--drop' : '')}
         {...probe.handlers}
         {...sliceHandlers}
-        onDragOver={(e) => { e.preventDefault(); setOver(true) }}
-        onDragLeave={() => setOver(false)}
+        onPointerDown={(e) => {
+          // compose mode: a click on the view outside every piece clears the selection
+          if (present && pr.composing && !(e.target instanceof Element && e.target.closest('.hud-piece'))) pr.setSel(null)
+          if ('onPointerDown' in sliceHandlers && sliceHandlers.onPointerDown) sliceHandlers.onPointerDown(e)
+          else probe.handlers.onPointerDown(e)
+        }}
+        onDragOver={(e) => {
+          e.preventDefault()
+          if (e.dataTransfer.types.includes(MARK_MIME)) { e.dataTransfer.dropEffect = present ? 'copy' : 'none'; setMarkOver(present) } else setOver(true)
+        }}
+        onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) { setOver(false); setMarkOver(false) } }}
         onDrop={(e) => {
           e.preventDefault()
           setOver(false)
+          setMarkOver(false)
+          // a component from the library: placed where it was dropped (Present)
+          const mark = e.dataTransfer.getData(MARK_MIME)
+          if (mark) {
+            if (!present) return
+            const r = e.currentTarget.getBoundingClientRect()
+            const at = { x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height }
+            if (mark === 'text') pr.addText(at)
+            else {
+              const [f, id] = mark.split(':')
+              const slot = FAMILIES.find((x) => x.id === f)?.modules.find((x) => x.id === id)?.slot
+              pr.place(f, id, slot === 'object' || slot === 'full' ? undefined : at)   // marks on the model have no place of their own
+            }
+            pr.setComposing(true)
+            return
+          }
           const f = e.dataTransfer.files[0]
           if (f) st.upload(f)
         }}
@@ -425,7 +452,8 @@ export function Stage() {
 
         {model && engine && (
           <HudLayer ctx={(live.ctx = hudCtx(engine))} compose={shown}
-            arrange={pr.arrange && !pr.bare} grab={present && !pr.bare && !pr.recording}
+            arrange={!present && pr.arrange && !pr.bare}
+            edit={present && pr.composing && !pr.bare && !pr.recording ? { sel: pr.sel, onSelect: pr.setSel, onRemove: pr.removePiece } : undefined}
             looks={present ? pr.looks : undefined} hl={present ? pr.hl : null}
             texts={present ? pr.texts : undefined} onText={pr.setText}
             positions={Object.fromEntries(Object.entries(pr.pos).filter(([k]) => k.startsWith(pr.mode + '|')).map(([k, v]) => [k.slice(pr.mode.length + 1), v]))}
@@ -502,7 +530,7 @@ export function ComposeMenu({ compose, setCompose, guides = true, align = 'right
         </div>
       </PopSection>
       <PopSection label="Marks · several per family">
-        <MarkLibrary compose={compose} onToggle={(f, id) => setCompose({ [f]: toggleVariant(compose, f, id) })} tile={160} />
+        <MarkLibrary compose={compose} tile={160} onAdd={(f, id) => setCompose({ [f]: toggleVariant(compose, f, id) })} onRemove={(f, id) => setCompose({ [f]: toggleVariant(compose, f, id) })} />
       </PopSection>
       {guides && <PopSection label="Guides">
         <Check label="Grid box" note="dashed n³ outline" checked={hud.bounds} onChange={(v) => st.setHud({ bounds: v })} />
