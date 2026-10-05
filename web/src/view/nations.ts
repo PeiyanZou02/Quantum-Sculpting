@@ -54,6 +54,9 @@ function table(theme: Theme) {
   return t
 }
 
+/** Linear RGB per owner byte (256 × 3), the palette for Engine.setLabels: index 0 is no nation, b is nation b − 1. */
+export const ownerPalette = (theme: Theme = 'light') => table(theme)
+
 /**
  * Instance colours for the voxels the engine drew: `cells` are the x, y, z, value quads that
  * Engine.setVoxels keeps in mesh.userData.cells; `owner` is a full n³ frame of owner + 1 (0 = empty),

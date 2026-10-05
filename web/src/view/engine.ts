@@ -43,6 +43,36 @@ const INK4 = new THREE.Color('#B3B5BB')
 const SURFACE = new THREE.Color('#C9CBD0')
 const DEEP = new THREE.Color('#5E6066')
 
+/** A labelled voxel layer (setLabels) and the tween from its previous frame. Instances are the union
+ *  of the cells drawn before and after; those that move come first, so each frame uploads one range. */
+interface Morph {
+  n: number
+  /** Target frame: label per cell (0 = empty), index (x·n + y)·n + z. */
+  labels: Uint8Array
+  grid: Grid
+  mesh: THREE.InstancedMesh
+  /** Flat cell index per instance. */
+  cell: Int32Array
+  /** Scale shown now, and from / to of the tween. */
+  scale: Float32Array
+  s0: Float32Array
+  s1: Float32Array
+  /** Linear RGB from / to. */
+  c0: Float32Array
+  c1: Float32Array
+  /** Owner changed: a small swell so the conquest reads. */
+  pop: Uint8Array
+  /** Drawn in the settled frame (else dropped when the tween ends). */
+  keep: Uint8Array
+  /** Instances [0, moving) change during the tween. */
+  moving: number
+  t0: number
+  ms: number
+  done: boolean
+}
+
+const POP = 0.18
+
 export interface Pick {
   cell: [number, number, number]
   value: number | null
@@ -94,6 +124,9 @@ export class Engine {
   private raf = 0
   controls: OrbitControls
   private tween: { from: THREE.Vector3; to: THREE.Vector3; t0: number } | null = null
+  private morphs: Partial<Record<LayerName, Morph>> = {}
+  /** Scratch n³ map cell → union slot (−1 = none), reset after each use. */
+  private slot: Int32Array | null = null
   onChange?: () => void
 
   private host: HTMLElement
@@ -159,6 +192,7 @@ export class Engine {
         this.dirty = true
         this.onChange?.()
       }
+      this.stepMorphs(performance.now())
       this.controls.update()
       if (this.dirty) {
         this.renderer.render(this.scene, this.camera)
@@ -459,6 +493,7 @@ export class Engine {
     else if (layer instanceof THREE.Mesh) layer.geometry.dispose()
     delete this.layers[name]
     delete this.grids[name]
+    delete this.morphs[name]
     this.dirty = true
   }
 
@@ -591,6 +626,184 @@ export class Engine {
     if (!(l instanceof THREE.InstancedMesh) || !l.instanceColor) return
     l.instanceColor.array.set(rgb.subarray(0, l.instanceColor.array.length))
     l.instanceColor.needsUpdate = true
+    this.dirty = true
+  }
+
+  /**
+   * A voxel layer from a label frame (e.g. Evolve's owners: 0 = empty, else owner + 1), drawn like
+   * setVoxels at level 0.5 with plain per-label colours from `palette` (linear RGB, 3 per label).
+   * With ms > 0 and a previous frame of the same size on this layer, it morphs from what is on screen:
+   * cells that fill grow in, cells that empty shrink out, cells that change label cross-fade with a
+   * small swell. A new frame interrupts a running tween and starts from its current state.
+   */
+  setLabels(name: LayerName, labels: Uint8Array, n: number, palette: Float32Array, ms = 0) {
+    const n2 = n * n, N = n * n2
+    const prev = this.morphs[name]
+    const from = ms > 0 && prev && prev.n === n ? prev : null
+    // the grid for picks: reuse the previous buffer, nothing outside the engine holds it
+    const grid: Grid = prev && prev.n === n ? prev.grid : { n, data: new Float32Array(N) }
+    const data = grid.data
+    for (let i = 0; i < N; i++) data[i] = labels[i] ? 1 : 0
+    // cells drawn in the new frame: filled with an empty neighbour or on the boundary
+    const drawn: number[] = []
+    for (let x = 0; x < n; x++)
+      for (let y = 0; y < n; y++)
+        for (let z = 0; z < n; z++) {
+          const i = x * n2 + y * n + z
+          if (!labels[i]) continue
+          if (x === 0 || x === n - 1 || y === 0 || y === n - 1 || z === 0 || z === n - 1
+            || !labels[i - n2] || !labels[i + n2] || !labels[i - n] || !labels[i + n] || !labels[i - 1] || !labels[i + 1]) drawn.push(i)
+        }
+    // the union: what is on screen now, then the new cells
+    const cell: number[] = [], s0: number[] = [], s1: number[] = [], c0: number[] = [], c1: number[] = [], pop: number[] = [], keep: number[] = []
+    if (from) {
+      if (!this.slot || this.slot.length !== N) this.slot = new Int32Array(N).fill(-1)
+      const slot = this.slot, col = from.mesh.instanceColor!.array as Float32Array
+      for (let k = 0; k < from.mesh.count; k++) {
+        const c = from.cell[k], s = from.scale[k], b = labels[c], a = from.labels[c]
+        if (s === 0 && !b) continue
+        slot[c] = cell.length
+        cell.push(c)
+        s0.push(s)
+        s1.push(b ? 1 : 0)
+        c0.push(col[k * 3], col[k * 3 + 1], col[k * 3 + 2])
+        if (b) c1.push(palette[b * 3], palette[b * 3 + 1], palette[b * 3 + 2])
+        else c1.push(col[k * 3], col[k * 3 + 1], col[k * 3 + 2])
+        pop.push(a && b && a !== b ? 1 : 0)
+        keep.push(0)
+      }
+      for (const c of drawn) {
+        if (slot[c] >= 0) { keep[slot[c]] = 1; continue }
+        // not on screen: it was empty (grows in) or hidden inside the old territory (already full)
+        const a = from.labels[c], b = labels[c], p = a ? a : b
+        cell.push(c)
+        s0.push(a ? 1 : 0)
+        s1.push(1)
+        c0.push(palette[p * 3], palette[p * 3 + 1], palette[p * 3 + 2])
+        c1.push(palette[b * 3], palette[b * 3 + 1], palette[b * 3 + 2])
+        pop.push(a && a !== b ? 1 : 0)
+        keep.push(1)
+      }
+      for (const c of cell) slot[c] = -1
+    } else {
+      for (const c of drawn) {
+        const b = labels[c]
+        cell.push(c)
+        s0.push(1)
+        s1.push(1)
+        c0.push(palette[b * 3], palette[b * 3 + 1], palette[b * 3 + 2])
+        c1.push(palette[b * 3], palette[b * 3 + 1], palette[b * 3 + 2])
+        pop.push(0)
+        keep.push(1)
+      }
+    }
+    // moving instances first
+    const U = cell.length
+    const order: number[] = [], still: number[] = []
+    for (let k = 0; k < U; k++) {
+      const moves = pop[k] || s0[k] !== s1[k] || c0[k * 3] !== c1[k * 3] || c0[k * 3 + 1] !== c1[k * 3 + 1] || c0[k * 3 + 2] !== c1[k * 3 + 2]
+      ;(moves ? order : still).push(k)
+    }
+    const moving = order.length
+    for (const k of still) order.push(k)
+    const m: Morph = {
+      n, labels, grid, mesh: new THREE.InstancedMesh(this.box, this.voxMats[name] ?? this.voxMats.voxels, Math.max(U, 1)),
+      cell: new Int32Array(U), scale: new Float32Array(U), s0: new Float32Array(U), s1: new Float32Array(U),
+      c0: new Float32Array(U * 3), c1: new Float32Array(U * 3), pop: new Uint8Array(U), keep: new Uint8Array(U),
+      moving, t0: performance.now(), ms, done: moving === 0,
+    }
+    const mesh = m.mesh
+    mesh.count = U
+    const mat = mesh.instanceMatrix.array as Float32Array
+    const rgb = new Float32Array(Math.max(U, 1) * 3)
+    mesh.instanceColor = new THREE.InstancedBufferAttribute(rgb, 3)
+    if (moving) {
+      mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
+      mesh.instanceColor.setUsage(THREE.DynamicDrawUsage)
+      // while cells scale, cull and pick against the whole grid (settle measures the real bounds)
+      mesh.boundingSphere = new THREE.Sphere(new THREE.Vector3((n - 1) / 2, (n - 1) / 2, (n - 1) / 2), n)
+    }
+    const cells = new Array<number>(U * 4)
+    for (let j = 0; j < U; j++) {
+      const k = order[j], c = cell[k]
+      const x = Math.floor(c / n2), y = Math.floor(c / n) % n, z = c % n
+      m.cell[j] = c
+      m.s0[j] = s0[k]
+      m.s1[j] = s1[k]
+      m.scale[j] = s0[k]
+      m.pop[j] = pop[k]
+      m.keep[j] = keep[k]
+      for (let a = 0; a < 3; a++) {
+        m.c0[j * 3 + a] = rgb[j * 3 + a] = c0[k * 3 + a]
+        m.c1[j * 3 + a] = c1[k * 3 + a]
+      }
+      const o = j * 16, s = s0[k]
+      mat[o] = s; mat[o + 5] = s; mat[o + 10] = s; mat[o + 15] = 1
+      mat[o + 12] = x; mat[o + 13] = y; mat[o + 14] = z
+      cells[j * 4] = x; cells[j * 4 + 1] = y; cells[j * 4 + 2] = z; cells[j * 4 + 3] = 1
+    }
+    mesh.userData.cells = cells
+    this.put(name, mesh)
+    this.grids[name] = grid
+    this.morphs[name] = m
+    if (m.done) this.settle(m)
+  }
+
+  /** Advance the running tweens: only the moving instances are rewritten and uploaded. */
+  private stepMorphs(now: number) {
+    for (const m of Object.values(this.morphs)) {
+      if (!m || m.done) continue
+      const k = Math.min(1, (now - m.t0) / m.ms), e = 1 - (1 - k) ** 3
+      const swell = POP * Math.sin(Math.PI * k)
+      const mesh = m.mesh, mat = mesh.instanceMatrix.array as Float32Array, rgb = mesh.instanceColor!.array as Float32Array
+      for (let j = 0; j < m.moving; j++) {
+        const s = m.s0[j] + (m.s1[j] - m.s0[j]) * e + (m.pop[j] ? swell : 0)
+        m.scale[j] = s
+        const o = j * 16
+        mat[o] = s; mat[o + 5] = s; mat[o + 10] = s
+        for (let a = j * 3; a < j * 3 + 3; a++) rgb[a] = m.c0[a] + (m.c1[a] - m.c0[a]) * e
+      }
+      mesh.instanceMatrix.clearUpdateRanges()
+      mesh.instanceMatrix.addUpdateRange(0, m.moving * 16)
+      mesh.instanceMatrix.needsUpdate = true
+      mesh.instanceColor!.clearUpdateRanges()
+      mesh.instanceColor!.addUpdateRange(0, m.moving * 3)
+      mesh.instanceColor!.needsUpdate = true
+      this.dirty = true
+      if (k >= 1) this.settle(m)
+    }
+  }
+
+  /** End of a tween: final values, and only the cells the frame draws (compacted in place). */
+  private settle(m: Morph) {
+    m.done = true
+    const mesh = m.mesh, mat = mesh.instanceMatrix.array as Float32Array, rgb = mesh.instanceColor!.array as Float32Array
+    const cells = mesh.userData.cells as number[]
+    let w = 0
+    for (let j = 0; j < mesh.count; j++) {
+      if (!m.keep[j]) continue
+      if (w !== j) {
+        mat.copyWithin(w * 16, j * 16, j * 16 + 16)
+        for (let a = 0; a < 4; a++) cells[w * 4 + a] = cells[j * 4 + a]
+        m.cell[w] = m.cell[j]
+      }
+      const o = w * 16
+      mat[o] = 1; mat[o + 5] = 1; mat[o + 10] = 1
+      m.scale[w] = 1
+      for (let a = 0; a < 3; a++) rgb[w * 3 + a] = m.c1[j * 3 + a]
+      w++
+    }
+    const moved = w !== mesh.count || m.moving > 0
+    mesh.count = w
+    cells.length = w * 4
+    m.moving = 0
+    if (!moved) return
+    mesh.instanceMatrix.clearUpdateRanges()
+    mesh.instanceMatrix.needsUpdate = true
+    mesh.instanceColor!.clearUpdateRanges()
+    mesh.instanceColor!.needsUpdate = true
+    mesh.boundingBox = null
+    mesh.boundingSphere = null
     this.dirty = true
   }
 
