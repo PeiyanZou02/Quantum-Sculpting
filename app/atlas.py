@@ -4,6 +4,7 @@
   POST /engines/blur-core-v1/process  {"params": {...}} → 202 {"job_id", "status", "submitted_at"}
   GET  /jobs/{job_id}/status          → {"status", "error", ...}
   GET  /jobs/{job_id}/result          → {"result": ...}
+  GET  /jobs?limit=&cursor=           → {"jobs": [...], "next_cursor"}，账户里的任务，新的在前
   GET  /me                            → 当前账户（用来检查 key）
 认证：Authorization: Bearer <moth_ API key>
 """
@@ -58,10 +59,10 @@ class Atlas:
             "User-Agent": USER_AGENT,
         }
 
-    def _request(self, method, path, body=None, timeout=120):
+    def _request(self, method, path, body=None, timeout=120, params=None):
         for attempt in range(6):
             try:
-                r = requests.request(method, self.base + path, json=body,
+                r = requests.request(method, self.base + path, json=body, params=params,
                                      headers=self._headers, timeout=timeout)
             except requests.RequestException as e:
                 raise AtlasError(f"连不上 Atlas（{type(e).__name__}）。检查网络后重试。") from e
@@ -88,6 +89,11 @@ class Atlas:
 
     def result(self, job_id):
         return self._request("GET", f"/jobs/{job_id}/result", timeout=300)
+
+    def jobs(self, limit=50, cursor=None):
+        """账户里的任务，新的在前。状态是服务端最后记下来的，可能比 status() 慢半拍。"""
+        params = {"limit": int(limit), **({"cursor": cursor} if cursor else {})}
+        return self._request("GET", "/jobs", params=params, timeout=30)
 
 
 def _describe_error(r):

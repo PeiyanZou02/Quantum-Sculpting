@@ -57,6 +57,7 @@ class ServerTest(unittest.TestCase):
         server.S = server.State()
         self.fake.bare_result = self.fake.fail_jobs = False
         self.fake.max_values, self.fake.throttle, self.fake.polls_needed = None, 0, 3
+        self.fake.stale_list = False
         (server.HOME / "limits.json").unlink(missing_ok=True)
         self.c.delete("/api/key")
 
@@ -542,6 +543,154 @@ class ServerTest(unittest.TestCase):
             server.atlas.build_params = original
         self.assertEqual(job["status"], "failed")
         self.assertIn("too_many_qubits", job["error"])
+
+    # ── 账户里的任务列表 ──
+
+    def test_job_list_needs_a_key(self):
+        self.assertIn("API key", self.c.get("/api/atlas/jobs").get_json()["error"])
+        self.assertEqual(self.c.get("/api/atlas/jobs").status_code, 400)
+
+    def test_job_list_marks_the_jobs_this_app_submitted(self):
+        self.fake.jobs.clear()
+        elsewhere = self.fake.add_job("qrc-image-v1", "completed", age=7200)
+        colleague = self.fake.add_job("blur-core-v1", "failed", age=9000, owner="someone-else")
+        self.post("/api/key", {"key": TEST_KEY})
+        self.ready(64)
+        body = {"mode": "atlas", "strength": 0.3, "style": "xy", "run": "listed"}
+        self.assertEqual(self.wait_for_job(self.post("/api/process", body).get_json()["job_id"])["status"], "done")
+
+        r = self.c.get("/api/atlas/jobs")
+        self.assertNotIn(TEST_KEY, r.get_data(as_text=True))
+        page = r.get_json()
+        self.assertIsNone(page["next_cursor"])
+        jobs = page["jobs"]
+        self.assertEqual([j["job_id"] for j in jobs[4:]], [elsewhere, colleague], "新的在前")
+        mine = jobs[:4]
+        self.assertEqual({j["status"] for j in mine}, {"completed"})
+        self.assertEqual({j["engine"] for j in mine}, {"blur-core-v1"})
+        self.assertEqual({j["local"]["run"] for j in mine}, {"listed"})
+        self.assertEqual(sorted(tuple(j["local"]["tile"]) for j in mine), [(0, 0, 0), (0, 1, 0), (1, 0, 0), (1, 1, 0)])
+        self.assertEqual(mine[0]["local"]["shape"], [32, 32, 64])
+        self.assertEqual(mine[0]["local"]["params"]["style"], "xy")
+        self.assertTrue(all(j["mine"] for j in mine))
+        self.assertTrue(mine[0]["created_at"].endswith("Z"))
+
+        other = {j["job_id"]: j for j in jobs[4:]}
+        self.assertIsNone(other[elsewhere]["local"], "别处提交的任务没有本地记录")
+        self.assertEqual((other[elsewhere]["engine"], other[elsewhere]["mine"]), ("qrc-image-v1", True))
+        self.assertEqual((other[colleague]["status"], other[colleague]["mine"]), ("failed", False))
+
+    def test_job_list_is_paged(self):
+        self.fake.jobs.clear()
+        ids = [self.fake.add_job(age=100 * (i + 1)) for i in range(5)]
+        self.post("/api/key", {"key": TEST_KEY})
+        first = self.c.get("/api/atlas/jobs?limit=2").get_json()
+        self.assertEqual([j["job_id"] for j in first["jobs"]], ids[:2])
+        self.assertTrue(first["next_cursor"])
+        rest = self.c.get(f"/api/atlas/jobs?limit=200&cursor={first['next_cursor']}").get_json()
+        self.assertEqual([j["job_id"] for j in rest["jobs"]], ids[2:])
+        self.assertIsNone(rest["next_cursor"])
+
+    def test_job_list_uses_the_status_this_app_polled_when_the_list_lags(self):
+        self.fake.jobs.clear()
+        self.fake.stale_list = True            # 列表里一直是 queued
+        self.fake.polls_needed = 40
+        self.post("/api/key", {"key": TEST_KEY})
+        self.ready(16)
+        job_id = self.post("/api/process", {"mode": "atlas", "run": "live"}).get_json()["job_id"]
+        seen = set()
+        for _ in range(400):
+            rows = self.c.get("/api/atlas/jobs").get_json()["jobs"]
+            if rows:
+                seen.add((rows[0]["status"], rows[0]["progress"]))
+            if ("running", "Simulating the circuit") in seen:
+                break
+            time.sleep(0.01)
+        self.assertIn(("running", "Simulating the circuit"), seen, "运行中应该显示轮询到的状态和进度")
+        self.assertEqual(self.wait_for_job(job_id)["status"], "done")
+        self.assertEqual(self.c.get("/api/atlas/jobs").get_json()["jobs"][0]["status"], "completed")
+
+    def test_job_detail_gives_the_reason_a_job_failed(self):
+        self.fake.jobs.clear()
+        failed = self.fake.add_job(status="failed", error="[TMPRL1103] payload too large")
+        self.post("/api/key", {"key": TEST_KEY})
+        detail = self.c.get(f"/api/atlas/jobs/{failed}").get_json()
+        self.assertEqual((detail["status"], detail["error"]), ("failed", "[TMPRL1103] payload too large"))
+        self.assertEqual(self.c.get("/api/atlas/jobs/not-a-job-id").status_code, 404)
+        self.assertEqual(self.c.get("/api/atlas/jobs/..%2Fme").status_code, 404)
+        missing = self.c.get("/api/atlas/jobs/00000000-0000-0000-0000-000000000000")
+        self.assertEqual(missing.status_code, 502)
+        self.assertIn("404", missing.get_json()["error"])
+
+    def test_a_running_atlas_job_can_be_found_again_and_blocks_a_second_one(self):
+        self.fake.polls_needed = 40
+        self.post("/api/key", {"key": TEST_KEY})
+        self.ready(16)
+        self.assertIsNone(self.c.get("/api/state").get_json()["job"])
+        body = {"mode": "atlas", "strength": 0.4, "run": "first"}
+        job = self.post("/api/process", body).get_json()
+        self.assertEqual((job["run"], job["params"]["strength"], job["tiling"]), ("first", 0.4, "cube"))
+        # 刷新页面后靠这个接回去
+        self.assertEqual(self.c.get("/api/state").get_json()["job"]["job_id"], job["job_id"])
+        before = self.fake.submits
+        refused = self.post("/api/process", {**body, "run": "second"}, expect=409).get_json()
+        self.assertIn("first", refused["error"])
+        self.assertEqual(self.fake.submits, before)
+        self.assertEqual(self.wait_for_job(job["job_id"])["status"], "done")
+        self.assertIsNone(self.c.get("/api/state").get_json()["job"])
+        second = self.post("/api/process", {**body, "run": "second"}).get_json()
+        self.assertEqual(self.wait_for_job(second["job_id"])["status"], "done")
+
+    # ── 服务重启之后 ──
+
+    def test_every_response_says_which_start_of_the_service_it_came_from(self):
+        boots = {self.c.get(path).headers.get("X-Boot") for path in ("/", "/api/state", "/api/grid/input")}
+        self.assertEqual(boots, {server.BOOT})
+        cup = self.post("/api/model/test-cup").get_json()
+        self.assertEqual((cup["file"], cup["builtin"]), ("test_cup.stl", True))
+        self.assertTrue(self.post("/api/model/orient", {"up": "+y"}).get_json()["builtin"])
+        data = {"file": (io.BytesIO((server.INPUT / "test_cup.stl").read_bytes()), "my cup.stl"), "up": "+y"}
+        r = self.c.post("/api/model/upload", data=data, content_type="multipart/form-data")
+        self.assertEqual((r.get_json()["file"], r.get_json()["builtin"]), ("my_cup.stl", False))
+        self.assertEqual(self.post("/api/model/orient", {"up": "+z"}).get_json()["file"], "my_cup.stl")
+
+    def test_a_reopened_model_gives_exactly_the_same_grid(self):
+        """Atlas 的缓存按网格内容找，所以服务重启后重新打开的模型必须体素化出一模一样的网格。"""
+        self.post("/api/model/test-cup")
+        data = {"file": (io.BytesIO((server.INPUT / "test_cup.stl").read_bytes()), "scan.stl")}
+        model = self.c.post("/api/model/upload", data=data, content_type="multipart/form-data").get_json()
+        for values in ("coverage", "binary"):
+            self.post("/api/voxelize", {"n": 64, "values": values})
+            before = self.c.get("/api/grid/input").data
+            server.S = server.State()
+            self.post("/api/model/open", {"name": model["file"], "up": model["up"]})
+            self.post("/api/voxelize", {"n": 64, "values": values})
+            self.assertEqual(self.c.get("/api/grid/input").data, before, values)
+
+    def test_after_a_restart_the_model_and_the_cached_atlas_result_can_be_put_back(self):
+        self.post("/api/key", {"key": TEST_KEY})
+        model = self.post("/api/model/test-cup").get_json()
+        self.post("/api/voxelize", {"n": 64, "values": "coverage"})
+        body = {"mode": "atlas", "strength": 0.3, "run": "kept"}
+        self.assertEqual(self.wait_for_job(self.post("/api/process", body).get_json()["job_id"])["status"], "done")
+        before = self.c.get("/api/grid/processed").data
+        submits = self.fake.submits
+
+        server.S = server.State()                       # 重启：内存里什么都没有了
+        self.assertIn("量子处理", self.post("/api/mesh", {"level": 0.5}, expect=400).get_json()["error"])
+        self.assertIn("体素化", self.post("/api/process", {"mode": "emulator"}, expect=400).get_json()["error"])
+
+        # 页面做的事：把模型送回来（内置的杯子是重新造一个），用原来的参数体素化，再去读缓存
+        self.assertTrue(model["builtin"])
+        self.post("/api/model/test-cup")
+        self.post("/api/voxelize", {"n": 64, "values": "coverage"})
+        missing = self.post("/api/process", {**body, "run": "never-submitted", "cached_only": True}).get_json()
+        self.assertEqual(missing, {"status": "missing"})
+        self.assertIsNone(self.c.get("/api/state").get_json()["job"])
+        back = self.post("/api/process", {**body, "cached_only": True}).get_json()
+        self.assertEqual((back["status"], back["meta"]["cached"]), ("done", True))
+        self.assertEqual(self.c.get("/api/grid/processed").data, before, "读回来的应该和重启前一模一样")
+        self.assertEqual(self.fake.submits, submits, "恢复不应该向 Atlas 提交任何任务")
 
 
 if __name__ == "__main__":

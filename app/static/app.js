@@ -12,6 +12,10 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // ── 和本地服务通信 ───────────────────────────────────────────────────────
 
+// 服务每次启动有一个新的编号。编号变了说明它重启过：内存里的模型、网格和结果都没了，
+// 页面上显示的东西它已经不认识，要把模型重新送回去（见 recover）
+let boot = null;
+
 async function request(path, options) {
   let res;
   try {
@@ -19,6 +23,10 @@ async function request(path, options) {
   } catch (e) {
     throw new Error('连不上本地服务。确认启动它的窗口还开着，然后刷新页面。');
   }
+  const seen = res.headers.get('X-Boot');
+  const restarted = !!(boot && seen && seen !== boot);
+  if (seen) boot = seen;
+  if (restarted) setTimeout(recover, 0);
   if (!res.ok) {
     let message = `请求失败（HTTP ${res.status}）。`;
     try {
@@ -27,6 +35,7 @@ async function request(path, options) {
     } catch (e) { /* 不是 JSON，就用上面的通用说明 */ }
     const err = new Error(message);
     err.status = res.status;
+    err.restarted = restarted;                         // 这次失败只是因为服务重启了，恢复之后会重算
     throw err;
   }
   return res;
@@ -289,7 +298,9 @@ const state = {
   adopt: false,         // 服务端有新的处理结果等着取（Atlas 任务完成、或刷新页面后恢复）
   partial: false,       // 「处理后」里现在是 Atlas 算到一半的样子
   frameNext: false,     // 下一次体素化完成后把相机对准模型
+  recovered: false,     // 服务重启后刚把模型送回去：Atlas 的结果从缓存里读回来
   atlasJob: null,
+  run: null,            // 正在 Atlas 上跑的那次提交：分块进度、实验名
   atlasStatus: null,    // [dot, text]
 };
 
@@ -409,7 +420,7 @@ function toast(message, kind = 'err') {
 }
 
 function renderStats(id, rows) {
-  const dl = $(id);
+  const dl = typeof id === 'string' ? $(id) : id;
   dl.hidden = rows.length === 0;
   dl.replaceChildren(...rows.flatMap(([label, value, dot]) => {
     const dd = element('dd');
@@ -456,7 +467,7 @@ async function pump() {
         }
         await doMesh();
       } catch (e) {
-        toast(e.message);
+        if (!e.restarted) toast(e.message);
       }
       render();
     }
@@ -501,7 +512,16 @@ async function doProcess() {
     return;
   }
   const params = processParams();
-  if (params.mode === 'atlas') return;                 // Atlas 只在点按钮时提交
+  const recovered = state.recovered;
+  state.recovered = false;
+  if (params.mode === 'atlas') {
+    // Atlas 只在点按钮时提交。服务重启后例外：算过的结果都在缓存里，读回来不用提交
+    if (!recovered) return;
+    let found = null;
+    try { found = await postJSON('/api/process', { ...params, cached_only: true }); } catch (e) { /* 读不回来就等用户自己点 */ }
+    if (found && found.status === 'done') await adoptProcessed();
+    return;
+  }
   if (params.axes.length === 0) throw new Error('至少选择一个模糊方向（X、Y 或 Z）。');
   await postJSON('/api/process', params);
   await adoptProcessed();
@@ -561,8 +581,43 @@ async function loadModel(send) {
     invalidate(STAGE.voxel);
   } catch (e) {
     $('spinner').hidden = true;
-    toast(e.message);
+    if (!e.restarted) toast(e.message);
   }
+}
+
+// 本地服务重启过：把正在用的模型从 input/ 重新打开，再按页面上现在的参数从体素化重算一遍
+let recovering = false;
+
+async function recover() {
+  if (recovering || !state.model) return;
+  recovering = true;
+  try {
+    await idle();
+    const up = $('up-select').value;
+    const turned = up !== state.model.up;
+    toast('本地服务重启过，正在重新载入模型并重算。', 'info');
+    $('spinner').hidden = false;
+    if (state.model.builtin) {
+      // 测试杯子要重新造：从 test_cup.stl 读回来的有浮点误差，Atlas 的缓存会对不上
+      state.model = await postJSON('/api/model/test-cup');
+      if (up !== '+z') state.model = await postJSON('/api/model/orient', { up });
+    } else {
+      // 文件名一般跟着模型信息来；没有的话，「已经在 input/ 里的模型」那一栏选中的就是它
+      const name = state.model.file || $('model-select').value;
+      state.model = await postJSON('/api/model/open', { name, up });
+    }
+    if (turned) {                                      // 重启前正好在改朝向：模型也要换成转过的
+      viewer.setMesh('model', (await getBinary('/api/model/mesh')).buffer);
+      viewer.layers.model.visible = false;
+      state.frameNext = true;
+    }
+    state.recovered = true;
+    invalidate(STAGE.voxel);
+  } catch (e) {
+    $('spinner').hidden = true;
+    toast(`本地服务重启过，模型没能重新载入，请重新选择模型。（${e.message}）`);
+  }
+  recovering = false;
 }
 
 // input/ 里已有的模型：重启或换机器之后不用再上传
@@ -599,16 +654,26 @@ async function submitAtlas() {
   render();
   try {
     const r = await postJSON('/api/process', processParams());
-    if (r.status === 'done') {
-      atlasFinished(true, r.meta);
-      return;
-    }
-    state.atlasJob = r.job_id;
+    if (r.status === 'done') atlasFinished(true, r.meta);
+    else watchAtlas(r);
+  } catch (e) {
+    state.atlasStatus = ['err', e.message];
     render();
-    let seen = -1, lastPartial = 0;
+  }
+}
+
+// 跟着一次提交直到它结束。刷新页面后也从这里接回去
+async function watchAtlas(job) {
+  state.atlasJob = job.job_id;
+  state.run = job;
+  revealJobs();
+  render();
+  let seen = -1, lastPartial = 0;
+  try {
     while (state.atlasJob) {
       await sleep(1000);
-      const job = await getJSON(`/api/process/${state.atlasJob}`);
+      job = await getJSON(`/api/process/${state.atlasJob}`);
+      state.run = job;
       if (job.status === 'running') {
         const label = ATLAS_STATE[job.atlas_status] || job.atlas_status;
         const tiles = job.tiles_total > 1 ? `分块 ${job.tiles_done} / ${job.tiles_total} · ` : `${label} · `;
@@ -632,9 +697,12 @@ async function submitAtlas() {
   } catch (e) {
     state.atlasJob = null;
     dropPartial();
-    state.atlasStatus = ['err', e.message];
+    state.atlasStatus = ['err', e.restarted || e.status === 404
+      ? '本地服务重启了，这次提交中断了。已经提交的分块留着任务号，再点一次「提交到 Atlas」会接着等，不会重复提交。'
+      : e.message];
   }
   render();
+  refreshJobs();
 }
 
 const formatWait = (seconds) => (seconds < 90 ? `${Math.round(seconds)} 秒` : `${(seconds / 60).toFixed(1)} 分钟`);
@@ -686,6 +754,397 @@ function atlasFinished(cached, meta) {
   invalidate(STAGE.process);
 }
 
+// ── Atlas 任务列表 ─────────────────────────────────────────────────────────
+// 账户里的任务，新的在前；本应用提交的标上实验名和分块。只在展开时向 Atlas 要数据：
+// 有任务在跑时 3 秒一次，否则 30 秒一次，页面不在前台时停下。
+
+const JOB_STATE = {
+  queued: ['', '排队中'], pending: ['', '排队中'],
+  processing: ['info', '运行中'], running: ['info', '运行中'],
+  completed: ['ok', '已完成'], succeeded: ['ok', '已完成'], success: ['ok', '已完成'],
+  failed: ['err', '失败'], cancelled: ['warn', '已取消'], canceled: ['warn', '已取消'],
+};
+const FILTER_LABEL = { active: '进行中', completed: '已完成', failed: '失败或取消' };
+const DAY = 864e5;
+const JOBS_STEP = 50;
+const calm = matchMedia('(prefers-reduced-motion: reduce)');
+
+const jobs = {
+  open: false,
+  pref: null,           // 用户自己点过展开或收起（'open' / 'closed'）
+  byId: new Map(),      // 任务号 → 服务端给的那一行
+  rows: new Map(),      // 任务号 → 页面上的那一行
+  cursor: null,         // 更早的任务从哪里接着取
+  loaded: false,
+  shown: JOBS_STEP,
+  filter: 'all',
+  expanded: new Set(),
+  details: new Map(),   // 展开时另外查到的失败原因
+  busy: false,
+  error: null,
+  updated: null,
+  timer: null,
+  epoch: 0,             // 换 key 之后加一，丢掉还在路上的旧响应
+};
+
+function jobGroup(status) {
+  const dot = (JOB_STATE[status] || [''])[0];
+  return dot === 'ok' ? 'completed' : dot === 'err' || dot === 'warn' ? 'failed' : 'active';
+}
+
+const sortedJobs = () => [...jobs.byId.values()].sort((a, b) =>
+  String(b.created_at).localeCompare(String(a.created_at)) || a.job_id.localeCompare(b.job_id));
+
+const jobsActive = () => !!state.atlasJob
+  || sortedJobs().slice(0, JOBS_STEP).some((j) => jobGroup(j.status) === 'active');
+
+const jobPage = (limit, cursor) =>
+  getJSON(`/api/atlas/jobs?limit=${limit}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`);
+
+// 第一次一页取 200 个；这一页全在 24 小时以内就接着取，最多三页，「过去 24 小时」的数才准
+async function loadJobs(epoch) {
+  let cursor = null;
+  for (let pages = 0; pages < 3; pages++) {
+    const page = await jobPage(200, cursor);
+    if (epoch !== jobs.epoch) return;
+    for (const job of page.jobs) jobs.byId.set(job.job_id, job);
+    cursor = page.next_cursor;
+    const last = page.jobs[page.jobs.length - 1];
+    if (!cursor || !last || Date.now() - Date.parse(last.created_at) > DAY) break;
+  }
+  jobs.cursor = cursor;
+  jobs.loaded = true;
+}
+
+async function refreshJobs() {
+  clearTimeout(jobs.timer);
+  if (!jobs.open || document.hidden || jobs.busy) return;
+  if (!state.key || !state.key.set) {
+    renderJobs();
+    return;
+  }
+  const epoch = jobs.epoch;
+  jobs.busy = true;
+  try {
+    if (!jobs.loaded) {
+      renderJobs();
+      await loadJobs(epoch);
+    } else {
+      const page = await jobPage(JOBS_STEP);
+      if (epoch === jobs.epoch) {
+        if (page.jobs.length && jobs.byId.size && !page.jobs.some((j) => jobs.byId.has(j.job_id))) {
+          jobs.byId.clear();                           // 离开太久，新任务和已有的接不上了：重新载入
+          await loadJobs(epoch);
+        } else {
+          for (const job of page.jobs) jobs.byId.set(job.job_id, job);
+        }
+      }
+    }
+    if (epoch === jobs.epoch) {
+      jobs.error = null;
+      jobs.updated = new Date();
+    }
+  } catch (e) {
+    if (epoch === jobs.epoch) jobs.error = e.message;
+  }
+  jobs.busy = false;
+  if (epoch !== jobs.epoch) {
+    refreshJobs();
+    return;
+  }
+  renderJobs(true);
+  jobs.timer = setTimeout(refreshJobs, jobsActive() ? 3000 : 30000);
+}
+
+function resetJobs() {
+  jobs.epoch++;
+  jobs.byId.clear();
+  jobs.details.clear();
+  jobs.expanded.clear();
+  Object.assign(jobs, { cursor: null, loaded: false, shown: JOBS_STEP, error: null, updated: null });
+  renderJobs();
+  refreshJobs();
+}
+
+async function moreJobs() {
+  jobs.shown += JOBS_STEP;
+  const have = jobs.filter === 'all' ? jobs.byId.size
+    : sortedJobs().filter((j) => jobGroup(j.status) === jobs.filter).length;
+  if (jobs.shown > have && jobs.cursor && !jobs.busy) {
+    const epoch = jobs.epoch;
+    jobs.busy = true;
+    try {
+      const page = await jobPage(200, jobs.cursor);
+      if (epoch === jobs.epoch) {
+        for (const job of page.jobs) jobs.byId.set(job.job_id, job);
+        jobs.cursor = page.next_cursor;
+      }
+    } catch (e) {
+      if (epoch === jobs.epoch) jobs.error = e.message;
+    }
+    jobs.busy = false;
+  }
+  renderJobs();
+  refreshJobs();                                       // 取更早的任务时可能错过了一次定时更新
+}
+
+function setJobsOpen(open, byUser) {
+  jobs.open = open;
+  if (byUser) {
+    jobs.pref = open ? 'open' : 'closed';
+    try { localStorage.setItem('quantum-sculpting-jobs', jobs.pref); } catch (e) { /* 存不了就下次用默认的 */ }
+  }
+  $('jobs-body').hidden = !open;
+  $('jobs-toggle').setAttribute('aria-expanded', String(open));
+  renderJobs();
+  refreshJobs();
+}
+
+// 提交任务或存好 key 之后把列表展开，除非用户自己收起过
+function revealJobs() {
+  if (!jobs.open && jobs.pref !== 'closed') setJobsOpen(true, false);
+  else refreshJobs();
+}
+
+async function toggleJob(id) {
+  if (jobs.expanded.delete(id)) {
+    renderJobs();
+    return;
+  }
+  jobs.expanded.add(id);
+  renderJobs();
+  const job = jobs.byId.get(id);
+  if (!job || jobGroup(job.status) === 'completed') return;   // 完成的任务再查一次会把整个结果下载下来
+  try {
+    jobs.details.set(id, await getJSON(`/api/atlas/jobs/${id}`));
+  } catch (e) {
+    jobs.details.set(id, { note: `查不到更多信息：${e.message}` });
+  }
+  renderJobs();
+}
+
+function ago(iso, now) {
+  const s = (now - Date.parse(iso)) / 1000;
+  if (Number.isNaN(s)) return '';
+  if (s < 60) return `${Math.max(0, Math.floor(s))} 秒前`;
+  if (s < 3600) return `${Math.floor(s / 60)} 分钟前`;
+  if (s < 86400) return `${Math.floor(s / 3600)} 小时前`;
+  return `${Math.floor(s / 86400)} 天前`;
+}
+
+function clock(iso) {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? '' : d.toLocaleString('zh-CN', { hour12: false });
+}
+
+function setText(el, value) {
+  if (el.textContent !== value) el.textContent = value;
+}
+
+function makeJobRow(job) {
+  const item = element('div', 'jobs-item');
+  const row = element('div', 'jobs-row');
+  row.setAttribute('role', 'row');
+  const cell = {};
+  for (const name of ['n', 'when', 'engine', 'id', 'source', 'status']) {
+    cell[name] = element('span', `jobs-${name}`);
+    cell[name].setAttribute('role', 'cell');
+    row.append(cell[name]);
+  }
+  const open = element('button', 'jobs-open');
+  open.type = 'button';
+  open.setAttribute('aria-label', '任务详情');
+  cell.no = element('span', 'mono muted');
+  cell.n.append(open, cell.no);
+  cell.engine.classList.add('mono');
+  cell.id.classList.add('mono');
+  cell.id.textContent = `${job.job_id.slice(0, 8)}…`;
+  cell.id.title = job.job_id;
+  const detail = element('dl', 'stats jobs-detail');
+  item.append(row, detail);
+  row.addEventListener('click', () => {
+    if (!String(getSelection())) toggleJob(job.job_id);   // 在行里选文字不算点击
+  });
+  return { item, row, cell, open, detail, status: null, source: null, detailKey: null };
+}
+
+function paintJobRow(view, job, index, now) {
+  const { cell } = view;
+  setText(cell.no, String(index + 1));
+  setText(cell.when, ago(job.created_at, now));
+  cell.when.title = clock(job.created_at);
+  setText(cell.engine, job.engine || '');
+
+  const local = job.local;
+  const source = JSON.stringify(local ? [local.run, local.tile] : job.mine);
+  if (view.source !== source) {
+    view.source = source;
+    cell.source.replaceChildren(...(local
+      ? [element('span', '', local.run || '本应用'),
+        ...(local.tile ? [element('span', 'muted', `块 ${local.tile.join(',')}`)] : [])]
+      : [element('span', 'muted', job.mine === false ? '组织里的其他成员' : '个人账户')]));
+  }
+
+  if (view.status !== job.status) {
+    const [dot, label] = JOB_STATE[job.status] || ['', job.status || '未知'];
+    const parts = [element('span', `dot ${dot}`), element('span', '', label)];
+    if (jobGroup(job.status) === 'active') {
+      // Atlas 不报百分比，这一小条只表示走到了哪个阶段
+      const bar = element('span', `progress${dot === 'info' ? ' busy' : ''}`);
+      bar.append(element('span'));
+      bar.firstChild.style.width = dot === 'info' ? '60%' : '15%';
+      parts.push(bar);
+    }
+    cell.status.replaceChildren(...parts);
+    if (view.status !== null) {                        // 状态变了，闪一下
+      view.row.classList.remove('changed');
+      void view.row.offsetWidth;
+      view.row.classList.add('changed');
+    }
+    view.status = job.status;
+  }
+  cell.status.title = job.progress || '';
+
+  const expanded = jobs.expanded.has(job.job_id);
+  view.open.setAttribute('aria-expanded', String(expanded));
+  view.detail.hidden = !expanded;
+  if (expanded) paintJobDetail(view, job);
+}
+
+function paintJobDetail(view, job) {
+  const extra = jobs.details.get(job.job_id) || {};
+  const key = JSON.stringify([job, extra]);
+  if (view.detailKey === key) return;                  // 没变就不重画，选中的文字不会丢
+  view.detailKey = key;
+
+  const id = document.createDocumentFragment();
+  const copy = element('button', '', '复制');
+  copy.type = 'button';
+  copy.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(job.job_id);
+      toast('已复制任务号。', 'ok');
+    } catch (e) {
+      toast('复制不了，手动选中任务号再复制。');
+    }
+  });
+  id.append(job.job_id, copy);
+
+  const local = job.local;
+  const p = local && local.params;
+  const ended = jobGroup(job.status) !== 'active';
+  const took = (Date.parse(job.updated_at) - Date.parse(job.created_at)) / 1000;
+  const progress = job.progress || (ended ? null : extra.progress);
+  renderStats(view.detail, [
+    ['任务号', id],
+    ['提交时间', clock(job.created_at)],
+    [ended ? '结束时间' : '最后更新', clock(job.updated_at)],
+    ...(ended && took >= 0 ? [['在 Atlas 上用时', formatWait(took)]] : []),
+    ['来源', local ? '本应用提交' : job.mine === false ? '组织里其他成员提交的' : '个人账户，不是从这个项目文件夹提交的'],
+    ...(local && local.run ? [['实验名', local.run]] : []),
+    ...(local && local.shape ? [['分块', local.shape.join('×') + (local.tile ? `，位置 ${local.tile.join(', ')}` : '')]] : []),
+    ...(p ? [['参数', [`strength ${p.strength}`, `reach ${p.reach}`, `style ${p.style}`,
+      ...(p.axes ? [`axes ${p.axes.map((a) => 'XYZ'[a]).join('')}`] : []),
+      ...(p.shots ? [`shots ${fmt(p.shots)}`] : [])].join(' · ')]] : []),
+    ...(progress ? [['进度', progress]] : []),
+    ...(extra.error ? [['失败原因', extra.error]] : []),
+    ...(extra.note ? [['详情', extra.note]] : []),
+  ]);
+}
+
+// animate：数据更新时让各行滑到新位置，新来的行从上面淡入
+function renderJobs(animate = false) {
+  const hasKey = !!(state.key && state.key.set);
+  const now = Date.now();
+  const all = sortedJobs();
+  const matching = jobs.filter === 'all' ? all : all.filter((j) => jobGroup(j.status) === jobs.filter);
+  const shown = jobs.open && hasKey ? matching.slice(0, jobs.shown) : [];
+  const list = $('jobs-list');
+
+  const move = animate && !calm.matches && jobs.rows.size > 0;
+  const before = new Map();
+  if (move) for (const [id, view] of jobs.rows) before.set(id, view.item.getBoundingClientRect().top);
+
+  const keep = new Set();
+  let anchor = null;
+  shown.forEach((job, index) => {
+    let view = jobs.rows.get(job.job_id);
+    if (!view) {
+      view = makeJobRow(job);
+      jobs.rows.set(job.job_id, view);
+    }
+    paintJobRow(view, job, index, now);
+    const next = anchor ? anchor.nextSibling : list.firstChild;
+    if (next !== view.item) list.insertBefore(view.item, next);
+    anchor = view.item;
+    keep.add(job.job_id);
+  });
+  for (const [id, view] of jobs.rows) {
+    if (keep.has(id)) continue;
+    view.item.remove();
+    jobs.rows.delete(id);
+  }
+
+  if (move) {
+    const frame = $('jobs-table').getBoundingClientRect();
+    for (const id of keep) {
+      const { item } = jobs.rows.get(id);
+      const top = item.getBoundingClientRect().top;
+      if (top > frame.bottom + 200) break;             // 看不见的行不用动
+      if (!before.has(id)) {
+        item.animate([{ opacity: 0, transform: 'translateY(-12px)' }, { opacity: 1, transform: 'none' }],
+          { duration: 500, easing: 'ease-out' });
+      } else if (Math.abs(before.get(id) - top) > 0.5) {
+        item.animate([{ transform: `translateY(${before.get(id) - top}px)` }, { transform: 'none' }],
+          { duration: 600, easing: 'cubic-bezier(0.2, 0, 0, 1)' });
+      }
+    }
+  }
+
+  const ready = jobs.open && hasKey && jobs.loaded;
+  const day = all.filter((j) => now - Date.parse(j.created_at) < DAY);
+  const active = all.filter((j) => jobGroup(j.status) === 'active').length;
+  const failed = day.filter((j) => (JOB_STATE[j.status] || [])[0] === 'err').length;
+  // 载入的全在 24 小时以内、后面还有没载入的：实际数量只会更多
+  const atLeast = jobs.cursor && day.length === all.length ? '+' : '';
+  $('jobs-summary').textContent = !ready ? '' : [
+    `过去 24 小时 ${fmt(day.length)}${atLeast} 个任务`,
+    ...(active ? [`${active} 个进行中`] : []),
+    ...(failed ? [`${failed} 个失败`] : []),
+  ].join(' · ');
+
+  const empty = !hasKey ? '设置 Atlas API key 后，这里会列出账户里的任务。点右上角的「设置 API key」。'
+    : !jobs.loaded ? (jobs.error ? '读不到任务列表。' : '正在读取…')
+      : all.length === 0 ? '账户里还没有任务。提交一次 Atlas 处理后会出现在这里。'
+        : matching.length === 0 ? `最近 ${fmt(all.length)} 个任务里没有${FILTER_LABEL[jobs.filter]}的。` : '';
+  $('jobs-empty').hidden = !empty;
+  $('jobs-empty').textContent = empty;
+  $('jobs-foot').hidden = !ready || matching.length === 0;
+  $('jobs-more').hidden = !(matching.length > jobs.shown || jobs.cursor);
+  $('jobs-count').textContent = `显示 ${fmt(shown.length)} / ${fmt(matching.length)} 个`
+    + (jobs.cursor ? '，更早的还没有载入。' : '。');
+  setStatusLine('jobs-status', !hasKey ? null : jobs.error ? ['err', jobs.error]
+    : !jobs.updated ? null : jobsActive() ? ['info', '有任务在运行，每 3 秒更新']
+      : ['', `${jobs.updated.toLocaleTimeString('zh-CN', { hour12: false })} 更新`]);
+  $('jobs-refresh').disabled = !hasKey;
+}
+
+// 任务栏右边的进度条：这次提交算完了几块
+function renderRun() {
+  const run = state.atlasJob ? state.run : null;
+  $('jobs-run').hidden = !run;
+  if (!run) return;
+  const bar = $('jobs-run-bar');
+  const tiled = run.tiles_total > 1;
+  $('jobs-run-text').textContent = tiled ? `${run.run} · 分块 ${run.tiles_done} / ${run.tiles_total}`
+    : `${run.run} · ${ATLAS_STATE[run.atlas_status] || run.atlas_status}`;
+  bar.classList.toggle('indeterminate', !tiled);
+  bar.firstElementChild.style.width = tiled ? `${run.tiles_done / run.tiles_total * 100}%` : '';
+  bar.setAttribute('aria-valuemax', run.tiles_total);
+  if (tiled) bar.setAttribute('aria-valuenow', run.tiles_done);
+  else bar.removeAttribute('aria-valuenow');
+}
+
 // ── API key ─────────────────────────────────────────────────────────────
 
 let keyMessage = null;
@@ -714,7 +1173,11 @@ function openKeyModal() {
 async function keyAction(run, done) {
   try {
     const result = await run();
-    if (result && 'set' in result) state.key = result;
+    if (result && 'set' in result) {
+      state.key = result;
+      resetJobs();                                     // 换了 key 就是换了账户
+      if (result.set) revealJobs();
+    }
     keyMessage = done ? ['ok', done] : null;
   } catch (e) {
     keyMessage = ['err', e.message];
@@ -916,6 +1379,7 @@ function render() {
   viewer.show(view);
   $('empty').hidden = !!m;
   $('stage-foot-text').textContent = view ? footText(view) : '';
+  renderRun();
   renderKey();
   drawSlice();
 }
@@ -1005,7 +1469,7 @@ function bind() {
       $('export-result').replaceChildren(`已保存到 ${r.folder}/${r.file}，同名 .json 里记着这次的全部参数。`, link);
       $('export-result').hidden = false;
     } catch (e) {
-      toast(e.message);
+      if (!e.restarted) toast(e.message);
     }
   });
 
@@ -1027,6 +1491,20 @@ function bind() {
     render();
   });
 
+  $('jobs-toggle').addEventListener('click', () => setJobsOpen(!jobs.open, true));
+  bindSeg('jobs-filter-seg', (value) => {
+    jobs.filter = value;
+    jobs.shown = JOBS_STEP;
+    $('jobs-table').scrollTop = 0;
+    renderJobs();
+  });
+  $('jobs-refresh').addEventListener('click', refreshJobs);
+  $('jobs-more').addEventListener('click', moreJobs);
+  document.addEventListener('visibilitychange', refreshJobs);
+  setInterval(() => {                                  // 「几秒前」自己往前走，不用等下一次向 Atlas 要数据
+    if (jobs.open && !document.hidden && jobs.rows.size) renderJobs();
+  }, 5000);
+
   $('key-button').addEventListener('click', openKeyModal);
   $('key-input').addEventListener('keydown', (e) => {
     if (e.key !== 'Enter') return;
@@ -1045,6 +1523,23 @@ function bind() {
   });
   $('key-clear').addEventListener('click', () => keyAction(
     async () => (await request('/api/key', { method: 'DELETE' })).json(), null));
+}
+
+// 把第三步的控件设成某一次处理用的参数
+function showProcessParams(mode, run, params, tiling) {
+  setSeg('mode-seg', mode);
+  if (tiling) setSeg('tiling-seg', tiling);
+  $('run-input').value = run;
+  if (mode === 'gaussian') {
+    $('sigma').value = params.sigma;
+  } else {
+    $('strength').value = params.strength;
+    $('reach').value = params.reach;
+    $('style-select').value = params.style;
+    $('shots-input').value = params.shots || '';
+    for (const a of [0, 1, 2]) $(`axis-${a}`).checked = !params.axes || params.axes.includes(a);
+  }
+  for (const id of ['sigma', 'strength', 'reach']) $(id).paint();
 }
 
 // 刷新页面后，把服务端还留着的模型和结果接回来
@@ -1071,19 +1566,7 @@ async function restore(saved) {
 
   const p = saved.processed;
   if (p) {
-    setSeg('mode-seg', p.mode);
-    if (p.tiles && p.tiles.mode) setSeg('tiling-seg', p.tiles.mode);
-    $('run-input').value = p.run;
-    if (p.mode === 'gaussian') {
-      $('sigma').value = p.params.sigma;
-    } else {
-      $('strength').value = p.params.strength;
-      $('reach').value = p.params.reach;
-      $('style-select').value = p.params.style;
-      $('shots-input').value = p.params.shots || '';
-      for (const a of [0, 1, 2]) $(`axis-${a}`).checked = !p.params.axes || p.params.axes.includes(a);
-    }
-    for (const id of ['sigma', 'strength', 'reach']) $(id).paint();
+    showProcessParams(p.mode, p.run, p.params, p.tiles && p.tiles.mode);
     state.adopt = true;
     state.view = 'result';
   } else {
@@ -1099,8 +1582,15 @@ async function init() {
   try {
     const saved = await getJSON('/api/state');
     state.key = saved.key;
+    try { jobs.pref = localStorage.getItem('quantum-sculpting-jobs'); } catch (e) { /* 用默认的 */ }
+    // 有 key 就默认展开任务列表；手机宽度上它会把控件挤到很下面，默认收起
+    setJobsOpen(jobs.pref ? jobs.pref === 'open' : saved.key.set && matchMedia('(min-width: 761px)').matches, false);
     refreshModels();
     if (saved.model) await restore(saved);
+    if (saved.job) {                                   // 有一次提交还在 Atlas 上跑：接回去看着它
+      showProcessParams('atlas', saved.job.run, saved.job.params, saved.job.tiling);
+      watchAtlas(saved.job);
+    }
   } catch (e) {
     toast(e.message);
   }

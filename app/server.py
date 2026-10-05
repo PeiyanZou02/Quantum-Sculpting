@@ -52,6 +52,8 @@ def _default_home():
 
 
 HOME = Path(os.environ.get("QUANTUM_SCULPTING_HOME") or _default_home())
+# 每次启动都不一样。模型、网格和结果只在内存里，页面靠它发现服务重启过、要把模型重新送回来
+BOOT = uuid.uuid4().hex[:12]
 ATLAS_BASE = os.environ.get("ATLAS_API_BASE") or atlas.DEFAULT_BASE
 
 app = Flask(__name__, static_folder=str(STATIC), static_url_path="/static")
@@ -63,7 +65,8 @@ class State:
     def __init__(self):
         self.lock = threading.RLock()
         self.raw_mesh = self.mesh = None
-        self.name, self.up, self.model_id = None, "+z", 0
+        self.name, self.file, self.up, self.model_id = None, None, "+z", 0
+        self.builtin = False
         self.grid = self.scale = self.transform = None
         self.grid_params, self.grid_id = None, 0
         self.processed = None
@@ -72,6 +75,9 @@ class State:
         self.levelset_cache = None
         self.advect_cache = None
         self.jobs = {}
+        self.live = {}              # Atlas 任务号 → 自己轮询到的最新状态
+        self.records_cache = {}     # grids/ 里的任务记录，按文件修改时间缓存
+        self.account = None
 
 
 S = State()
@@ -87,6 +93,12 @@ def only_local_same_origin():
     origin = request.headers.get("Origin")
     if origin and urlparse(origin).netloc != request.host:
         abort(403)
+
+
+@app.after_request
+def stamp_boot(resp):
+    resp.headers["X-Boot"] = BOOT
+    return resp
 
 
 @app.errorhandler(ValueError)
@@ -209,9 +221,14 @@ def remember_bits(bits):
 
 # ── 第一步：模型 ─────────────────────────────────────────────────────────
 
-def set_model(mesh, name, up="+z"):
+def set_model(mesh, name, file, up="+z", builtin=False):
+    """file 是模型在 input/ 里的文件名：服务重启后页面凭它把模型重新打开。
+
+    builtin 是程序里现造的测试杯子。它和从 test_cup.stl 读回来的差在浮点误差上，体素网格
+    有个别格子不一样，Atlas 的缓存就对不上，所以恢复时要重新造一个，而不是去读文件。
+    """
     with S.lock:
-        S.raw_mesh, S.name, S.up = mesh, name, up
+        S.raw_mesh, S.name, S.file, S.up, S.builtin = mesh, name, file, up, builtin
         S.mesh = pipeline.orient(mesh, up)
         S.model_id += 1
         S.grid = S.processed = S.proc_meta = None
@@ -220,7 +237,8 @@ def set_model(mesh, name, up="+z"):
 def model_info():
     if S.mesh is None:
         return None
-    return {"name": S.name, "up": S.up, "model_id": S.model_id, **pipeline.mesh_stats(S.mesh)}
+    return {"name": S.name, "file": S.file, "builtin": S.builtin, "up": S.up, "model_id": S.model_id,
+            **pipeline.mesh_stats(S.mesh)}
 
 
 @app.post("/api/model/test-cup")
@@ -228,7 +246,7 @@ def use_test_cup():
     cup = pipeline.make_test_cup()
     INPUT.mkdir(exist_ok=True)
     cup.export(INPUT / "test_cup.stl")
-    set_model(cup, "test_cup")
+    set_model(cup, "test_cup", "test_cup.stl", builtin=True)
     return jsonify(model_info())
 
 
@@ -245,7 +263,7 @@ def upload_model():
     dest = INPUT / f"{stem}{ext}"
     f.save(dest)
     up = request.form.get("up", "+z")
-    set_model(_load(dest, f.filename), stem, up if up in pipeline.UP_AXES else "+z")
+    set_model(_load(dest, f.filename), stem, dest.name, up if up in pipeline.UP_AXES else "+z")
     return jsonify(model_info())
 
 
@@ -273,7 +291,7 @@ def open_model():
     if path.suffix.lower() not in MODEL_TYPES or not path.is_file():
         raise ValueError("input/ 里没有这个模型文件。")
     up = b.get("up", "+z")
-    set_model(_load(path, path.name), path.stem, up if up in pipeline.UP_AXES else "+z")
+    set_model(_load(path, path.name), path.stem, path.name, up if up in pipeline.UP_AXES else "+z")
     return jsonify(model_info())
 
 
@@ -283,7 +301,7 @@ def orient_model():
     with S.lock:
         if S.raw_mesh is None:
             raise ValueError("还没有模型。")
-        set_model(S.raw_mesh, S.name, up)
+        set_model(S.raw_mesh, S.name, S.file, up, S.builtin)
         return jsonify(model_info())
 
 
@@ -414,7 +432,8 @@ def apply_processed(raw, meta):
 
 @app.post("/api/process")
 def process():
-    mode, run, params, tile_mode = read_process_request(body())
+    b = body()
+    mode, run, params, tile_mode = read_process_request(b)
     with S.lock:
         if S.grid is None:
             raise ValueError("先完成体素化。")
@@ -441,6 +460,9 @@ def process():
         key, _ = load_key()
         if not key:
             raise ValueError("还没有设置 Atlas API key。点右上角的「设置 API key」。")
+        busy = running_job()
+        if busy:      # 两边同时提交会把还没提交的分块各交一遍
+            abort(409, f"「{busy['run']}」还在 Atlas 上运行，等它结束再提交。")
         # 每一块都已经有缓存：直接拼起来，不用再找 Atlas
         todo = [t for t in tiling.split(grid, shape) if t.data.any()]
         found = [_load_cached(_tile_stem(t, params, run)) for t in todo]
@@ -454,12 +476,15 @@ def process():
                         tiles={"mode": tile_mode, "shape": list(shape), "jobs": len(todo),
                                "cached": len(todo)})
             return jsonify(status="done", meta=apply_processed(raw, meta))
+        if b.get("cached_only"):      # 只想知道有没有现成的结果（服务重启后恢复用），没有也不提交
+            return jsonify(status="missing")
 
         job = {"id": uuid.uuid4().hex[:12], "status": "running", "atlas_status": "submitting",
                "started": time.time(), "finished": None, "error": None, "meta": None,
                "stale": False, "note": None, "tiles_total": len(todo), "tiles_done": 0,
                "tiles_cached": 0, "tile_shape": list(shape), "version": 0, "partial": None,
-               "cancel": False, "lock": threading.Lock()}
+               "cancel": False, "lock": threading.Lock(), "run": run, "params": params,
+               "tiling": tile_mode}
         S.jobs[job["id"]] = job
         threading.Thread(target=_run_atlas_job, daemon=True,
                          args=(job, grid, grid_id, params, meta, key, tile_mode)).start()
@@ -589,6 +614,7 @@ def _atlas_tile(client, job, tile, params, run):
                   "submitted_at": accepted.get("submitted_at"), "params": params, "run": run,
                   "shape": list(tile.data.shape), "tile": list(tile.index)}
         record_file.write_text(json.dumps(record, indent=1), encoding="utf-8")
+        S.live[record["job_id"]] = {"status": str(accepted.get("status") or "queued").lower()}
     job_id = record["job_id"]
 
     started = time.time()
@@ -605,6 +631,7 @@ def _atlas_tile(client, job, tile, params, run):
         resumed = False
         state = str(status.get("status", "")).lower()
         job["atlas_status"] = state
+        S.live[job_id] = {"status": state, "progress": status.get("progress")}
         if state in atlas.DONE:
             break
         if state in atlas.FAILED:
@@ -627,8 +654,13 @@ def _atlas_tile(client, job, tile, params, run):
     return result, False, job_id
 
 
+def running_job():
+    return next((job for job in S.jobs.values() if job["status"] == "running"), None)
+
+
 def _job_view(job):
     return {"job_id": job["id"], "status": job["status"], "atlas_status": job["atlas_status"],
+            "run": job["run"], "params": job["params"], "tiling": job["tiling"],
             "elapsed": round((job["finished"] or time.time()) - job["started"], 1),
             "error": job["error"], "meta": job["meta"], "stale": job["stale"], "note": job["note"],
             "tiles_total": job["tiles_total"], "tiles_done": job["tiles_done"],
@@ -655,6 +687,93 @@ def job_status(job_id):
     if job is None:
         abort(404)
     return jsonify(_job_view(job))
+
+
+# ── Atlas 账户里的任务列表 ─────────────────────────────────────────────────
+
+JOB_ID = re.compile(r"[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}")
+
+
+def local_records():
+    """本应用提交过的任务：Atlas 任务号 → grids/ 里的记录。文件没变就不重读，轮询时不用每次读几百个文件。"""
+    fresh = {}
+    try:
+        entries = [e for e in os.scandir(GRIDS) if e.name.startswith("atlas_") and e.name.endswith(".json")]
+    except OSError:
+        entries = []
+    for entry in entries:
+        stamp = entry.stat().st_mtime_ns
+        hit = S.records_cache.get(entry.name)
+        if hit is None or hit[0] != stamp:
+            try:
+                record = json.loads(Path(entry.path).read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                record = {}
+            hit = (stamp, record if isinstance(record, dict) else {})
+        fresh[entry.name] = hit
+    S.records_cache = fresh
+    return {record["job_id"]: record for _, record in fresh.values() if record.get("job_id")}
+
+
+def account_id(client, key):
+    """这个 key 所属账户的 id，用来区分自己的任务和组织里别人的。查不到就不区分。"""
+    tag = hashlib.sha256(f"{key} {ATLAS_BASE}".encode()).hexdigest()
+    if S.account is None or S.account[0] != tag:
+        try:
+            S.account = (tag, client.me().get("id"))
+        except atlas.AtlasError:
+            return None
+    return S.account[1]
+
+
+def job_row(item, records, me):
+    job_id = str(item.get("job_id") or "")
+    status, progress = str(item.get("status") or "").lower(), None
+    live = S.live.get(job_id)
+    if live and status not in atlas.DONE | atlas.FAILED:
+        # 列表里的状态是服务端最后记下来的，会慢半拍；自己正在轮询的任务用轮询到的
+        status, progress = live["status"], live.get("progress")
+    record = records.get(job_id)
+    return {
+        "job_id": job_id, "engine": item.get("engine_id"), "status": status,
+        "created_at": item.get("created_at"), "updated_at": item.get("updated_at"),
+        "mine": None if me is None else item.get("owner") == me,
+        "progress": progress.get("detail") if isinstance(progress, dict) else None,
+        "local": None if record is None else {
+            k: record.get(k) for k in ("run", "tile", "shape", "params", "seconds")},
+    }
+
+
+def atlas_client():
+    key, _ = load_key()
+    if not key:
+        raise ValueError("还没有设置 Atlas API key。")
+    return atlas.Atlas(key, ATLAS_BASE), key
+
+
+@app.get("/api/atlas/jobs")
+def atlas_jobs():
+    """账户里的 Atlas 任务，新的在前。本应用提交的带上实验名和分块位置。"""
+    client, key = atlas_client()
+    limit = int(clamp(request.args.get("limit"), 1, 200, 50))
+    page = client.jobs(limit=limit, cursor=request.args.get("cursor") or None)
+    records, me = local_records(), account_id(client, key)
+    return jsonify(jobs=[job_row(item, records, me) for item in page.get("jobs") or []],
+                   next_cursor=page.get("next_cursor") or None)
+
+
+@app.get("/api/atlas/jobs/<job_id>")
+def atlas_job_detail(job_id):
+    """一个任务现在的状态和失败原因。结果不转发：完成的任务会带着整个数组。"""
+    if not JOB_ID.fullmatch(job_id):
+        abort(404)
+    status = atlas_client()[0].status(job_id)
+    error, progress = status.get("error"), status.get("progress")
+    return jsonify(
+        job_id=job_id, status=str(status.get("status") or "").lower(),
+        error=(error.get("message") if isinstance(error, dict) else error) or None,
+        progress=progress.get("detail") if isinstance(progress, dict) else None,
+        warnings=[str(w) for w in status.get("warnings") or []])
 
 
 # ── 第四、五步：转回模型、打印检查、导出 ──────────────────────────────────────
@@ -760,7 +879,9 @@ def download(name):
 @app.get("/api/state")
 def state():
     with S.lock:
-        return jsonify(model=model_info(), grid=grid_info(), processed=S.proc_meta, key=key_status())
+        busy = running_job()
+        return jsonify(model=model_info(), grid=grid_info(), processed=S.proc_meta, key=key_status(),
+                       job=_job_view(busy) if busy else None)
 
 
 @app.get("/")

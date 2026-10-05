@@ -43,6 +43,24 @@ enter the key once.
 
 The interface is in Chinese.
 
+## Atlas jobs panel
+
+Below the preview there is a panel that lists the jobs in your Atlas account, newest first:
+when each was submitted, the engine, the job ID, where it came from and its status. Jobs this
+app submitted are labelled with the run name and the tile they computed; anything else in the
+account shows as "personal account". Click a row for the full job ID, timings, the tile's
+parameters and, for a failed job, the reason Atlas gave.
+
+While a run is in progress the bar at the top of the panel shows how many tiles are done, and
+the list updates every 3 seconds: new jobs slide in at the top and rows change state as they
+finish. When nothing is running it refreshes every 30 seconds, and it stops asking Atlas
+altogether while the panel is collapsed or the tab is in the background. The summary line
+counts the jobs of the last 24 hours. Atlas does not report a percentage for a single job, so
+the small bar on a running row only shows the stage (queued or running).
+
+If you reload the page during a run, the app picks the run up again. A second run cannot be
+submitted until the first one has finished.
+
 ## Large grids: tiling
 
 One Atlas job can return about 2 MB, which is roughly 65,000 values. A 32³ grid fits in one
@@ -138,6 +156,8 @@ Taken from the official OpenAPI document, <https://api.mothquantum.com/openapi.j
   returns a `job_id`
 - `GET /api/v1/jobs/{job_id}/status` — poll until `completed`
 - `GET /api/v1/jobs/{job_id}/result` — fetch the result
+- `GET /api/v1/jobs?limit=&cursor=` — the account's jobs, newest first, 200 per page at most
+- `GET /api/v1/me` — the account behind the key
 - Authentication: `Authorization: Bearer <key>`
 
 Observed on the real service: jobs of 32³, 32 × 32 × 64 and 256 × 256 × 1 values complete in
@@ -152,7 +172,8 @@ Observed on the real service: jobs of 32³, 32 × 32 × 64 and 256 × 256 × 1 v
 
 `tests/run_with_fake_atlas.py` starts a fake Atlas server and a copy of the app pointed at it
 (port 8766), so the Atlas path — including tiling, size limits and rate limiting — can be
-exercised without a real key. Its key and outputs live in a temporary folder.
+exercised without a real key. Its key and outputs live in a temporary folder, and its job list
+starts with about 250 made-up jobs so the panel has something to show.
 
 ## Notes
 
@@ -164,6 +185,14 @@ exercised without a real key. Its key and outputs live in a temporary folder.
   down. After normalisation the threshold means "density relative to the original solid".
 - With `reach > 0` the blur is meant to act over long distances; tiling limits that to the
   size of a tile.
+- The model, the voxel grid and the processed result live in the service's memory. If the
+  service is restarted while a page is open, the page notices on its next request, reopens the
+  model from `input/` and recomputes with the parameters on screen; Atlas results are read back
+  from the cache, never resubmitted. A page opened fresh after a restart starts empty: pick the
+  model again from the list of files in `input/`.
+- The built-in test cup and the same cup reopened from `input/test_cup.stl` differ by
+  floating-point noise, enough to change a few voxels and therefore the cache key of an Atlas
+  result. Use one or the other consistently when you want cached results to be found.
 - Coverage (fractional) input has been run through the local emulation and the fake Atlas
   server only. It has not yet been submitted to the real service.
 - The interface uses the TWK Everett typeface, which is commercially licensed and not included.

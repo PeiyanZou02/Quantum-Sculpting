@@ -131,7 +131,10 @@ button, input, select { font: inherit; color: inherit; }
 .app {
   display: grid;
   height: 100%;
-  grid-template: "top top top" 56px "side stage insp" minmax(0, 1fr) / 360px minmax(0, 1fr) 344px;
+  grid-template:
+    "top top top" 56px
+    "side stage insp" minmax(0, 1fr)
+    "side jobs insp" auto / 360px minmax(0, 1fr) 344px;
 }
 .topbar {
   grid-area: top;
@@ -140,7 +143,7 @@ button, input, select { font: inherit; color: inherit; }
   background: var(--surface);
   border-bottom: 1px solid var(--border);
 }
-.brand { display: flex; align-items: baseline; gap: var(--space-3); min-width: 0; }
+.brand { display: flex; align-items: baseline; gap: var(--space-3); min-width: 0; overflow: hidden; }
 .brand-name { font: 500 20px/28px var(--font-sans); letter-spacing: -0.015em; white-space: nowrap; }
 .brand-sub { font-size: 13px; line-height: 16px; color: var(--ink-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .topbar-actions { display: flex; align-items: center; gap: var(--space-3); }
@@ -187,7 +190,7 @@ button, input, select { font: inherit; color: inherit; }
 .panels { display: contents; }
 
 @media (max-width: 1200px) {
-  .app { grid-template: "top top" 56px "side stage" minmax(0, 1fr) / 340px minmax(0, 1fr); }
+  .app { grid-template: "top top" 56px "side stage" minmax(0, 1fr) "side jobs" auto / 340px minmax(0, 1fr); }
   .panels { display: block; grid-area: side; overflow-y: auto; border-right: 1px solid var(--border); }
   .sidebar, .inspector { overflow: visible; border: 0; }
   .inspector { padding-top: 0; }
@@ -198,7 +201,9 @@ button, input, select { font: inherit; color: inherit; }
   .topbar { flex: none; height: 56px; padding: 0 var(--space-4); }
   .brand-sub { display: none; }
   .stage { order: 1; flex: none; position: sticky; top: 0; z-index: 2; height: 46vh; border-bottom: 1px solid var(--border); }
-  .panels { order: 2; overflow: visible; border-right: 0; }
+  .jobs { order: 2; }
+  .jobs-body { height: auto; max-height: 60vh; }
+  .panels { order: 3; overflow: visible; border-right: 0; }
 }
 
 /* ── 卡片与文字 ───────────────────────────────────────────────────── */
@@ -387,6 +392,117 @@ button, input, select { font: inherit; color: inherit; }
 .slice-frame { border-radius: var(--radius-sm); box-shadow: var(--material-base); overflow: hidden; background: var(--surface); }
 #slice-canvas { display: block; width: 100%; aspect-ratio: 1; }
 .inspector .field-row { align-items: center; justify-content: space-between; }
+
+/* ── Atlas 任务列表：预览下面的一栏，可以收起 ─────────────────────────────── */
+
+.jobs {
+  grid-area: jobs;
+  display: flex; flex-direction: column; min-width: 0;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  container-type: inline-size;
+}
+.jobs-bar { display: flex; align-items: center; gap: var(--space-3); height: 48px; padding: 0 var(--space-4) 0 var(--space-2); }
+.jobs-bar .chevron { transition: transform 150ms ease; }
+.jobs-bar [aria-expanded="true"] .chevron { transform: rotate(180deg); }
+.jobs-summary {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 13px; line-height: 16px; color: var(--ink-muted); font-variant-numeric: tabular-nums;
+}
+.jobs-run { flex: 0 1 340px; min-width: 0; margin-left: auto; display: flex; align-items: center; gap: var(--space-3); }
+.jobs-run-text { font-size: 13px; line-height: 16px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+.progress {
+  flex: 1; min-width: 48px; height: 4px; overflow: hidden;
+  border-radius: var(--radius-full); background: var(--gray-400);
+}
+.progress > span {
+  display: block; width: 0; height: 100%;
+  border-radius: inherit; background: var(--primary);
+  transition: width 600ms ease;
+}
+.progress.busy > span { animation: breathe 1.6s ease-in-out infinite; }
+.progress.indeterminate > span { width: 36%; animation: sweep 1.6s ease-in-out infinite; }
+@keyframes breathe { 50% { opacity: 0.4; } }
+@keyframes sweep { from { transform: translateX(-100%); } to { transform: translateX(280%); } }
+
+.jobs-body { display: flex; flex-direction: column; height: clamp(200px, 38vh, 360px); border-top: 1px solid var(--border); }
+.jobs-tools { flex: none; display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-4); }
+.jobs-tools .status-line { min-width: 0; white-space: nowrap; overflow: hidden; }
+.jobs-tools .status-line span:last-child { overflow: hidden; text-overflow: ellipsis; }
+.jobs-table { flex: 1; min-height: 0; overflow: hidden auto; border-top: 1px solid var(--border); }
+
+.jobs-row {
+  display: grid; grid-template-columns: 60px 88px 116px 96px minmax(120px, 1fr) 136px;
+  align-items: center; column-gap: var(--space-3);
+  min-height: 36px; padding: 0 var(--space-4);
+  font-size: 13px; line-height: 20px; font-variant-numeric: tabular-nums;
+}
+.jobs-row > * { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.jobs-head {
+  position: sticky; top: 0; z-index: 1;
+  background: var(--surface); color: var(--ink-muted);
+  box-shadow: 0 1px 0 var(--border);
+}
+.jobs-head .jobs-n { padding-left: 32px; }
+/* 不透明：旧的行往下滑时盖住正在淡入的新行，字不会叠在一起 */
+.jobs-item { background: var(--surface); }
+.jobs-item + .jobs-item { border-top: 1px solid var(--border); }
+.jobs-item > .jobs-row { cursor: pointer; transition: background-color 150ms ease; }
+.jobs-item > .jobs-row:hover { background: var(--surface-hover); }
+.jobs-item > .jobs-row.changed { animation: flash 1.4s ease-out; }
+@keyframes flash { from { background: var(--gray-400); } }
+
+.jobs-n, .jobs-source, .jobs-status { display: flex; align-items: center; gap: var(--space-2); }
+.jobs-row .jobs-n { overflow: visible; }
+.jobs-source > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.jobs-source > .muted { flex: none; }
+.jobs-status .progress { flex: none; width: 40px; min-width: 0; }
+.jobs-open {
+  flex: none; display: inline-grid; place-content: center;
+  width: 24px; height: 24px; padding: 0;
+  border: 0; border-radius: var(--radius-sm);
+  background: transparent; color: var(--ink-muted); cursor: pointer;
+}
+.jobs-open::before {
+  content: ""; width: 6px; height: 6px; margin-left: -2px;
+  border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform 150ms ease;
+}
+.jobs-open[aria-expanded="true"]::before { margin: -2px 0 0; transform: rotate(45deg); }
+.jobs-open:hover { background: var(--surface-active); color: var(--ink); }
+
+.jobs-detail { margin: 0 var(--space-4) var(--space-3) calc(var(--space-4) + 32px); }
+.jobs-detail dd { justify-content: flex-start; text-align: left; flex-wrap: wrap; }
+.jobs-detail dd button {
+  height: 20px; padding: 0 var(--space-2);
+  border: 1px solid var(--border-control); border-radius: 4px;
+  background: var(--surface); font: 400 12px/16px var(--font-sans); cursor: pointer;
+}
+.jobs-detail dd button:hover { background: var(--surface-hover); }
+.jobs-empty { padding: var(--space-6) var(--space-4); text-align: center; }
+.jobs-foot { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); border-top: 1px solid var(--border); }
+
+@container (max-width: 720px) {
+  .jobs-row { grid-template-columns: 60px 80px 96px minmax(96px, 1fr) 120px; }
+  .jobs-engine { display: none; }
+  .jobs-run { flex-basis: 220px; }
+}
+@container (max-width: 540px) {
+  .jobs-row { grid-template-columns: 24px 72px 88px minmax(0, 1fr); column-gap: var(--space-2); }
+  .jobs-source, .jobs-n > .mono { display: none; }
+  .jobs-head .jobs-n { padding-left: 0; font-size: 0; }
+  .jobs-summary { display: none; }
+  .jobs-tools { flex-wrap: wrap; }
+  .jobs-tools .status-line { order: 1; flex-basis: 100%; }
+  .jobs-detail { margin-left: var(--space-4); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .progress > span { transition: none; }
+  .progress.busy > span, .progress.indeterminate > span, .jobs-item > .jobs-row.changed { animation: none; }
+  .progress.indeterminate > span { width: 100%; opacity: 0.4; }
+}
 
 /* ── 浮层 ─────────────────────────────────────────────────────────── */
 
