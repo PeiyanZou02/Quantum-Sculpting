@@ -21,7 +21,7 @@
 .qs-pop__panel--left { left: 0; }
 .qs-pop__title { font: 400 15px/1.1 var(--qs-sans); }
 .qs-pop__sec { display: flex; flex-direction: column; gap: 2px; padding-top: 10px; border-top: 1px solid var(--qs-line); }
-.qs-pop__label { font: 500 12px/1 var(--qs-sans); letter-spacing: 0; color: var(--qs-ink2); margin-bottom: 6px; }
+.qs-pop__label { font: 500 12px/1 var(--qs-sans); letter-spacing: var(--qs-track); color: var(--qs-ink2); margin-bottom: 6px; }
 
 .qs-check { position: relative; display: grid; grid-template-columns: 18px auto 1fr; align-items: center; column-gap: 0; padding: 5px 0; cursor: pointer; }
 .qs-check input { position: absolute; opacity: 0; pointer-events: none; }

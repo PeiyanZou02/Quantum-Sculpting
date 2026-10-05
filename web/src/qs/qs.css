@@ -99,7 +99,7 @@
 
 /* ---------- QReadout ---------- */
 .qs-readout { display: flex; flex-direction: column; gap: 10px; color: var(--qs-ink); }
-.qs-readout__title { font: 500 12px/1 var(--qs-sans); letter-spacing: 0; color: var(--qs-ink); }
+.qs-readout__title { font: 500 12px/1 var(--qs-sans); letter-spacing: var(--qs-track); color: var(--qs-ink); }
 .qs-readout__grid {
   display: grid;
   column-gap: 14px;

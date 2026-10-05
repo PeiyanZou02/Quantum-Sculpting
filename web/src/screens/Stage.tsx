@@ -806,8 +806,9 @@ function Legend({ level, mode }: { level: number; mode: Shading }) {
   )
 }
 
-/** What the workspace is showing and why. Not a switch: it follows what you do — the step whose
- *  parameters you touch, a model being opened, Evolve's turns, an Atlas run coming back in layers. */
+/** What the workspace is showing and why. It follows what you do — the step whose
+ *  parameters you touch, a model being opened, Evolve's turns, an Atlas run coming back in layers —
+ *  and a click on a step shows that step until you work on another. */
 function FocusStrip() {
   const focus = useStore((s) => s.focus)
   const view = useStore((s) => s.view)
@@ -817,6 +818,7 @@ function FocusStrip() {
   }
   const working = useStore((s) => s.busy.model ? 'opening' : s.busy.vox ? 'voxelising' : s.busy.proc || s.busy.evolve ? (s.q.mode === 'nations' ? 'evolving' : 'processing') : s.busy.mesh ? 'meshing' : null)
   const ev = useStore((s) => s.evolve)
+  const setFocus = useStore((s) => s.setFocus)
   const evolve = st.mode === 'nations'
   const steps: { id: StageName; t: string; done: boolean }[] = [
     { id: 'model', t: 'Model', done: st.model },
@@ -834,12 +836,16 @@ function FocusStrip() {
   if (!st.model) return <div className="focus-strip"><span className="focus-strip__why">Open a model to begin</span></div>
   return (
     <div className="focus-strip" aria-live="polite">
-      <ol className="focus-strip__steps" aria-label="Pipeline">
-        {steps.map((x) => (
-          <li key={x.id} className={'focus-strip__s' + (x.id === at ? ' focus-strip__s--on' : '') + (x.done ? ' focus-strip__s--done' : '')}
-            aria-current={x.id === at ? 'step' : undefined}>{x.t}</li>
-        ))}
-        {focus.stage === 'scan' && <li className="focus-strip__s focus-strip__s--on focus-strip__s--extra">Scan</li>}
+      <ol className="focus-strip__steps" aria-label="Show">
+        {[...steps, { id: 'scan' as StageName, t: 'Scan', done: st.proc && st.grid }].map((x) => {
+          const on = x.id === 'scan' ? focus.stage === 'scan' : x.id === at && focus.stage !== 'scan'
+          return (
+            <li key={x.id}>
+              <button className={'focus-strip__s' + (on ? ' focus-strip__s--on' : '') + (x.done ? ' focus-strip__s--done' : '')}
+                disabled={!x.done} aria-pressed={on} onClick={() => setFocus(x.id, `Showing the ${VIEW_T[wanted[x.id]]}`)}>{x.t}</button>
+            </li>
+          )
+        })}
       </ol>
       <span key={focus.t} className="focus-strip__why">
         {focus.why || `Showing the ${VIEW_T[view]}`}

@@ -3,7 +3,7 @@
 
 .qp-num { font: 400 11px/1 var(--qs-mono); font-variant-numeric: tabular-nums; color: var(--qs-ink); }
 .qp-num--dim { color: var(--qs-ink3); }
-.qp-k { font: 500 12px/1 var(--qs-sans); letter-spacing: 0; color: var(--qs-ink2); }
+.qp-k { font: 500 12px/1 var(--qs-sans); letter-spacing: var(--qs-track); color: var(--qs-ink2); }
 .qp-note { font: 400 12px/1.45 var(--qs-sans); color: var(--qs-ink3); text-wrap: pretty; margin: 0; }
 .qp-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 .qp-col { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
@@ -103,7 +103,7 @@
   font: 400 11px/1 var(--qs-mono); font-variant-numeric: tabular-nums; color: var(--qs-ink2); cursor: pointer;
 }
 .qp-run > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.qp-run--head { cursor: default; height: 18px; font: 500 12px/1 var(--qs-sans); letter-spacing: 0; color: var(--qs-ink3); }
+.qp-run--head { cursor: default; height: 18px; font: 500 12px/1 var(--qs-sans); letter-spacing: var(--qs-track); color: var(--qs-ink3); }
 .qp-run:not(.qp-run--head):hover { background: var(--qs-faint); color: var(--qs-ink); }
 .qp-run--cur { color: var(--qs-ink); background: var(--qs-faint); }
 .qp-dot { cursor: pointer; }

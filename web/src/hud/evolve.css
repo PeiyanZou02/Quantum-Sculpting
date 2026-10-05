@@ -37,5 +37,5 @@
 .hev-figs { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 18px; }
 .hev-fig { display: flex; flex-direction: column; gap: 4px; }
 .hev-k { font: var(--qs-t-label); text-transform: uppercase; letter-spacing: var(--qs-track-label); color: var(--qs-ink2); }
-.hev-big { font: var(--qs-t-display); letter-spacing: -.01em; }
+.hev-big { font: var(--qs-t-display); letter-spacing: var(--qs-track); }
 .hev-note { font: var(--qs-t-meta); color: var(--qs-ink2); }

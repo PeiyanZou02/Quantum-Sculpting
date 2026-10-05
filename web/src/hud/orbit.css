@@ -45,7 +45,7 @@
 /* corner module: small-caps head, diagram, mono readout */
 .qh-card { display: inline-flex; flex-direction: column; gap: 8px; color: var(--qs-ink); pointer-events: none; user-select: none; }
 .qh-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
-.qh-sc { font: 500 12px/1 var(--qs-sans); letter-spacing: 0; color: var(--qs-ink); }
+.qh-sc { font: 500 12px/1 var(--qs-sans); letter-spacing: var(--qs-track); color: var(--qs-ink); }
 .qh-capt { font: 400 12px/1.3 var(--qs-sans); color: var(--qs-ink3); }
 .qh-val { font: 400 11px/1 var(--qs-mono); font-variant-numeric: tabular-nums; color: var(--qs-ink3); white-space: nowrap; }
 

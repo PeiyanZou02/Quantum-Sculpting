@@ -32,13 +32,15 @@
   --qs-sans: var(--qs-mono);
 
   /* type roles (Swiss: few sizes, set by role, never by place). Size/line-height pairs on a 4px rhythm. */
-  --qs-t-display: 500 22px/28px var(--qs-mono);   /* hero figures */
-  --qs-t-title: 500 13px/16px var(--qs-mono);     /* app name, section and panel titles */
+  --qs-t-display: 500 20px/24px var(--qs-mono);   /* hero figures */
+  --qs-t-title: 500 12px/16px var(--qs-mono);     /* app name, section and panel titles */
   --qs-t-body: 400 12px/16px var(--qs-mono);      /* values, controls, list rows, sentences */
   --qs-t-prose: 400 12px/18px var(--qs-mono);     /* help and descriptions: looser for reading */
   --qs-t-label: 500 11px/12px var(--qs-mono);     /* field labels, kickers, column heads: upper case, tracked */
   --qs-t-meta: 400 11px/16px var(--qs-mono);      /* secondary facts; the smallest size anywhere */
-  --qs-track-label: .06em;
+  /* tracking: TWK Everett Mono sets wide, so text is tightened; labels open only a little */
+  --qs-track: -.035em;
+  --qs-track-label: .01em;
 
   --qs-snap: 480ms;
   --qs-ease: cubic-bezier(.215, .61, .355, 1);
@@ -71,6 +73,7 @@ body {
   background: var(--qs-bg);
   color: var(--qs-ink);
   font: var(--qs-t-body);
+  letter-spacing: var(--qs-track);
   font-variant-numeric: tabular-nums;
   -webkit-font-smoothing: antialiased;
   overflow: hidden;
@@ -79,7 +82,7 @@ button, input, select { font: inherit; color: inherit; }
 * { box-sizing: border-box; }
 
 /* type scale: one class per role (see the --qs-t-* tokens) */
-.qs-title  { font: var(--qs-t-display); letter-spacing: -.01em; }
+.qs-title  { font: var(--qs-t-display); letter-spacing: var(--qs-track); }
 .qs-app    { font: var(--qs-t-title); text-transform: uppercase; letter-spacing: var(--qs-track-label); }
 .qs-sub    { font: var(--qs-t-title); }
 .qs-body   { font: var(--qs-t-body); }

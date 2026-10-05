@@ -5,7 +5,7 @@
 .qg--live { pointer-events: auto; }
 .qg-head { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; white-space: nowrap; }
 .qg-head > span:first-child { display: inline-flex; align-items: baseline; gap: 7px; }
-.qg-t { font: 500 12px/1 var(--qs-sans); letter-spacing: 0; color: var(--qs-ink); }
+.qg-t { font: 500 12px/1 var(--qs-sans); letter-spacing: var(--qs-track); color: var(--qs-ink); }
 .qg-tw { font: 400 11px/1 var(--qs-sans); color: var(--qs-ink2); }
 .qg-tv { font: 400 11px/1 var(--qs-mono); color: var(--qs-ink2); }
 .qg-note { font: 400 11px/1.2 var(--qs-sans); color: var(--qs-ink3); }

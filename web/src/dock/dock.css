@@ -101,7 +101,7 @@ html.qd-dragging, html.qd-dragging * { cursor: grabbing !important; user-select:
   background: var(--qs-bg); border: 1px solid var(--qs-line); color: var(--qs-ink);
   font: 400 11px/1 var(--qs-mono);
 }
-.qd-menu__label { font: 500 12px/1 var(--qs-sans); letter-spacing: 0; color: var(--qs-ink3); padding: 8px 12px 6px; }
+.qd-menu__label { font: 500 12px/1 var(--qs-sans); letter-spacing: var(--qs-track); color: var(--qs-ink3); padding: 8px 12px 6px; }
 .qd-menu__item {
   all: unset; box-sizing: border-box; display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 12px 0 8px;
   color: var(--qs-ink2); cursor: pointer; white-space: nowrap;

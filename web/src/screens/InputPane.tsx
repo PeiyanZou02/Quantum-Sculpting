@@ -152,10 +152,10 @@ function QubitBars() {
 }
 
 const MODE_HELP = {
-  gaussian: 'An ordinary blur, only for checking the pipeline.',
-  emulator: 'Local approximation of Quantum Blur Core, same tiling as Atlas. Updates live.',
-  atlas: 'Submits to Atlas blur-core-v1. Results are cached in grids/ and never submitted twice.',
-  nations: 'Splits the model into nations, one qubit each, that evolve turn by turn: every nation is asked one question a turn and all the answers are measured together. Runs on this machine.',
+  gaussian: 'A plain blur, to check the pipeline.',
+  emulator: 'Quantum Blur Core approximated locally. Live.',
+  atlas: 'Runs on Atlas blur-core-v1. Cached in grids/.',
+  nations: 'Nations, one qubit each, evolve turn by turn. Local.',
 }
 const MODE_LABEL = { gaussian: 'gaussian', emulator: 'emulation', atlas: 'atlas', nations: 'evolve' }
 

@@ -41,7 +41,7 @@ export function Slider({ label, value, min, max, step = 0.01, onChange, onCommit
   const decimals = Math.max(0, -Math.floor(Math.log10(step)))
   return (
     <div className={'qs-slider' + (disabled ? ' qs-slider--off' : '')}>
-      <div className="qs-field-head">
+      <div className="qs-field-head" data-tip={typeof help === 'string' && typeof label === 'string' ? label : undefined} data-tip-desc={typeof help === 'string' ? help : undefined}>
         <span>{label}</span>
         <output>{format ? format(value) : value.toFixed(decimals)}</output>
       </div>
@@ -88,7 +88,7 @@ export function Slider({ label, value, min, max, step = 0.01, onChange, onCommit
         <div className="qs-slider__fill" style={{ left: `${Math.min(o, p) * 100}%`, width: `${Math.abs(p - o) * 100}%` }} />
         <div className="qs-slider__thumb" style={{ left: `${p * 100}%` }} />
       </div>
-      {help && <p className="qs-help">{help}</p>}
+      {help && typeof help !== 'string' && <p className="qs-help">{help}</p>}
     </div>
   )
 }
@@ -138,7 +138,7 @@ export function Select<T extends string>({ label, value, options, onChange, help
   }
   return (
     <div className="qs-select-field">
-      {label && <span className="qs-field-label">{label}</span>}
+      {label && <span className="qs-field-label" data-tip={typeof help === 'string' && typeof label === 'string' ? label : undefined} data-tip-desc={typeof help === 'string' ? help : undefined}>{label}</span>}
       <button ref={btn} type="button" className={'qs-dd' + (open ? ' qs-dd--open' : '')} disabled={disabled}
         aria-haspopup="listbox" aria-expanded={open} onClick={() => (open ? setOpen(false) : openList())} onKeyDown={key}>
         <span className="qs-dd__v">{cur?.label ?? '—'}</span>
@@ -158,7 +158,7 @@ export function Select<T extends string>({ label, value, options, onChange, help
         </div>,
         document.body,
       )}
-      {help && <span className="qs-help">{help}</span>}
+      {help && typeof help !== 'string' && <span className="qs-help">{help}</span>}
     </div>
   )
 }
@@ -170,13 +170,13 @@ export function Input({ label, value, onChange, type = 'text', placeholder, min,
 }) {
   return (
     <label className="qs-input-field">
-      <span className="qs-field-label">{label}</span>
+      <span className="qs-field-label" data-tip={typeof help === 'string' && typeof label === 'string' ? label : undefined} data-tip-desc={typeof help === 'string' ? help : undefined}>{label}</span>
       <span className="qs-input">
         <input type={type} value={value} placeholder={placeholder} min={min} max={max} step={step} spellCheck={false}
           onChange={(e) => onChange(e.target.value)} />
         {suffix && <span className="qs-input__suffix">{suffix}</span>}
       </span>
-      {help && <span className="qs-help">{help}</span>}
+      {help && typeof help !== 'string' && <span className="qs-help">{help}</span>}
     </label>
   )
 }
