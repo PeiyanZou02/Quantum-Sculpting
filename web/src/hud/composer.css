@@ -73,14 +73,6 @@
 .hud-text { display: inline-block; min-width: 24px; font: 500 22px/1.15 var(--qs-sans); color: var(--qs-ink); outline: none; white-space: pre-wrap; max-width: 520px; }
 .hud-text--edit { cursor: text; box-shadow: 0 1px 0 var(--qs-ink3); }
 
-/* previews */
-.mini { position: relative; overflow: hidden; border-radius: 10px; background: var(--qs-view, var(--qs-bg)); flex: none; }
-.mini__frame { position: absolute; left: 0; top: 0; transform-origin: 0 0; pointer-events: none; }
-.mini__bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: .9; }
-.mini .hud-layer { z-index: 1; }
-.hud-slot--bottom.hud-slot--lean-l { left: 36px; transform: none; align-items: flex-start; }
-.hud-slot--bottom.hud-slot--lean-r { left: auto; right: 36px; transform: none; align-items: flex-end; }
-
 /* a component previewed from the library: on the view, outlined, with everything else dimmed */
 .hud-piece--ghost { outline: 1px dashed var(--qs-ink2); outline-offset: 6px; border-radius: 4px; }
 .hud-piece--ghost > .hud-piece__body, .hud-free--ghost > * { animation: hud-ghost .18s ease-out; }

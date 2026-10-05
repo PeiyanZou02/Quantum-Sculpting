@@ -6,7 +6,7 @@ import './scroll.css'
 export interface ScrollMarker { id: string; label: string; icon?: string }
 export interface ScrollIndex { markers: ScrollMarker[]; active: string | null; go: (id: string) => void; pos: Record<string, number>; frac: (id: string) => number }
 
-export function ScrollArea({ children, markers, className, style, follow, onActive, bar = true, renderIndex }: {
+export function ScrollArea({ children, markers, className, style, follow, onActive, bar = true, renderIndex, tail = false }: {
   children: ReactNode
   /** Draw the scrollbar rail and thumb (default true). */
   bar?: boolean
@@ -18,9 +18,12 @@ export function ScrollArea({ children, markers, className, style, follow, onActi
   style?: CSSProperties
   /** Stick to the bottom while new content arrives (terminal). */
   follow?: boolean
+  /** Room after the last section so every section, the last too, can scroll to the top (section index). */
+  tail?: boolean
   onActive?: (id: string) => void
 }) {
   const box = useRef<HTMLDivElement>(null)
+  const tailRef = useRef<HTMLDivElement>(null)
   const [m, setM] = useState({ top: 0, h: 1, sh: 1 })
   const [pos, setPos] = useState<Record<string, number>>({})
   const [active, setActive] = useState<string | null>(null)
@@ -30,6 +33,10 @@ export function ScrollArea({ children, markers, className, style, follow, onActi
   const measure = useCallback(() => {
     const el = box.current
     if (!el) return
+    if (tailRef.current && markers?.length) {
+      const last = el.querySelector<HTMLElement>(`[data-mark="${markers[markers.length - 1].id}"]`)
+      if (last) tailRef.current.style.height = `${Math.max(24, el.clientHeight - last.offsetHeight - 8)}px`
+    }
     setM({ top: el.scrollTop, h: el.clientHeight, sh: el.scrollHeight })
     if (markers) {
       const p: Record<string, number> = {}
@@ -80,7 +87,13 @@ export function ScrollArea({ children, markers, className, style, follow, onActi
   const scrollable = m.sh > m.h + 1
   const th = Math.max(24, (m.h / m.sh) * m.h)
   const ty = scrollable ? (m.top / (m.sh - m.h)) * (m.h - th) : 0
-  const go = (id: string) => box.current?.scrollTo({ top: Math.max(0, (pos[id] ?? 0) - 4), behavior: 'smooth' })
+  // read the section's place when asked: content above it may have grown since the last measure
+  const go = (id: string) => {
+    const el = box.current, t = el?.querySelector<HTMLElement>(`[data-mark="${id}"]`)
+    if (!el || !t) return
+    el.scrollTo({ top: Math.max(0, t.offsetTop - 4), behavior: 'smooth' })
+    setActive(id)   // the index answers the click at once; the scroll-spy agrees once the scroll lands
+  }
   const frac = (id: string) => (pos[id] ?? 0) / Math.max(1, m.sh)
 
   return (
@@ -95,6 +108,7 @@ export function ScrollArea({ children, markers, className, style, follow, onActi
         }}
       >
         {children}
+        {tail && <div ref={tailRef} aria-hidden />}
       </div>
       {renderIndex && markers && renderIndex({ markers, active, go, pos, frac })}
       {bar && <div className={'qs-scroll__rail' + (scrollable ? '' : ' qs-scroll__rail--idle') + (markers && !renderIndex ? ' qs-scroll__rail--index' : '')}

@@ -69,10 +69,12 @@ export function Slider({ label, value, min, max, step = 0.01, onChange, onCommit
         }}
         onDoubleClick={() => defaultValue != null && (onChange(defaultValue), onCommit?.(defaultValue))}
         onKeyDown={(e) => {
-          const d = e.key === 'ArrowRight' || e.key === 'ArrowUp' ? 1 : e.key === 'ArrowLeft' || e.key === 'ArrowDown' ? -1 : 0
-          if (!d) return
+          // arrows step (Shift: ten steps), Page Up/Down ten steps, Home/End the ends
+          const k = e.key
+          const d = k === 'ArrowRight' || k === 'ArrowUp' ? 1 : k === 'ArrowLeft' || k === 'ArrowDown' ? -1 : k === 'PageUp' ? 10 : k === 'PageDown' ? -10 : 0
+          if (!d && k !== 'Home' && k !== 'End') return
           e.preventDefault()
-          const v = snap(value + d * step * (e.shiftKey ? 10 : 1))
+          const v = k === 'Home' ? min : k === 'End' ? max : snap(value + d * step * (e.shiftKey ? 10 : 1))
           onChange(v)
           onCommit?.(v)
         }}

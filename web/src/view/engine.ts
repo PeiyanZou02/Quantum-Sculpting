@@ -242,18 +242,6 @@ export class Engine {
     this.dirty = true
   }
 
-  /** A small still of the view as it is, `w` px wide (PNG data URL), for previews in the compose drawer. */
-  snapshot(w: number): string | null {
-    const vw = this.host.clientWidth, vh = this.host.clientHeight
-    if (!vw || !vh) return null
-    this.renderer.render(this.scene, this.camera)   // read back in the same task, so no preserveDrawingBuffer
-    const c = document.createElement('canvas')
-    c.width = w
-    c.height = Math.round((w * vh) / vw)
-    c.getContext('2d')!.drawImage(this.renderer.domElement, 0, 0, c.width, c.height)
-    return c.toDataURL('image/png')
-  }
-
   /** A still of the geometry alone at `scale`× the view's pixels, transparent background (PNG blob). */
   async render(scale = 2): Promise<Blob | null> {
     const pr = this.renderer.getPixelRatio()

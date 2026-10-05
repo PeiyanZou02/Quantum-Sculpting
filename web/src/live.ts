@@ -1,13 +1,11 @@
-// What the viewport shares with panels outside it (the Present drawer): the engine, the latest HUD
-// context and the probe's pins. Stage writes these as it renders and calls `bump()` when pins change.
+// What the viewport shares with panels outside it (the Present panel): the engine and the probe's pins.
+// Stage writes these as it renders and calls `bump()` when pins change.
 import { useSyncExternalStore } from 'react'
 import type { Engine } from './view/engine'
-import type { HudCtx } from './hud/types'
 import type { ProbeController } from './qs/QProbe'
 
 export const live: {
   engine?: Engine
-  ctx?: HudCtx
   probe?: ProbeController
   /** Pins notable cells (peak, top, widest layer, base, most changed) with their readouts. */
   autoAnnotate?: () => number

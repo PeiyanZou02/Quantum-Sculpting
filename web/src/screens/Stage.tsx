@@ -156,15 +156,23 @@ export function Stage() {
   // present: the cutting plane sweeps up and down; compositions can cycle on their own
   useEffect(() => {
     if (!present || !pr.sweep || !grid) return
-    let dir = 1
+    // within its range, `step` layers at a time, one pass in `sec` seconds; changes apply as it runs
+    const { from, to, step, sec, mode } = pr.sweepCfg
+    const lo = Math.round(Math.min(from, to) * (grid.n - 1)), hi = Math.round(Math.max(from, to) * (grid.n - 1))
+    let dir = mode === 'down' ? -1 : 1
+    const s0 = useStore.getState().slice.index
+    if (s0 < lo || s0 > hi) useStore.getState().setSlice({ index: mode === 'down' ? hi : lo })
     const t = setInterval(() => {
-      const s0 = useStore.getState().slice
-      let next = s0.index + dir
-      if (next > grid.n - 1 || next < 0) { dir = -dir; next = s0.index + dir }
+      const i = useStore.getState().slice.index
+      let next = i + dir * step
+      if (next > hi || next < lo) {
+        if (mode === 'bounce') { dir = -dir; next = Math.min(hi, Math.max(lo, i + dir * step)) }
+        else next = mode === 'up' ? lo : hi
+      }
       useStore.getState().setSlice({ index: next })
-    }, 6000 / grid.n)
+    }, (sec * 1000 * step) / Math.max(1, hi - lo))
     return () => clearInterval(t)
-  }, [present, pr.sweep, grid])
+  }, [present, pr.sweep, grid, pr.sweepCfg])
   useEffect(() => {
     if (!present || !pr.cycle) return
     const t = setInterval(() => {
@@ -458,7 +466,7 @@ export function Stage() {
         )}
 
         {model && engine && (
-          <HudLayer ctx={(live.ctx = hudCtx(engine))} compose={shown}
+          <HudLayer ctx={hudCtx(engine)} compose={shown}
             arrange={!present && pr.arrange && !pr.bare}
             edit={present && pr.composing && !pr.bare && !pr.recording ? { sel: pr.sel, onSelect: pr.setSel, onRemove: pr.removePiece } : undefined}
             looks={present ? pr.looks : undefined} hl={present ? pr.hl : null} ghost={present ? pr.preview : null}

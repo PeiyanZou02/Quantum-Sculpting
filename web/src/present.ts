@@ -16,6 +16,9 @@ export interface TextNote { id: string; text: string }
 /** Guides drawn in the scene itself: the grid volume's bounding box and the print grid on its floor
  *  (`div` cells a side). */
 export interface Guides { box: boolean; floor: boolean; div: number }
+/** The slice sweep: the range it covers (fractions of the grid height), layers per step, seconds for one
+ *  pass through the range, and whether it goes up and down, only up or only down. */
+export interface Sweep { from: number; to: number; step: number; sec: number; mode: 'bounce' | 'up' | 'down' }
 export interface Saved { id: string; name: string; compose: Record<string, string>; pos: Record<string, Pos>; looks: Record<string, Look>; texts: TextNote[]; guides?: Guides }
 
 interface P {
@@ -78,6 +81,8 @@ interface P {
   /** Sweep the cutting plane up and down through the grid. */
   sweep: boolean
   setSweep: (v: boolean) => void
+  sweepCfg: Sweep
+  setSweepCfg: (s: Partial<Sweep>) => void
   recording: boolean
   setRecording: (v: boolean) => void
   /** Per-piece looks, keyed like positions but without the mode. */
@@ -116,7 +121,7 @@ const keep = (s: P) => {
   try {
     localStorage.setItem(KEY, JSON.stringify({
       v: VERSION, mode: s.mode, compose: s.compose, pos: s.pos, shots: s.shots, spin: s.spin, reelSec: s.reelSec, spinSpeed: s.spinSpeed,
-      cycleSec: s.cycleSec, drawer: s.drawer, looks: s.looks, spinDir: s.spinDir, texts: s.texts, pngInk: s.pngInk, saved: s.saved, current: s.current, guides: s.guides,
+      cycleSec: s.cycleSec, drawer: s.drawer, looks: s.looks, spinDir: s.spinDir, texts: s.texts, pngInk: s.pngInk, saved: s.saved, current: s.current, guides: s.guides, sweepCfg: s.sweepCfg,
     }))
   } catch { /* per-viewer only */ }
 }
@@ -202,6 +207,8 @@ export const usePresent = create<P>()((set, get) => {
     setCycle: (v) => set({ cycle: v }),
     sweep: false,
     setSweep: (v) => set({ sweep: v }),
+    sweepCfg: { from: 0, to: 1, step: 1, sec: 6, mode: 'bounce', ...saved.sweepCfg },
+    setSweepCfg: (c) => up({ sweepCfg: { ...get().sweepCfg, ...c } }),
     recording: false,
     setRecording: (v) => set({ recording: v }),
     looks: saved.looks ?? {},
