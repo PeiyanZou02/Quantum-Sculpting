@@ -1,5 +1,5 @@
 // OUTPUT: what each step produced. Read-only readouts and charts, plus the export.
-import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useContext, useEffect, useEffectEvent, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useStore } from '../store'
 import { Segmented } from '../qs/Segmented'
 import { Slider } from '../qs/Slider'
@@ -11,7 +11,8 @@ import { IconButton } from '../qs/Icon'
 import { LevelHistogram } from '../qs/LevelHistogram'
 import { histogram, solidPerLayer, type Axis } from '../qs/grid'
 import { SectionMap } from './SectionMap'
-import { fmt } from './parts'
+import { fmt } from './fmt'
+import { PresentStyle } from './presentStyle'
 
 const MARKERS = [
   { id: 'out-model', label: 'Model', icon: 'model' }, { id: 'out-grid', label: 'Grid', icon: 'grid' },
@@ -45,8 +46,6 @@ function Hero({ k, v, unit, note, wide }: { k: string; v: ReactNode; unit?: stri
   )
 }
 
-/** Present renders figures as large infographic numbers; Lab as a compact, practical readout. */
-export const PresentStyle = createContext(false)
 interface Fig { k: string; v: ReactNode; unit?: string; note?: ReactNode; wide?: boolean }
 function Figures({ items }: { items: Fig[] }) {
   const present = useContext(PresentStyle)
@@ -149,7 +148,14 @@ export function GridOut() {
 export function SliceOut() {
   const st = useStore()
   const { slice, gridData, procData, m, hud, view, scan } = st
-  const [src, setSrc] = useState<'input' | 'processed'>('input')
+  const [src, setSrc] = useState<'input' | 'processed'>(procData ? 'processed' : 'input')
+  // a result arriving (or going) switches the source to it; otherwise the choice is the user's
+  const hasProc = !!procData
+  const [srcFor, setSrcFor] = useState(hasProc)
+  if (srcFor !== hasProc) {
+    setSrcFor(hasProc)
+    setSrc(hasProc ? 'processed' : 'input')
+  }
   const g = src === 'processed' && procData ? procData : gridData
   const n = g?.n ?? 32
   const box = useRef<HTMLDivElement>(null)
@@ -159,8 +165,9 @@ export function SliceOut() {
     ro.observe(box.current!)
     return () => ro.disconnect()
   }, [])
-  useEffect(() => { setSrc(procData ? 'processed' : 'input') }, [!!procData]) // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { if (slice.index > n - 1) st.setSlice({ index: Math.floor(n / 2) }) }, [n]) // eslint-disable-line react-hooks/exhaustive-deps
+  // only a new grid size re-centres the slice; the index itself is read, not watched
+  const fitSlice = useEffectEvent(() => { if (slice.index > n - 1) st.setSlice({ index: Math.floor(n / 2) }) })
+  useEffect(() => { fitSlice() }, [n])
   const level = src === 'processed' ? m.level : 0.5
   const scanning = view === 'scan'
   const canScan = !!procData && !!gridData

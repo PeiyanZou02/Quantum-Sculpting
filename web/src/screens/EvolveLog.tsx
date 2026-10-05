@@ -4,7 +4,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useStore } from '../store'
 import type { NationAction, NationTurn } from '../api'
-import { Nat, say } from './EvolvePanel'
+import { Nat, Say } from './EvolvePanel'
 import type { Theme } from '../view/nations'
 import { Spinner } from './parts'
 import './evolve.css'
@@ -75,7 +75,7 @@ function Line({ r, k, theme, on, alive, onClick }: { r: NationTurn; k: number; t
         {r.turn === 0 ? <>Founded {k} nations, one qubit each.</>
           : <>
               <span className="evlog__tally">{tally(r) || 'nothing moved'}</span>
-              {r.events.map((e, i) => <span key={i} className="evlog__ev">{say(e, theme)}</span>)}
+              {r.events.map((e, i) => <span key={i} className="evlog__ev"><Say e={e} theme={theme} /></span>)}
               {r.attacks.length > 0 && !r.events.length && (
                 <span className="evlog__ev evlog__ev--quiet">{r.attacks.slice(0, 3).map(([a, b], i) => <span key={i}>{i > 0 && ', '}<Nat i={a} theme={theme} /> → <Nat i={b} theme={theme} /></span>)}{r.attacks.length > 3 ? ` +${r.attacks.length - 3}` : ''}</span>
               )}

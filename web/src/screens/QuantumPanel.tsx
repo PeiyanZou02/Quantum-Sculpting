@@ -1,14 +1,14 @@
 // QUANTUM: the library's quantum glyphs and data views, bound to the live settings, grid, job and runs.
 // Maths follows app/emulator.py: each axis of n cells is Gray-coded onto b = ceil(log2 n) qubits;
 // qubit k turns by θ_k = π·strength·((1−reach)·2^−k + reach), gates from `style`, and mixes cells 2^(k+1) apart.
-import { useEffect, useLayoutEffect, useMemo, useState, useSyncExternalStore, type PointerEvent as RPointerEvent, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore, type PointerEvent as RPointerEvent, type ReactNode } from 'react'
 import { useStore } from '../store'
 import type { Mode, ProcMeta } from '../api'
 import { ScrollArea } from '../qs/ScrollArea'
 import { SectionTabs } from './SectionTabs'
 import { QCircuit, type QGate } from '../qs/QCircuit'
 import { at, histogram } from '../qs/grid'
-import { fmt } from './parts'
+import { fmt } from './fmt'
 import './quantum.css'
 
 const MARKERS = [
@@ -84,16 +84,16 @@ const useRuns = () => useSyncExternalStore(subscribeRuns, () => runs)
 // ── small parts ──────────────────────────────────────────────────────────────────────────────────
 /** Content width of a box, for glyphs drawn at true pixel size. */
 function useWidth() {
-  const [el, setEl] = useState<HTMLDivElement | null>(null)
   const [w, setW] = useState(0)
-  useLayoutEffect(() => {
+  // measured from the ref callback as the box mounts (before paint), then followed
+  const ref = useCallback((el: HTMLDivElement | null) => {
     if (!el) return
     setW(Math.floor(el.getBoundingClientRect().width))
     const ro = new ResizeObserver(([e]) => setW(Math.floor(e.contentRect.width)))
     ro.observe(el)
     return () => ro.disconnect()
-  }, [el])
-  return [setEl, w] as const
+  }, [])
+  return [ref, w] as const
 }
 
 function usePrefersStill() {
@@ -602,8 +602,9 @@ function LevelsBlk() {
   const total = Math.max(1, bins.reduce((a, b) => a + b, 0))
   const peak = Math.sqrt(Math.max(1, ...bins))
   // kept share: of the non-empty cells, the part at or above each level
+  const share: number[] = []
   let acc = total
-  const share = bins.map((b) => { const s = acc / total; acc -= b; return s })
+  for (const b of bins) { share.push(acc / total); acc -= b }
   const kept = bins.reduce((a, b, i) => ((i + 0.5) / n >= level ? a + b : a), 0)
   const curve = share.map((s, i) => `${(i * bw).toFixed(1)},${(H - 1 - s * (H - 4)).toFixed(1)}`).join(' ')
   const pick = (e: RPointerEvent<HTMLDivElement>) => {

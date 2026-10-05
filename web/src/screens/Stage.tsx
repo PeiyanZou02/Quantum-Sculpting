@@ -6,18 +6,21 @@ import * as THREE from 'three'
 import { useStore, type Layer, type Shading, type Tool, type View, type Stage as StageName } from '../store'
 import { Engine, type LayerName, type ViewName } from '../view/engine'
 import { loadBundled, makeEntangleMaterial, type ShaderTables } from '../view/entangle'
-import { QProbe, useProbe, type ProbeHit } from '../qs/QProbe'
+import { QProbe } from '../qs/QProbe'
+import { useProbe, type ProbeHit } from '../qs/useProbe'
 import { QPill } from '../qs/QPill'
 import { Icon, IconButton } from '../qs/Icon'
 import { Popover, PopSection, Check } from '../qs/Popover'
 import { Slider } from '../qs/Slider'
 import { Spinner } from './parts'
-import { HudLayer, FAMILIES, PRESETS, presetOf, full, toggleVariant, variantsOf } from '../hud/Composer'
+import { HudLayer } from '../hud/Composer'
+import { FAMILIES } from '../hud/registry'
+import { PRESETS, presetOf, full, toggleVariant, variantsOf } from '../hud/compose'
 import { MARK_MIME, MarkLibrary } from './MarkLibrary'
 import { usePresent } from '../present'
 import { PresentChrome } from './PresentBar'
 import type { HudCtx, Vec3 } from '../hud/types'
-import { MODEL_EXT } from './InputPane'
+import { MODEL_EXT } from './modelExt'
 import { live, bump } from '../live'
 import { ownerGrid, ownerToColors } from '../view/nations'
 
@@ -94,14 +97,15 @@ export function Stage() {
   useEffect(() => { engine?.setVoxels('voxels', gridData, 0.5, valued) }, [engine, gridData, valued])
   // Evolve draws the turn on screen, each cell in its nation's colour; other modes draw the result by value
   const ev = st.evolve
-  const nations = st.proc?.mode === 'nations' && ev.owner && ev.n ? { owner: ev.owner, n: ev.n } : null
+  const nations = useMemo(() => (st.proc?.mode === 'nations' && ev.owner && ev.n ? { owner: ev.owner, n: ev.n } : null), [st.proc?.mode, ev.owner, ev.n])
+  const isNations = !!nations
   useEffect(() => {
     if (!engine) return
     if (!nations) { engine.setVoxels('processed', procData, m.level, valued); return }
     engine.setVoxels('processed', ownerGrid(nations.owner, nations.n), 0.5, false)
     const cells = engine.cellsOf('processed')
     if (cells) engine.setVoxelColors('processed', ownerToColors(nations.owner, cells, nations.n, theme))
-  }, [engine, procData, m.level, valued, nations?.owner, nations?.n, theme]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [engine, procData, m.level, valued, nations, theme])
   useEffect(() => { engine?.setMesh('result', resultMesh) }, [engine, resultMesh])
   useEffect(() => { engine?.show(view as ViewName) }, [engine, view, gridData, procData, resultMesh, modelMesh])
   useEffect(() => { engine?.setGhosts((Object.keys(layers) as Layer[]).filter((k) => layers[k].visible)) }, [engine, layers, gridData, procData, resultMesh, modelMesh])
@@ -113,7 +117,8 @@ export function Stage() {
   const planeOn = hud.slice || tool === 'slice' || (present && (pr.sweep || (shown.slicecard ?? 'off') !== 'off'))
   useEffect(() => { engine?.setSlice(planeOn ? slice : null) }, [engine, slice, view, planeOn])
   useEffect(() => { if (engine && view === 'scan') engine.setScan(slice.axis === 'z' ? slice.index + 1 : 0) }, [engine, view, slice, grid])
-  useEffect(() => { if (view === 'scan' && slice.axis !== 'z') st.setSlice({ axis: 'z' }) }, [view]) // eslint-disable-line react-hooks/exhaustive-deps
+  // entering the scan view turns the plane to z (only then: the axis is read, not watched)
+  useEffect(() => { const s = useStore.getState(); if (view === 'scan' && s.slice.axis !== 'z') s.setSlice({ axis: 'z' }) }, [view])
 
   // Entanglement shading: one material per layer kind, rebuilt when the tables or settings change
   const table = tables.find((t) => t.id === shade.tables) ?? tables[0]
@@ -133,17 +138,18 @@ export function Stage() {
     const bg = getComputedStyle(document.documentElement).getPropertyValue('--qs-bg').trim()
     if (entMats) for (const mat of Object.values(entMats)) if (mat.uniforms.u_bg) mat.uniforms.u_bg.value = new THREE.Color(bg)
     // entanglement reads a voxel's colour as film thickness, so Evolve's nation colours keep plain value shading
-    engine.setShading(shading === 'entangle' && (!entMats || nations) ? 'value' : shading, entMats)
-  }, [engine, shading, entMats, theme, !!nations]) // eslint-disable-line react-hooks/exhaustive-deps
+    engine.setShading(shading === 'entangle' && (!entMats || isNations) ? 'value' : shading, entMats)
+  }, [engine, shading, entMats, theme, isNations])
 
   useEffect(() => { engine?.setLighting(shade.light) }, [engine, shade.light])
   // present: turntable, and a reel that flies through the saved shots
   useEffect(() => { engine?.setSpin(present && pr.spin, pr.spinSpeed * pr.spinDir) }, [engine, present, pr.spin, pr.spinSpeed, pr.spinDir])
   useEffect(() => {
     if (!engine || !present) return
-    const sh = pr.shots[pr.shot]
+    const p = usePresent.getState()   // pr.fly asks for the flight; the shot is read, not watched
+    const sh = p.shots[p.shot]
     if (sh) engine.flyTo(sh.az, sh.el, sh.dist)
-  }, [engine, present, pr.fly]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [engine, present, pr.fly])
   useEffect(() => {
     if (!present || !pr.reel || pr.shots.length < 2) return
     const t = setInterval(() => { const p = usePresent.getState(); p.setShot((p.shot + 1) % p.shots.length) }, pr.reelSec * 1000)
@@ -151,7 +157,7 @@ export function Stage() {
   }, [present, pr.reel, pr.shots.length, pr.reelSec])
   useEffect(() => { if (engine) { (window as unknown as { __qsEngine?: Engine }).__qsEngine = engine; live.engine = engine } }, [engine])
   // present opens on navigate: the probe's hover readout and the slice drag are lab tools
-  useEffect(() => { if (present && (useStore.getState().tool === 'probe' || useStore.getState().tool === 'slice')) st.setTool('navigate') }, [present]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { const s = useStore.getState(); if (present && (s.tool === 'probe' || s.tool === 'slice')) s.setTool('navigate') }, [present])
   // present: the cutting plane sweeps up and down; compositions can cycle on their own
   useEffect(() => {
     if (!present || !pr.sweep || !grid) return
@@ -184,17 +190,17 @@ export function Stage() {
   }, [present, pr.cycle, pr.cycleSec])
 
   // tools: the slice tool takes the left drag; navigate turns the probe off
-  useEffect(() => { if (engine) engine.controls.enableRotate = tool !== 'slice' }, [engine, tool])
+  useEffect(() => { engine?.setRotate(tool !== 'slice') }, [engine, tool])
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey || (e.target instanceof Element && e.target.closest('input,textarea,select,[contenteditable="true"]'))) return
       const t = TOOLS.find((x) => x.key.toLowerCase() === e.key.toLowerCase())
-      if (t) st.setTool(t.id)
+      if (t) useStore.getState().setTool(t.id)
       if (e.key === 'Home') engine?.home()
     }
     window.addEventListener('keydown', key)
     return () => window.removeEventListener('keydown', key)
-  }, [engine]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [engine])
 
   // sweep: step the slice from where it is to the top over ~10 s
   useEffect(() => {
@@ -235,12 +241,13 @@ export function Stage() {
     const [x, y] = engine.project(h.p ? new THREE.Vector3(...h.p) : new THREE.Vector3(h.x, h.y, h.z))
     return { x, y }
   }
-  useEffect(() => { probe.clear() }, [model?.model_id]) // eslint-disable-line react-hooks/exhaustive-deps
-  live.probe = probe
+  const clearPins = probe.clear   // stable
+  useEffect(() => { clearPins() }, [model?.model_id, clearPins])
+  useEffect(() => { live.probe = probe })   // for the Present panel; set before the bump below
   useEffect(() => { bump() }, [probe.pins])
 
   /** Auto-annotate: pins the notable cells of what was computed last (quantum result, else the voxels). */
-  live.autoAnnotate = () => {
+  const autoAnnotate = () => {
     const g = useStore.getState()
     const src = g.procData ?? g.gridData
     if (!src || !engine) return 0
@@ -286,6 +293,7 @@ export function Stage() {
     }))
     return uniq.length
   }
+  useEffect(() => { live.autoAnnotate = autoAnnotate })
 
   // slice tool: vertical drag moves the cutting plane one layer per 6 px
   const sliceDrag = useRef<{ y: number; i: number } | null>(null)

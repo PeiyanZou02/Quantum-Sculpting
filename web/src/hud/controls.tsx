@@ -4,7 +4,7 @@
 // needle turns. The orbit gimbal and its states are orbit.tsx v1 and v5.
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import type { FamilyDef, HudCtx, HudModule } from './types'
+import type { HudCtx } from './types'
 import './controls.css'
 
 const RAD = Math.PI / 180
@@ -68,12 +68,11 @@ function useEased(target: number, ms = 480): number {
 
 /** A rotation that always takes the short way round, for a CSS transition on transform. */
 function useTurn(deg: number): number {
-  const last = useRef(deg)
-  const next = last.current + dArc(last.current, deg)
-  useEffect(() => {
-    last.current = next
-  })
-  return next
+  const [s, setS] = useState({ deg, turn: deg })
+  if (s.deg === deg) return s.turn
+  const turn = s.turn + dArc(s.turn, deg)
+  setS({ deg, turn })
+  return turn
 }
 
 /** Strength, style and shots drive the emulator and Atlas only. */
@@ -168,7 +167,7 @@ function ArcDial({ v, size, min, max, pressed, children }: ArcProps) {
 
 // D1 · arc dial, the base build: strength ------------------------------------------------------
 
-function D1Arc({ ctx }: { ctx: HudCtx }) {
+export function D1Arc({ ctx }: { ctx: HudCtx }) {
   // as in the sheet: the threshold (mesh level) on 0.05–0.95
   const level = clamp(num(ctx.level, 0.5), 0.05, 0.95)
   const v = useEased((level - 0.05) / 0.9)
@@ -182,7 +181,7 @@ function D1Arc({ ctx }: { ctx: HudCtx }) {
 
 // D2 · ring dial, value in the hole: strength --------------------------------------------------
 
-function D2Ring({ ctx }: { ctx: HudCtx }) {
+export function D2Ring({ ctx }: { ctx: HudCtx }) {
   const s = clamp(num(ctx.q.strength, 0), 0, 1)
   const v = useEased(s)
   const idle = notUsed(ctx)
@@ -237,7 +236,7 @@ function splitLevel(x: number): [number, number] {
   return [c, x - c]
 }
 
-function D3CoarseFine({ ctx }: { ctx: HudCtx }) {
+export function D3CoarseFine({ ctx }: { ctx: HudCtx }) {
   const L = clamp(num(ctx.level, 0.5), 0, 1)
   const Le = useEased(L)
   const [c, f] = splitLevel(L)
@@ -275,7 +274,7 @@ const DET_P: [number, number, number][] = [
   [16, 55, 270],
 ]
 
-function D4Detents({ ctx }: { ctx: HudCtx }) {
+export function D4Detents({ ctx }: { ctx: HudCtx }) {
   const st = ctx.q.style
   const i = STYLES.indexOf(st)
   const turn = useTurn(i >= 0 ? -90 * i : 0)
@@ -311,7 +310,7 @@ const WHEEL_STOPS: { t: string; lg: number | null }[] = [
   { t: 'exact', lg: null },
 ]
 
-function D5EdgeWheel({ ctx }: { ctx: HudCtx }) {
+export function D5EdgeWheel({ ctx }: { ctx: HudCtx }) {
   const shots = shotsOf(ctx)
   const lg = shots ? Math.log2(shots) : 18
   const roll = useEased(lg, 640)
@@ -373,7 +372,7 @@ function useDialState(v: number, def: number, busy: boolean): { kind: DState; up
 }
 
 /** The level on the arc, as the sheet's base build reads its threshold: 0.05–0.95. */
-function DialStates({ ctx }: { ctx: HudCtx }) {
+export function DialStates({ ctx }: { ctx: HudCtx }) {
   const L = clamp(num(ctx.level, LEVEL_DEFAULT), 0.05, 0.95)
   const v = useEased((L - 0.05) / 0.9)
   const { kind, up } = useDialState(L, LEVEL_DEFAULT, ctx.busy)
@@ -410,7 +409,7 @@ function DialStates({ ctx }: { ctx: HudCtx }) {
 // ---------------------------------------------------------------------------------------------
 // N1 · drum: level, 0.05 a number, foreshortened toward the edges
 
-function N1Drum({ ctx }: { ctx: HudCtx }) {
+export function N1Drum({ ctx }: { ctx: HudCtx }) {
   const L = clamp(num(ctx.level, 0.5), 0, 1)
   const Le = useEased(L)
   const k0 = Math.round(Le / STEP)
@@ -456,7 +455,7 @@ function N1Drum({ ctx }: { ctx: HudCtx }) {
 
 const ROLL = [9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0]
 
-function N2Odometer({ ctx }: { ctx: HudCtx }) {
+export function N2Odometer({ ctx }: { ctx: HudCtx }) {
   const shots = shotsOf(ctx)
   const digits = (shots ? String(Math.round(shots)).padStart(5, '0') : '00000').split('').map(Number)
   const idle = notUsed(ctx)
@@ -489,7 +488,7 @@ function N2Odometer({ ctx }: { ctx: HudCtx }) {
 
 const PUSH_MAX = 8
 
-function N3PullRod({ ctx }: { ctx: HudCtx }) {
+export function N3PullRod({ ctx }: { ctx: HudCtx }) {
   const r = ctx.report
   const push = r?.method === 'advect'
   const amt = push ? clamp(num(r.amount, 0), 0, PUSH_MAX) : 0
@@ -525,7 +524,7 @@ function N3PullRod({ ctx }: { ctx: HudCtx }) {
 
 // N4 · centre-detent slide: thicken / shrink in voxels (−4 … +4) ------------------------------
 
-function N4DetentSlide({ ctx }: { ctx: HudCtx }) {
+export function N4DetentSlide({ ctx }: { ctx: HudCtx }) {
   const r = ctx.report
   const g = r ? clamp(num(r.grow, 0), -4, 4) : 0
   const ge = useEased(g)
@@ -619,7 +618,7 @@ function useGate(slot: number): [number, number] {
   return pos
 }
 
-function N5ShiftGate({ ctx }: { ctx: HudCtx }) {
+export function N5ShiftGate({ ctx }: { ctx: HudCtx }) {
   const r = ctx.report
   const push = r?.method === 'advect'
   const slot = push ? GATE.findIndex((g) => g.id === r.field) : -1
@@ -694,7 +693,7 @@ const S_X0 = 16
 const S_LEN = 220
 const sx = (l: number) => S_X0 + ((l - 0.05) / 0.9) * S_LEN
 
-function N6DualScale({ ctx }: { ctx: HudCtx }) {
+export function N6DualScale({ ctx }: { ctx: HudCtx }) {
   const kept = useKept(ctx)
   const L = clamp(num(ctx.level, 0.5), 0.05, 0.95)
   const Le = useEased(L)
@@ -756,7 +755,7 @@ function N6DualScale({ ctx }: { ctx: HudCtx }) {
 const TB_SIN = 20 / 69
 const TB_COS = Math.sqrt(1 - TB_SIN * TB_SIN)
 
-function Trackball({ ctx }: { ctx: HudCtx }) {
+export function Trackball({ ctx }: { ctx: HudCtx }) {
   const az = num(ctx.cam.az, 0)
   const el = clamp(num(ctx.cam.el, 0), -89.9, 89.9)
   const g = useMemo(() => {
@@ -820,7 +819,7 @@ function CamObject({ x, y, rot, hood = true }: { x: number; y: number; rot: numb
 
 const focalMm = (fov: number) => 12 / Math.tan((clamp(fov, 1, 170) / 2) * RAD)
 
-function CamTop({ ctx }: { ctx: HudCtx }) {
+export function CamTop({ ctx }: { ctx: HudCtx }) {
   const az = wrap360(num(ctx.cam.az, 0))
   const fov = num(ctx.cam.fov, 35)
   const aspect = ctx.h > 0 && ctx.w > 0 ? ctx.w / ctx.h : 1.6
@@ -886,7 +885,7 @@ const S_O: [number, number] = [130, 130]
 const S_R = 90
 const sidePt = (deg: number, r = S_R): [number, number] => [S_O[0] - r * Math.cos(deg * RAD), S_O[1] - r * Math.sin(deg * RAD)]
 
-function CamSide({ ctx }: { ctx: HudCtx }) {
+export function CamSide({ ctx }: { ctx: HudCtx }) {
   const el = num(ctx.cam.el, 0)
   const e = clamp(el, -30, 90)
   const fov = num(ctx.cam.fov, 35)
@@ -924,42 +923,3 @@ function CamSide({ ctx }: { ctx: HudCtx }) {
     </div>
   )
 }
-
-// ---------------------------------------------------------------------------------------------
-
-const DIALS: HudModule[] = [
-  { family: 'dials', id: 'v1', label: 'arc dial', desc: 'The base build: the threshold on a 270° arc of ticks', slot: 'bl', render: (ctx) => <D1Arc ctx={ctx} /> },
-  { family: 'dials', id: 'v2', label: 'ring dial', desc: 'Strength in the hole of a satin ring', slot: 'br', render: (ctx) => <D2Ring ctx={ctx} /> },
-  { family: 'dials', id: 'v3', label: 'coarse ring, fine cap', desc: 'Level: the ring clicks in 0.05 steps, the cap turns once per step', slot: 'br', render: (ctx) => <D3CoarseFine ctx={ctx} /> },
-  { family: 'dials', id: 'v4', label: 'engraved detents', desc: 'Gate style on detents under a fixed index', slot: 'bl', render: (ctx) => <D4Detents ctx={ctx} /> },
-  { family: 'dials', id: 'v5', label: 'edge wheel', desc: 'Shots on a thumbwheel, for long ranges', slot: 'bottom', render: (ctx) => <D5EdgeWheel ctx={ctx} /> },
-  {
-    family: 'dials',
-    id: 'v6',
-    label: 'dial states',
-    desc: 'Level on one dial in five moments: rest, ring while busy, turning, reset, a 0.01 step',
-    slot: 'br',
-    render: (ctx) => <DialStates ctx={ctx} />,
-  },
-]
-
-const NUMBERS: HudModule[] = [
-  { family: 'numbers', id: 'v1', label: 'drum', desc: 'Level on a drum; numbers foreshorten toward the edges', slot: 'bottom', render: (ctx) => <N1Drum ctx={ctx} /> },
-  { family: 'numbers', id: 'v2', label: 'odometer', desc: 'Shots, one wheel per digit; exact when reset', slot: 'bl', render: (ctx) => <N2Odometer ctx={ctx} /> },
-  { family: 'numbers', id: 'v3', label: 'pull rod', desc: 'Push amount: how far the quantum result moves the surface', slot: 'bl', render: (ctx) => <N3PullRod ctx={ctx} /> },
-  { family: 'numbers', id: 'v4', label: 'centre-detent slide', desc: 'Thicken or shrink; the ink bar shows the offset in voxels', slot: 'bottom', render: (ctx) => <N4DetentSlide ctx={ctx} /> },
-  { family: 'numbers', id: 'v5', label: 'shift gate', desc: 'Push field: toward the result, difference or gradient', slot: 'br', render: (ctx) => <N5ShiftGate ctx={ctx} /> },
-  { family: 'numbers', id: 'v6', label: 'dual scale', desc: 'Level above, share of the input kept below; dashed tick is 100%', slot: 'bottom', render: (ctx) => <N6DualScale ctx={ctx} /> },
-]
-
-const VIEWCAM: HudModule[] = [
-  { family: 'viewcam', id: 'v1', label: 'trackball', desc: 'The world sphere; the dot marks the camera', slot: 'br', render: (ctx) => <Trackball ctx={ctx} /> },
-  { family: 'viewcam', id: 'v2', label: 'from the top', desc: 'Station ring, frustum, near plane', slot: 'tr', render: (ctx) => <CamTop ctx={ctx} /> },
-  { family: 'viewcam', id: 'v3', label: 'from the side', desc: 'Elevation arc over the build floor', slot: 'tr', render: (ctx) => <CamSide ctx={ctx} /> },
-]
-
-export const CONTROL_FAMILIES: FamilyDef[] = [
-  { id: 'dials', title: 'Dials', desc: 'Five dial builds and their states, each showing a parameter', modules: DIALS },
-  { id: 'numbers', title: 'Number controls', desc: 'Beyond the arc: drum, odometer, rod, slide, gate, dual scale', modules: NUMBERS },
-  { id: 'viewcam', title: 'View camera', desc: 'The view camera as an object: trackball, top, side', modules: VIEWCAM },
-]

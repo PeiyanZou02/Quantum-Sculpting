@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import type { CSSProperties, PointerEvent as RPointerEvent } from 'react'
+import { QCAM_HOME, QCAM_STATIONS } from './qcamPresets'
 
 /** Orbit camera: azimuth in degrees 0–360, elevation 0–89, dolly distance 0.6–8. */
 export interface Camera {
@@ -16,15 +17,6 @@ export interface QCamProps {
   /** Hide the readout and the station pills. */
   bare?: boolean
 }
-
-export const QCAM_HOME: Camera = { az: 35, el: 22, dist: 2.4 }
-
-export const QCAM_STATIONS: ReadonlyArray<{ label: string; az: number; el: number }> = [
-  { label: 'Front', az: 0, el: 0 },
-  { label: 'Side', az: 90, el: 0 },
-  { label: 'Top', az: 0, el: 89 },
-  { label: 'Iso', az: 45, el: 35 },
-]
 
 const INK = 'var(--qs-ink)'
 const INK2 = 'var(--qs-ink2)'

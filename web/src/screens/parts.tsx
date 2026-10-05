@@ -1,7 +1,7 @@
 // Small layout pieces repeated across the screens (labels, step headers, field rows).
 import type { CSSProperties, ReactNode } from 'react'
 
-export const ink = { ink: 'var(--qs-ink)', ink2: 'var(--qs-ink2)', ink3: 'var(--qs-ink3)', ink4: 'var(--qs-ink4)' }
+const ink = { ink: 'var(--qs-ink)', ink2: 'var(--qs-ink2)', ink3: 'var(--qs-ink3)', ink4: 'var(--qs-ink4)' }
 
 export function Abs({ x, y, w, h, children, style }: { x: number; y: number; w?: number; h?: number; children?: ReactNode; style?: CSSProperties }) {
   return <div style={{ position: 'absolute', left: x, top: y, width: w, height: h, ...style }}>{children}</div>
@@ -114,12 +114,4 @@ export function Bang() {
       display: 'flex', alignItems: 'center', justifyContent: 'center', font: "500 9px/1 var(--qs-mono)",
     }}>!</span>
   )
-}
-
-export const fmt = {
-  int: (v: number) => Math.round(v).toLocaleString('en-US'),
-  f2: (v: number) => v.toFixed(2),
-  f1: (v: number) => v.toFixed(1),
-  pct: (v: number) => `${Math.round(v * 100)}%`,
-  up: (u: string) => `${u[0]}${u[1].toUpperCase()}`,
 }

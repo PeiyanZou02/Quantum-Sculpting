@@ -6,7 +6,8 @@
 import { useState, type ReactNode } from 'react'
 import { useStore, type Layer, type Shading, type Tool, type View } from '../store'
 import { isDirty, usePresent, type PanelTab, type Sweep } from '../present'
-import { CATEGORIES, savePng } from '../hud/Composer'
+import { CATEGORIES } from '../hud/registry'
+import { countOn, savePng } from '../hud/compose'
 import { Icon, IconButton } from '../qs/Icon'
 import { Segmented } from '../qs/Segmented'
 import { Slider } from '../qs/Slider'
@@ -14,7 +15,8 @@ import { Check } from '../qs/Popover'
 import { ScrollArea } from '../qs/ScrollArea'
 import { useLive } from '../live'
 import { renderStill, screenshot, toggleRecording } from './capture'
-import { FloorSize, LayerList, LibRow, MarkLibrary, countOn } from './MarkLibrary'
+import { FloorSize, LayerList, LibRow, MarkLibrary } from './MarkLibrary'
+import { PRESENT_TOOLS } from './presentTools'
 
 const VIEWS: { id: View; t: string }[] = [
   { id: 'model', t: 'Model' }, { id: 'voxels', t: 'Voxels' }, { id: 'processed', t: 'Quantum' }, { id: 'result', t: 'Mesh' }, { id: 'scan', t: 'Scan' },
@@ -24,11 +26,6 @@ const LIGHTS = [{ id: 'studio', t: 'Key' }, { id: 'soft', t: 'Soft' }, { id: 'fl
 const BACKDROPS = [{ id: 'plain', t: 'Plain' }, { id: 'dots', t: 'Dots' }, { id: 'lines', t: 'Grid' }, { id: 'gradient', t: 'Vignette' }, { id: 'studio', t: 'Studio' }] as const
 const GHOSTS: { id: Layer; t: string }[] = [
   { id: 'model', t: 'Original mesh' }, { id: 'voxels', t: 'Input voxels' }, { id: 'processed', t: 'Quantum result' }, { id: 'result', t: 'Surface' },
-]
-export const PRESENT_TOOLS: { id: Tool; icon: string; t: string; d: string; key: string }[] = [
-  { id: 'navigate', icon: 'navigate', t: 'Navigate', d: 'Drag to orbit, right-drag to pan, scroll to zoom.', key: 'V' },
-  { id: 'annotate', icon: 'annotate', t: 'Annotate', d: 'Click the geometry to pin a note; it turns with the model.', key: 'N' },
-  { id: 'measure', icon: 'measure', t: 'Measure', d: 'Click points; consecutive pins are joined with their distance in mm.', key: 'M' },
 ]
 const TABS: { id: PanelTab; icon: string; t: string }[] = [
   { id: 'view', icon: 'visibility', t: 'View' },

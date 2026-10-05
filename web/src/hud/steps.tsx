@@ -3,7 +3,7 @@
 // side bar 300 ms, needle 450 ms, live ping 1.8 s.
 import { useLayoutEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
-import type { HudCtx, HudModule } from './types'
+import type { HudCtx } from './types'
 import './lab.css'
 
 const MONO11: CSSProperties = { font: '400 11px/1 var(--qs-mono)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }
@@ -26,7 +26,7 @@ const fg = (it: Item) => (it.reached ? 'var(--qs-ink)' : 'var(--qs-ink3)')
 
 // ---------------------------------------------------------------- A index bar, sliding pill
 
-function IndexBar({ ctx }: { ctx: HudCtx }) {
+export function IndexBar({ ctx }: { ctx: HudCtx }) {
   const { list, live } = items(ctx)
   const refs = useRef<(HTMLButtonElement | null)[]>([])
   const [pill, setPill] = useState<{ l: number; w: number } | null>(null)
@@ -67,7 +67,7 @@ function IndexBar({ ctx }: { ctx: HudCtx }) {
 
 // ---------------------------------------------------------------- B rail with nodes
 
-function Rail({ ctx }: { ctx: HudCtx }) {
+export function Rail({ ctx }: { ctx: HudCtx }) {
   const { list, live } = items(ctx)
   const cols = Math.max(1, list.length)
   const span = ((cols - 1) / cols) * 100
@@ -113,7 +113,7 @@ function Rail({ ctx }: { ctx: HudCtx }) {
 
 // ---------------------------------------------------------------- C side index
 
-function SideIndex({ ctx }: { ctx: HudCtx }) {
+export function SideIndex({ ctx }: { ctx: HudCtx }) {
   const { list, live } = items(ctx)
   return (
     <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', gap: 16, width: 200, paddingLeft: 20, boxSizing: 'border-box', ...MONO11 }}>
@@ -150,7 +150,7 @@ const RING_POS: [number, number][] = [
   [28, 100],
 ]
 
-function StepRing({ ctx }: { ctx: HudCtx }) {
+export function StepRing({ ctx }: { ctx: HudCtx }) {
   const { list, live } = items(ctx)
   const n = Math.max(1, list.length)
   const pos = (i: number): [number, number] => {
@@ -188,45 +188,3 @@ function StepRing({ ctx }: { ctx: HudCtx }) {
     </div>
   )
 }
-
-export const STEPS_MODULES: HudModule[] = [
-  {
-    family: 'steps',
-    id: 'v1',
-    label: 'index bar',
-    desc: 'The pill slides in 350 ms with ease-out. Done steps stay ink, later steps grey.',
-    slot: 'top',
-    interactive: true,
-    render: (ctx) => <IndexBar ctx={ctx} />,
-  },
-  {
-    family: 'steps',
-    id: 'v2',
-    label: 'rail with nodes',
-    desc: 'Progress line grows in 500 ms. The live node pings every 1.8 s.',
-    slot: 'top',
-    interactive: true,
-    render: (ctx) => <Rail ctx={ctx} />,
-  },
-  {
-    family: 'steps',
-    id: 'v3',
-    label: 'side index',
-    desc: 'The position bar moves in 300 ms. Fits a narrow left edge.',
-    slot: 'left',
-    interactive: true,
-    render: (ctx) => <SideIndex ctx={ctx} />,
-  },
-  {
-    family: 'steps',
-    id: 'v4',
-    label: 'step ring',
-    desc: 'Echoes the dials. The needle turns in 450 ms.',
-    slot: 'tr',
-    interactive: true,
-    render: (ctx) => <StepRing ctx={ctx} />,
-  },
-]
-
-/** The default steps variant: v2, B · rail with nodes. */
-export const STEPS_DEFAULT = 'v2'

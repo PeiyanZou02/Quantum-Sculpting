@@ -7,7 +7,7 @@ import { useStore } from '../store'
 import { usePresent } from '../present'
 import { IconButton } from '../qs/Icon'
 import { isRecording, screenshot, toggleRecording } from './capture'
-import { PRESENT_TOOLS } from './PresentPanel'
+import { PRESENT_TOOLS } from './presentTools'
 
 export function PresentChrome() {
   const { shots, shot } = usePresent()

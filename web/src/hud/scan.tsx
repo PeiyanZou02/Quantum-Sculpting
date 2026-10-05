@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { PointerEvent as RPointerEvent } from 'react'
 import type { Axis } from '../qs/grid'
-import type { HudCtx, HudModule } from './types'
+import type { HudCtx } from './types'
 import './lab.css'
 
 type V2 = [number, number]
@@ -16,7 +16,7 @@ const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v
 // ---------------------------------------------------------------- v1 sweep
 
 /** A 3.2 s pass across the view each time ctx.busy turns on. */
-function Sweep({ ctx }: { ctx: HudCtx }) {
+export function Sweep({ ctx }: { ctx: HudCtx }) {
   const [pass, setPass] = useState(0)
   const [on, setOn] = useState(false)
   const was = useRef(false)
@@ -60,7 +60,7 @@ const OY = 132
 const U32 = 2.9
 
 /** The QSlice cabinet cube with its plane and index tab, driven by ctx.slice / ctx.n. Drag to move. */
-function PlaneIndex({ ctx }: { ctx: HudCtx }) {
+export function PlaneIndex({ ctx }: { ctx: HudCtx }) {
   const N = Math.max(1, ctx.n)
   const ax: Axis = ctx.slice.axis
   const k = clamp(Math.round(ctx.slice.index), 0, N - 1)
@@ -197,7 +197,7 @@ function PlaneIndex({ ctx }: { ctx: HudCtx }) {
 const ROW = 7 // px per stroke row (1px stroke + gap)
 
 /** One stroke per layer group, top = highest layer; the current one is longer and labelled. Click or drag to set the slice. */
-function LayerStack({ ctx }: { ctx: HudCtx }) {
+export function LayerStack({ ctx }: { ctx: HudCtx }) {
   const N = Math.max(1, ctx.n)
   const g = Math.max(1, Math.ceil(N / 32)) // layers per stroke
   const G = Math.ceil(N / g)
@@ -281,7 +281,7 @@ function LayerStack({ ctx }: { ctx: HudCtx }) {
 // ---------------------------------------------------------------- v4 marching
 
 /** Dashed marching rectangle around the object while the grid is being recomputed. */
-function Marching({ ctx }: { ctx: HudCtx }) {
+export function Marching({ ctx }: { ctx: HudCtx }) {
   if (!ctx.busy || !ctx.rect) return null
   const pad = 10
   const { l, r, t, b } = ctx.rect
@@ -298,40 +298,3 @@ function Marching({ ctx }: { ctx: HudCtx }) {
     </svg>
   )
 }
-
-export const SCAN_MODULES: HudModule[] = [
-  {
-    family: 'scan',
-    id: 'v1',
-    label: 'sweep',
-    desc: '3.2 s pass while a slice loads.',
-    slot: 'object',
-    render: (ctx) => <Sweep ctx={ctx} />,
-  },
-  {
-    family: 'scan',
-    id: 'v2',
-    label: 'plane + index',
-    desc: 'Drag to move the plane; hover previews a layer.',
-    slot: 'br',
-    interactive: true,
-    render: (ctx) => <PlaneIndex ctx={ctx} />,
-  },
-  {
-    family: 'scan',
-    id: 'v3',
-    label: 'layer stack',
-    desc: 'For printing and the slice index.',
-    slot: 'right',
-    interactive: true,
-    render: (ctx) => <LayerStack ctx={ctx} />,
-  },
-  {
-    family: 'scan',
-    id: 'v4',
-    label: 'marching',
-    desc: 'Region being recomputed.',
-    slot: 'object',
-    render: (ctx) => <Marching ctx={ctx} />,
-  },
-]

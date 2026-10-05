@@ -2,7 +2,7 @@
 // Stage writes these as it renders and calls `bump()` when pins change.
 import { useSyncExternalStore } from 'react'
 import type { Engine } from './view/engine'
-import type { ProbeController } from './qs/QProbe'
+import type { ProbeController } from './qs/useProbe'
 
 export const live: {
   engine?: Engine

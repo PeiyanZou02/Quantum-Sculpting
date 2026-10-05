@@ -1,6 +1,6 @@
 // Metadata blocks in the lab style: "HISTORY — BASE … / TYPE …", "SCENE — SAMPLES …, SEED …, MODEL …".
 // Intrinsically sized; the composer puts them in the tl / tr slots.
-import type { HudCtx, HudModule } from './types'
+import type { HudCtx } from './types'
 import './lab.css'
 
 type Row = [string, string, boolean?] // key, value, dim
@@ -80,55 +80,14 @@ function quantumRows(c: HudCtx): Row[] {
   ]
 }
 
-const History = ({ ctx }: { ctx: HudCtx }) => <Block title="History" tag={ctx.model ? 'base' : undefined} rows={historyRows(ctx)} />
-const Scene = ({ ctx }: { ctx: HudCtx }) => <Block title="Scene" rows={sceneRows(ctx)} />
-const Quantum = ({ ctx }: { ctx: HudCtx }) => <Block title="Quantum" tag={modeName(ctx.q.mode).toLowerCase()} rows={quantumRows(ctx)} />
+export const History = ({ ctx }: { ctx: HudCtx }) => <Block title="History" tag={ctx.model ? 'base' : undefined} rows={historyRows(ctx)} />
+export const Scene = ({ ctx }: { ctx: HudCtx }) => <Block title="Scene" rows={sceneRows(ctx)} />
+export const Quantum = ({ ctx }: { ctx: HudCtx }) => <Block title="Quantum" tag={modeName(ctx.q.mode).toLowerCase()} rows={quantumRows(ctx)} />
 
 /** History and scene side by side (v3), for one corner slot. */
-const Both = ({ ctx }: { ctx: HudCtx }) => (
+export const Both = ({ ctx }: { ctx: HudCtx }) => (
   <div className="qs-lab-meta-pair">
     <History ctx={ctx} />
     <Scene ctx={ctx} />
   </div>
 )
-
-export const META_MODULES: HudModule[] = [
-  {
-    family: 'meta',
-    id: 'v1',
-    label: 'history',
-    desc: 'Where this result came from: the model file, the grid and the run.',
-    slot: 'tl',
-    render: (ctx) => <History ctx={ctx} />,
-  },
-  {
-    family: 'meta',
-    id: 'v2',
-    label: 'scene',
-    desc: 'How it was computed: samples, seed, engine, solid cells and level.',
-    slot: 'tr',
-    render: (ctx) => <Scene ctx={ctx} />,
-  },
-  {
-    family: 'meta',
-    id: 'v3',
-    label: 'both',
-    desc: 'History and scene together in one corner.',
-    slot: 'tl',
-    render: (ctx) => <Both ctx={ctx} />,
-  },
-  {
-    family: 'meta',
-    id: 'v4',
-    label: 'quantum',
-    desc: 'The quantum settings: qubits per axis, strength, reach, style and axes.',
-    slot: 'tr',
-    render: (ctx) => <Quantum ctx={ctx} />,
-  },
-]
-
-/** v3 split across both corners, for a composer that can place two blocks for one variant. */
-export const META_SPLIT: HudModule[] = [
-  { ...META_MODULES[0], id: 'v3-tl' },
-  { ...META_MODULES[1], id: 'v3-tr' },
-]

@@ -1,8 +1,8 @@
 // The four stages side by side, each rendered live from the same camera: the original mesh, the
 // input voxels, the quantum result and the surface. Refreshes shortly after the camera settles
 // or the data changes, so it costs nothing while you orbit.
-import { useEffect, useRef, useState } from 'react'
-import type { HudCtx, HudModule } from './types'
+import { useEffect, useEffectEvent, useState } from 'react'
+import type { HudCtx } from './types'
 import './cards.css'
 
 type L = 'model' | 'voxels' | 'processed' | 'result'
@@ -11,16 +11,15 @@ const ALL: { id: L; n: string; t: string }[] = [
   { id: 'processed', n: '03', t: 'Quantum' }, { id: 'result', n: '04', t: 'Mesh' },
 ]
 
-function Stages({ ctx, which, w, h, dir }: { ctx: HudCtx; which: L[]; w: number; h: number; dir: 'row' | 'column' }) {
+export function Stages({ ctx, which, w, h, dir }: { ctx: HudCtx; which: L[]; w: number; h: number; dir: 'row' | 'column' }) {
   const [imgs, setImgs] = useState<Partial<Record<string, string>>>({})
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const key = `${ctx.tick}|${ctx.grid?.grid_id}|${ctx.proc?.proc_id}|${ctx.report?.faces}|${ctx.model?.model_id}|${ctx.level}`
+  // reads the latest ctx when it fires; only `key` (camera or data) restarts the wait
+  const refresh = useEffectEvent(() => { if (ctx.thumbs) setImgs(ctx.thumbs(which, w, h)) })
   useEffect(() => {
-    if (!ctx.thumbs) return
-    if (timer.current) clearTimeout(timer.current)
-    timer.current = setTimeout(() => setImgs(ctx.thumbs!(which, w, h)), 260)
-    return () => { if (timer.current) clearTimeout(timer.current) }
-  }, [key]) // eslint-disable-line react-hooks/exhaustive-deps
+    const t = setTimeout(refresh, 260)
+    return () => clearTimeout(t)
+  }, [key])
   const items = ALL.filter((a) => which.includes(a.id))
   return (
     <div className={'hud-stages hud-stages--' + dir}>
@@ -36,10 +35,3 @@ function Stages({ ctx, which, w, h, dir }: { ctx: HudCtx; which: L[]; w: number;
     </div>
   )
 }
-
-export const STAGES_MODULES: HudModule[] = [
-  { family: 'stages', id: 'v1', label: 'four stages', desc: 'Model, voxels, quantum and mesh in a row', slot: 'bottom', render: (c) => <Stages ctx={c} which={['model', 'voxels', 'processed', 'result']} w={132} h={96} dir="row" /> },
-  { family: 'stages', id: 'v2', label: 'column', desc: 'The four stages down the side', slot: 'left', render: (c) => <Stages ctx={c} which={['model', 'voxels', 'processed', 'result']} w={120} h={86} dir="column" /> },
-  { family: 'stages', id: 'v3', label: 'before / after', desc: 'The original mesh beside the sculpted surface', slot: 'bottom', render: (c) => <Stages ctx={c} which={['model', 'result']} w={180} h={130} dir="row" /> },
-  { family: 'stages', id: 'v4', label: 'input / quantum', desc: 'The voxel grid beside the quantum result', slot: 'bottom', render: (c) => <Stages ctx={c} which={['voxels', 'processed']} w={180} h={130} dir="row" /> },
-]

@@ -1,34 +1,20 @@
 // Camera, abstracted (QLMarks4): the view camera as a diagram rather than an object: where it
 // stands, what it sees and how it sits against the grid. Ink is the camera; grey is context.
 // Small corner diagrams, live from ctx.cam.
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import type { ReactNode } from 'react'
-import type { HudCtx, HudModule } from './types'
+import type { HudCtx } from './types'
+import { useCamTrail } from './useCamTrail'
 import './orbit.css'
 
 const RAD = Math.PI / 180
 const wrap360 = (v: number) => ((v % 360) + 360) % 360
-const dArc = (a: number, b: number) => ((((b - a) % 360) + 540) % 360) - 180
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v))
 const n1 = (v: number) => v.toFixed(1)
 const a3 = (v: number) => String(Math.round(wrap360(v)) % 360).padStart(3, '0')
 const fA = (v: number) => a3(v) + '°'
 const fE = (v: number) => Math.round(v) + '°'
 const cross = (x: number, y: number, r = 8) => `M${n1(x - r)} ${n1(y)}H${n1(x + r)}M${n1(x)} ${n1(y - r)}V${n1(y + r)}`
-
-/** Recent camera positions (az, el), newest last; a new point is kept once the camera moves ≥ 2°. */
-export function useCamTrail(tick: number, az: number, el: number, max = 24): [number, number][] {
-  const [trail, setTrail] = useState<[number, number][]>([])
-  useEffect(() => {
-    setTrail((t) => {
-      const l = t[t.length - 1]
-      if (l && Math.abs(dArc(l[0], az)) < 2 && Math.abs(l[1] - el) < 2) return t
-      const n: [number, number][] = [...t, [wrap360(az), el]]
-      return n.length > max ? n.slice(n.length - max) : n
-    })
-  }, [tick, az, el, max])
-  return trail
-}
 
 /** Corner card: small-caps title, a mono readout, then the diagram. */
 export function Card({ title, value, w = 220, h = 150, children, overflow = false }: { title: string; value: string; w?: number; h?: number; children: ReactNode; overflow?: boolean }) {
@@ -47,7 +33,7 @@ export function Card({ title, value, w = 220, h = 150, children, overflow = fals
 
 // C1 · viewpoint: eye, view cone and target ---------------------------------------------------
 
-function Viewpoint({ ctx }: { ctx: HudCtx }) {
+export function Viewpoint({ ctx }: { ctx: HudCtx }) {
   const { el, dist, fov } = ctx.cam
   const T = [176, 78] as const
   const s = Math.sin(el * RAD)
@@ -79,7 +65,7 @@ function Viewpoint({ ctx }: { ctx: HudCtx }) {
 
 // C2 · frustum plan: top view; grid bounds dashed --------------------------------------------
 
-function FrustumPlan({ ctx }: { ctx: HudCtx }) {
+export function FrustumPlan({ ctx }: { ctx: HudCtx }) {
   const { az, el, dist, fov } = ctx.cam
   const cx = 110
   const cy = 75
@@ -136,7 +122,7 @@ const RATIOS: [number, string][] = [
   [21 / 9, '21:9'],
 ]
 
-function Viewport({ ctx }: { ctx: HudCtx }) {
+export function Viewport({ ctx }: { ctx: HudCtx }) {
   const a = ctx.h > 0 ? ctx.w / ctx.h : 1.6
   let fw = 200
   let fh = fw / a
@@ -192,7 +178,7 @@ const CH = 100
 const ax = (az: number) => CX0 + (wrap360(az) / 360) * CW
 const ey = (el: number) => CY0 + CH / 2 - (clamp(el, -90, 90) / 90) * (CH / 2)
 
-function AzElChart({ ctx }: { ctx: HudCtx }) {
+export function AzElChart({ ctx }: { ctx: HudCtx }) {
   const { az, el } = ctx.cam
   const trail = useCamTrail(ctx.tick, az, el)
   const [hot, setHot] = useState(-1)
@@ -250,7 +236,7 @@ function AzElChart({ ctx }: { ctx: HudCtx }) {
 
 // C5 · three views: camera direction in plan and elevation -----------------------------------
 
-function ThreeViews({ ctx }: { ctx: HudCtx }) {
+export function ThreeViews({ ctx }: { ctx: HudCtx }) {
   const { az, el } = ctx.cam
   const b = ctx.box
   const ext = b ? [b.max[0] - b.min[0], b.max[1] - b.min[1], b.max[2] - b.min[2]] : [ctx.n, ctx.n, ctx.n]
@@ -297,7 +283,7 @@ function ThreeViews({ ctx }: { ctx: HudCtx }) {
 
 // C6 · look-at: distance and up axis ---------------------------------------------------------
 
-function LookAt({ ctx }: { ctx: HudCtx }) {
+export function LookAt({ ctx }: { ctx: HudCtx }) {
   const { el, dist } = ctx.cam
   const s = Math.sin(el * RAD)
   const c = Math.cos(el * RAD)
@@ -331,20 +317,3 @@ function LookAt({ ctx }: { ctx: HudCtx }) {
     </Card>
   )
 }
-
-export const CAMERA_MODULES: HudModule[] = [
-  { family: 'camera', id: 'c1', label: 'viewpoint', desc: 'Eye, view cone and target', slot: 'tr', render: (ctx) => <Viewpoint ctx={ctx} /> },
-  { family: 'camera', id: 'c2', label: 'frustum plan', desc: 'Top view; grid bounds dashed', slot: 'tr', render: (ctx) => <FrustumPlan ctx={ctx} /> },
-  { family: 'camera', id: 'c3', label: 'viewport', desc: 'Thirds, safe area, centre', slot: 'tr', render: (ctx) => <Viewport ctx={ctx} /> },
-  {
-    family: 'camera',
-    id: 'c4',
-    label: 'az / el chart',
-    desc: 'Sphere unwrapped, presets as rings',
-    slot: 'tr',
-    interactive: true,
-    render: (ctx) => <AzElChart ctx={ctx} />,
-  },
-  { family: 'camera', id: 'c5', label: 'three views', desc: 'Camera direction in plan and elevation', slot: 'tr', render: (ctx) => <ThreeViews ctx={ctx} /> },
-  { family: 'camera', id: 'c6', label: 'look-at', desc: 'Distance and up axis', slot: 'tr', render: (ctx) => <LookAt ctx={ctx} /> },
-]

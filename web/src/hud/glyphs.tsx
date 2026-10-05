@@ -6,7 +6,7 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import type { CSSProperties, PointerEvent as RPointerEvent, ReactNode } from 'react'
 import type { GridInfo } from '../api'
-import type { FamilyDef, HudCtx, Vec3 } from './types'
+import type { HudCtx, Vec3 } from './types'
 import './glyphs.css'
 
 // ── maths and small helpers ─────────────────────────────────────────────────────────────────────
@@ -196,7 +196,7 @@ function pathTitle(id: string | null, mode: string) {
     : <Word c={2}>{mode === 'emulator' ? 'emulation' : mode === 'nations' ? 'evolve' : mode}</Word>
 }
 
-function BackendPath({ ctx }: { ctx: HudCtx }) {
+export function BackendPath({ ctx }: { ctx: HudCtx }) {
   const net = useNet(ctx.log)
   const { hops, id, mode, cap } = backendPath(ctx, net)
   return (
@@ -222,7 +222,7 @@ function BackendPath({ ctx }: { ctx: HudCtx }) {
   )
 }
 
-function BackendStack({ ctx }: { ctx: HudCtx }) {
+export function BackendStack({ ctx }: { ctx: HudCtx }) {
   const net = useNet(ctx.log)
   const { hops, id, mode } = backendPath(ctx, net)
   return (
@@ -250,7 +250,7 @@ function BackendStack({ ctx }: { ctx: HudCtx }) {
 
 // ── Register ────────────────────────────────────────────────────────────────────────────────────
 
-function Register({ ctx }: { ctx: HudCtx }) {
+export function Register({ ctx }: { ctx: HudCtx }) {
   const pr = probed(ctx)
   const n = Math.max(2, ctx.grid?.n ?? ctx.n)
   const shape = tileOf(ctx)
@@ -300,7 +300,7 @@ function Register({ ctx }: { ctx: HudCtx }) {
 
 // ── Rotation ────────────────────────────────────────────────────────────────────────────────────
 
-function Rotation({ ctx }: { ctx: HudCtx }) {
+export function Rotation({ ctx }: { ctx: HudCtx }) {
   const s = Math.max(0, ctx.q.strength)
   const b = Math.max(...tileOf(ctx).map(bitsFor))
   const P = (t: number, r = 65) => [85 - r * Math.cos(t), 92 - r * Math.sin(t)] as const
@@ -345,7 +345,7 @@ const SHOT_CURVE = Array.from({ length: 49 }, (_, i) => {
   return `${shotX(l).toFixed(1)},${shotY(shotErr(2 ** l)).toFixed(1)}`
 }).join(' ')
 
-function Shots({ ctx }: { ctx: HudCtx }) {
+export function Shots({ ctx }: { ctx: HudCtx }) {
   const shots = ctx.q.shots && ctx.q.shots > 0 ? ctx.q.shots : null
   const W = SHOT_W, xs = shotX, ys = shotY, err = shotErr, conv = SHOT_CURVE
   const l = shots ? clamp(Math.log2(shots), SHOT_LO, SHOT_HI) : null
@@ -404,7 +404,7 @@ function draw(data: Float32Array, count: number, seed: number): number[] {
   return out
 }
 
-function HearRun({ ctx }: { ctx: HudCtx }) {
+export function HearRun({ ctx }: { ctx: HudCtx }) {
   const g = ctx.data.proc
   const [sx, sy, sz] = tileOf(ctx)
   const lanes = bitsFor(sx) + bitsFor(sy) + bitsFor(sz)
@@ -483,7 +483,7 @@ function HearRun({ ctx }: { ctx: HudCtx }) {
 // ── Processing ──────────────────────────────────────────────────────────────────────────────────
 
 const BELL = 'M2 30C14 30 16 4 26 4S38 30 50 30'
-function Processing({ ctx }: { ctx: HudCtx }) {
+export function Processing({ ctx }: { ctx: HudCtx }) {
   const run = ctx.job && ctx.job.status === 'running' ? ctx.job : null
   const mode = run ? 'atlas' : ctx.proc?.mode ?? ctx.q.mode
   const engine = ctx.atlasJobs.find((j) => j.engine)?.engine ?? 'blur-core-v1'
@@ -561,7 +561,7 @@ function Ruler({ k, v }: { k: string; v: number }) {
   )
 }
 
-function BlurSettings({ ctx }: { ctx: HudCtx }) {
+export function BlurSettings({ ctx }: { ctx: HudCtx }) {
   const st = styleOf(ctx.q.style)
   const axes = ctx.q.axes.map((a) => AX[a]).filter(Boolean).join(' ')
   return (
@@ -581,7 +581,7 @@ function BlurSettings({ ctx }: { ctx: HudCtx }) {
   )
 }
 
-function QubitTable({ ctx }: { ctx: HudCtx }) {
+export function QubitTable({ ctx }: { ctx: HudCtx }) {
   const st = styleOf(ctx.q.style)
   const b = Math.max(...tileOf(ctx).map(bitsFor))
   const rows = Array.from({ length: b }, (_, k) => {
@@ -639,7 +639,7 @@ function useLine(ctx: HudCtx) {
   }, [g, len, cx, cy, cz, search])
 }
 
-function GrayPairing({ ctx }: { ctx: HudCtx }) {
+export function GrayPairing({ ctx }: { ctx: HudCtx }) {
   const line = useLine(ctx)
   const len = line?.len ?? Math.min(tileOf(ctx)[0], 32)
   const b = bitsFor(len)
@@ -704,7 +704,7 @@ function GrayPairing({ ctx }: { ctx: HudCtx }) {
   )
 }
 
-function HowItWorks({ ctx }: { ctx: HudCtx }) {
+export function HowItWorks({ ctx }: { ctx: HudCtx }) {
   const n = Math.max(2, ctx.grid?.n ?? ctx.n)
   const b = Math.max(...tileOf(ctx).map(bitsFor))
   const s = ctx.q.strength, r = ctx.q.reach
@@ -745,7 +745,7 @@ const bump = (x: number, y: number, w: number, a: number) => {
   return `M${f(x)} ${f(y)}C${f(x + 0.265 * w)} ${f(y)} ${f(x + 0.32 * w)} ${f(y - a)} ${f(x + 0.5 * w)} ${f(y - a)}S${f(x + 0.735 * w)} ${f(y)} ${f(x + w)} ${f(y)}`
 }
 
-function PulseExplore({ ctx }: { ctx: HudCtx }) {
+export function PulseExplore({ ctx }: { ctx: HudCtx }) {
   const st = styleOf(ctx.q.style)
   const b = Math.max(...tileOf(ctx).map(bitsFor))
   const W = 300, L0 = 24, R0 = 268, track = R0 - L0, pitch = 22, top = 16, pw = 22
@@ -796,7 +796,7 @@ function PulseExplore({ ctx }: { ctx: HudCtx }) {
   )
 }
 
-function PulseDrag({ ctx }: { ctx: HudCtx }) {
+export function PulseDrag({ ctx }: { ctx: HudCtx }) {
   const st = styleOf(ctx.q.style)
   const b = Math.max(...tileOf(ctx).map(bitsFor))
   const { strength, reach } = ctx.q
@@ -868,7 +868,7 @@ function PulseDrag({ ctx }: { ctx: HudCtx }) {
 // ── Atlas usage ─────────────────────────────────────────────────────────────────────────────────
 
 const SUBMIT_RE = /^Submitted .+ to Atlas · (\d+) tiles?/
-function UsageSession({ ctx }: { ctx: HudCtx }) {
+export function UsageSession({ ctx }: { ctx: HudCtx }) {
   const { sent, cache } = useMemo(() => {
     const t0 = Math.min(T0, ctx.log[0]?.t ?? T0)
     const rows = ctx.atlasJobs.filter((j) => j.mine !== false && Date.parse(j.created_at) >= t0).length
@@ -904,7 +904,7 @@ function UsageSession({ ctx }: { ctx: HudCtx }) {
 }
 
 const SIZES = [16, 32, 64, 128, 256]
-function ResultSize({ ctx }: { ctx: HudCtx }) {
+export function ResultSize({ ctx }: { ctx: HudCtx }) {
   const cur = ctx.grid?.n ?? null
   const mode = ctx.q.tiling
   const list = cur && !SIZES.includes(cur) ? [...SIZES, cur].sort((a, b) => a - b) : SIZES
@@ -940,7 +940,7 @@ function ResultSize({ ctx }: { ctx: HudCtx }) {
   )
 }
 
-function RequestRate({ ctx }: { ctx: HudCtx }) {
+export function RequestRate({ ctx }: { ctx: HudCtx }) {
   const net = useNet(ctx.log)
   const now = useNow(1000)
   const [phase] = useState(() => Date.now() % 60000) // the hand follows the wall clock: up is :00
@@ -972,64 +972,3 @@ function RequestRate({ ctx }: { ctx: HudCtx }) {
     </div>
   )
 }
-
-// ── families ────────────────────────────────────────────────────────────────────────────────────
-
-export const GLYPH_FAMILIES: FamilyDef[] = [
-  {
-    id: 'backend', title: 'Backend path', desc: 'The hops a job takes; the dashed line moves on the active hop',
-    modules: [
-      { family: 'backend', id: 'v1', label: 'path', desc: 'Browser to marching cubes, with this session\'s timings. Local runs skip the remote hops.', slot: 'bottom', render: (ctx) => <BackendPath ctx={ctx} /> },
-      { family: 'backend', id: 'v2', label: 'path, stacked', desc: 'The same hops as a column for a side edge.', slot: 'left', render: (ctx) => <BackendStack ctx={ctx} /> },
-    ],
-  },
-  {
-    id: 'register', title: 'Register', desc: 'The qubits of the probed cell',
-    modules: [
-      { family: 'register', id: 'v1', label: 'cell', desc: 'Each axis of the probed cell, Gray-coded onto its qubits; the 1-bits are filled.', slot: 'bl', render: (ctx) => <Register ctx={ctx} /> },
-    ],
-  },
-  {
-    id: 'rotation', title: 'Rotation', desc: 'Rx θ = strength · π on a half circle',
-    modules: [
-      { family: 'rotation', id: 'v1', label: 'rotation', desc: 'The turn of q0 on a half circle from 0 to π; ticks mark the higher qubits.', slot: 'br', render: (ctx) => <Rotation ctx={ctx} /> },
-    ],
-  },
-  {
-    id: 'shots', title: 'Shots and error', desc: 'Sampling error falls as 1/√shots',
-    modules: [
-      { family: 'shots', id: 'v1', label: 'shots and error', desc: 'Error falls as 1/√shots. Leave shots empty for exact.', slot: 'br', render: (ctx) => <Shots ctx={ctx} /> },
-      { family: 'shots', id: 'v2', label: 'hear the run', desc: 'Measured bitstrings as a piano roll: one note per qubit, one shot per sixteenth.', slot: 'bl', render: (ctx) => <HearRun ctx={ctx} /> },
-    ],
-  },
-  {
-    id: 'processing', title: 'Processing', desc: 'Which engine made the result',
-    modules: [
-      { family: 'processing', id: 'v1', label: 'engines', desc: 'Gaussian stand-in, local emulation or Atlas blur-core-v1; the one in use is ink.', slot: 'tr', render: (ctx) => <Processing ctx={ctx} /> },
-    ],
-  },
-  {
-    id: 'blur', title: 'How the blur works', desc: 'Strength, reach, style, and what each qubit mixes',
-    modules: [
-      { family: 'blur', id: 'v1', label: 'settings', desc: 'Strength, reach and style as they are set.', slot: 'tl', render: (ctx) => <BlurSettings ctx={ctx} /> },
-      { family: 'blur', id: 'v2', label: 'qubits', desc: 'Per qubit: weight, θ, the span it mixes within and the share it moves.', slot: 'tr', render: (ctx) => <QubitTable ctx={ctx} /> },
-      { family: 'blur', id: 'v3', label: 'gray pairing', desc: 'Which cells a qubit pairs on one row of the grid, and that row blurred alone.', slot: 'bottom', interactive: true, render: (ctx) => <GrayPairing ctx={ctx} /> },
-      { family: 'blur', id: 'v4', label: 'how it works', desc: 'Three steps in words, and the sums in and out: the blur moves value, it does not add any.', slot: 'right', render: (ctx) => <HowItWorks ctx={ctx} /> },
-    ],
-  },
-  {
-    id: 'pulse', title: 'Pulse schedule', desc: 'Rx and Ry rotations as drive pulses on the qubit lines',
-    modules: [
-      { family: 'pulse', id: 'v1', label: 'exploration', desc: 'How the rotations could map to drive pulses, with amplitude set by strength.', slot: 'br', render: (ctx) => <PulseExplore ctx={ctx} /> },
-      { family: 'pulse', id: 'v2', label: 'drag the playhead', desc: 'Pulse height is the angle. Drag the playhead to apply the gates one at a time.', slot: 'bottom', interactive: true, render: (ctx) => <PulseDrag ctx={ctx} /> },
-    ],
-  },
-  {
-    id: 'usage', title: 'Atlas usage', desc: 'Jobs this session, result size by grid, request rate',
-    modules: [
-      { family: 'usage', id: 'v1', label: 'this session', desc: 'Jobs sent and read from cache this session, against a budget.', slot: 'tr', render: (ctx) => <UsageSession ctx={ctx} /> },
-      { family: 'usage', id: 'v2', label: 'result size by grid', desc: 'Values per grid against the 2 MB line per job; larger grids are split into tiles.', slot: 'bl', render: (ctx) => <ResultSize ctx={ctx} /> },
-      { family: 'usage', id: 'v3', label: 'request rate', desc: 'Requests in the last 60 s around a clock; status polls every 2 s.', slot: 'tr', render: (ctx) => <RequestRate ctx={ctx} /> },
-    ],
-  },
-]

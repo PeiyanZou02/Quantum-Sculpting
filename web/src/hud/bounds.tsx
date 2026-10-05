@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
-import type { HudCtx, HudModule, Vec3 } from './types'
+import type { HudCtx, Vec3 } from './types'
 import './marks.css'
 
 /*
@@ -50,7 +50,7 @@ const mmText = (v: number) => (v >= 100 ? v.toFixed(0) : v.toFixed(v >= 10 ? 0 :
 const ARM = 0.06 // fraction of each edge
 const ARM_MIN = 7, ARM_MAX = 24 // px
 
-function Corners3D({ ctx }: { ctx: HudCtx }) {
+export function Corners3D({ ctx }: { ctx: HudCtx }) {
   const { box, project } = ctx
   const geo = useMemo(() => {
     if (!box) return null
@@ -90,7 +90,7 @@ function Corners3D({ ctx }: { ctx: HudCtx }) {
       front: corners.filter((_, i) => i !== far).map((c) => c.d).join(''),
       back: corners[far].d,
     }
-  }, [ctx.tick, ctx.w, ctx.h, box])
+  }, [box, project])
   if (!geo) return null
   return (
     <Hud ctx={ctx}>
@@ -102,7 +102,7 @@ function Corners3D({ ctx }: { ctx: HudCtx }) {
 
 /* ── v2 · extents ───────────────────────────────────────────────────────────── */
 
-function Extents({ ctx }: { ctx: HudCtx }) {
+export function Extents({ ctx }: { ctx: HudCtx }) {
   const { rect } = ctx
   const ext = extentsOf(ctx)
   if (!rect || !ext) return null
@@ -124,7 +124,7 @@ function Extents({ ctx }: { ctx: HudCtx }) {
 
 /* ── v3 · footprint ─────────────────────────────────────────────────────────── */
 
-function Footprint({ ctx }: { ctx: HudCtx }) {
+export function Footprint({ ctx }: { ctx: HudCtx }) {
   const { box, project } = ctx
   const ext = extentsOf(ctx)
   const geo = useMemo(() => {
@@ -145,7 +145,7 @@ function Footprint({ ctx }: { ctx: HudCtx }) {
       if (s[0] > right[0]) right = s
     }
     return { d, bot, top, right }
-  }, [ctx.tick, ctx.w, ctx.h, box])
+  }, [box, project])
   if (!geo || !ext) return null
   const { bot, top, right } = geo
   return (
@@ -161,7 +161,7 @@ function Footprint({ ctx }: { ctx: HudCtx }) {
 
 /* ── v4 · drop area ─────────────────────────────────────────────────────────── */
 
-function DropArea({ ctx }: { ctx: HudCtx }) {
+export function DropArea({ ctx }: { ctx: HudCtx }) {
   const { w, h, rect, model } = ctx
   if (model && rect) {
     // A model is in: the dashed corners close in on it once, then stay as context.
@@ -206,10 +206,3 @@ function DropArea({ ctx }: { ctx: HudCtx }) {
     </Hud>
   )
 }
-
-export const BOUNDS_MODULES: HudModule[] = [
-  { family: 'bounds', id: 'v1', label: 'corners in 3D', desc: 'Eight corners, no full wireframe', slot: 'object', render: (ctx) => <Corners3D ctx={ctx} /> },
-  { family: 'bounds', id: 'v2', label: 'extents', desc: 'Width and height at print size', slot: 'object', render: (ctx) => <Extents ctx={ctx} /> },
-  { family: 'bounds', id: 'v3', label: 'footprint', desc: 'Floor contact and height for Mesh', slot: 'object', render: (ctx) => <Footprint ctx={ctx} /> },
-  { family: 'bounds', id: 'v4', label: 'drop area', desc: 'Dashed corners and a floor, no box', slot: 'object', render: (ctx) => <DropArea ctx={ctx} /> },
-]

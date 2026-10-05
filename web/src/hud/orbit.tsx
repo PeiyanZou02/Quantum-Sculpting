@@ -7,10 +7,9 @@
 // shown in profile: on the elevation arc in the vertical plane square to the view (to the right of
 // the model), where the elevation reads at its true angle. The azimuth is marked on the floor ring
 // at the point nearest the viewer.
-/* oxlint-disable react-hooks/exhaustive-deps -- projected geometry is memoised by ctx.tick (and size, box); ctx.project is read inside */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { PointerEvent as RPointerEvent, ReactNode } from 'react'
-import type { HudCtx, HudModule, Vec3 } from './types'
+import type { HudCtx, Vec3 } from './types'
 import { QCam } from '../qs/QCam'
 import './orbit.css'
 
@@ -38,7 +37,6 @@ function frameOf(box: HudCtx['box']): Frame | null {
   const ext = Math.max(max[0] - min[0], max[1] - min[1], max[2] - min[2], 1)
   return { c: [(min[0] + max[0]) / 2, (min[1] + max[1]) / 2, min[2]], R: 0.75 * ext }
 }
-const boxKey = (b: HudCtx['box']) => (b ? b.min.join(',') + '|' + b.max.join(',') : '')
 
 /** Point on the horizontal ring at azimuth t (az 0 = −y, toward +x), scaled by k. */
 const ringPt = (f: Frame, t: number, k = 1, dz = 0): Vec3 => [
@@ -126,11 +124,10 @@ interface Drag {
   e0: number
 }
 
-function GimbalRing({ ctx }: { ctx: HudCtx }) {
+export function GimbalRing({ ctx }: { ctx: HudCtx }) {
   const [drag, setDrag] = useState<Drag | null>(null)
   const [hov, setHov] = useState(false)
   const { az, el } = ctx.cam
-  const bk = boxKey(ctx.box)
 
   const g = useMemo(() => {
     const f = frameOf(ctx.box)
@@ -163,7 +160,7 @@ function GimbalRing({ ctx }: { ctx: HudCtx }) {
       foot,
       ctr,
     }
-  }, [ctx.tick, ctx.w, ctx.h, bk, az, el])
+  }, [ctx.box, ctx.project, az, el])
 
   if (!g) return null
   const { node, ctr, foot, aL } = g
@@ -249,9 +246,8 @@ function GimbalRing({ ctx }: { ctx: HudCtx }) {
 const CAGE_LATS = [-60, -30, 0, 30, 60]
 const CAGE_MERS = [0, 30, 60, 90, 120, 150]
 
-function Cage({ ctx }: { ctx: HudCtx }) {
+export function Cage({ ctx }: { ctx: HudCtx }) {
   const { az, el } = ctx.cam
-  const bk = boxKey(ctx.box)
   const g = useMemo(() => {
     const box = ctx.box
     if (!box) return null
@@ -299,7 +295,7 @@ function Cage({ ctx }: { ctx: HudCtx }) {
       arc: pathOf(P, arc),
       node: P(sphPt(c, R, az + 90, el)),
     }
-  }, [ctx.tick, ctx.w, ctx.h, bk, az, el])
+  }, [ctx.box, ctx.project, az, el])
   if (!g) return null
   const { node } = g
   return (
@@ -325,9 +321,8 @@ function Cage({ ctx }: { ctx: HudCtx }) {
 
 const STATIONS = Array.from({ length: 12 }, (_, i) => i * 30)
 
-function Stations({ ctx }: { ctx: HudCtx }) {
+export function Stations({ ctx }: { ctx: HudCtx }) {
   const { az, el } = ctx.cam
-  const bk = boxKey(ctx.box)
   const [visited, setVisited] = useState(0)
   const [hot, setHot] = useState(-1)
 
@@ -342,9 +337,8 @@ function Stations({ ctx }: { ctx: HudCtx }) {
     }
   }
   const at = cur >= 0 && best < 4 ? cur : -1
-  useEffect(() => {
-    if (at >= 0) setVisited((m) => m | (1 << at))
-  }, [at])
+  // mark the station visited as soon as the camera sits on it
+  if (at >= 0 && !((visited >> at) & 1)) setVisited(visited | (1 << at))
 
   const g = useMemo(() => {
     const f = frameOf(ctx.box)
@@ -356,7 +350,7 @@ function Stations({ ctx }: { ctx: HudCtx }) {
       lab: P(ringPt(f, az, 1.2)),
       ctr: P(f.c),
     }
-  }, [ctx.tick, ctx.w, ctx.h, bk, az])
+  }, [ctx.box, ctx.project, az])
   if (!g) return null
 
   const go = (i: number) => {
@@ -414,6 +408,7 @@ function Stations({ ctx }: { ctx: HudCtx }) {
 function useMoving(tick: number, az: number, ms = 800) {
   const [moving, setMoving] = useState(false)
   const [rate, setRate] = useState(0)
+  const [seen, setSeen] = useState(false)
   const last = useRef<{ tick: number; az: number; t: number } | null>(null)
   const timer = useRef(0)
   useEffect(() => {
@@ -427,6 +422,7 @@ function useMoving(tick: number, az: number, ms = 800) {
       setRate((r) => r * 0.7 + v * 0.3)
     }
     setMoving(true)
+    setSeen(true)
     window.clearTimeout(timer.current)
     timer.current = window.setTimeout(() => {
       setMoving(false)
@@ -434,15 +430,15 @@ function useMoving(tick: number, az: number, ms = 800) {
     }, ms)
   }, [tick, az, ms])
   useEffect(() => () => window.clearTimeout(timer.current), [])
-  return { moving, rate }
+  return { moving, rate, seen }
 }
 
-function LiveRing({ ctx }: { ctx: HudCtx }) {
+export function LiveRing({ ctx }: { ctx: HudCtx }) {
   const { az, el } = ctx.cam
-  const bk = boxKey(ctx.box)
-  const { moving, rate } = useMoving(ctx.tick, az)
-  const g = useMemo(() => {
-    if (!moving) return null
+  const { moving, rate, seen } = useMoving(ctx.tick, az)
+  // drawn from the first move on; while it fades out the camera is still, so this is the last drawing
+  const d = useMemo(() => {
+    if (!seen) return null
     const f = frameOf(ctx.box)
     if (!f) return null
     const P = ctx.project
@@ -452,11 +448,7 @@ function LiveRing({ ctx }: { ctx: HudCtx }) {
       node: P(ringPt(f, az)),
       ctr: P(f.c),
     }
-  }, [moving, ctx.tick, ctx.w, ctx.h, bk, az])
-  // keep the last drawing while fading out
-  const keep = useRef(g)
-  if (g) keep.current = g
-  const d = g ?? keep.current
+  }, [seen, ctx.box, ctx.project, az])
   if (!d) return null
   const r = Math.round(rate)
   const label = r >= 1 ? `orbiting · ${r}°/s` : `${fA(az)} / ${fE(el)}`
@@ -485,7 +477,7 @@ function LiveRing({ ctx }: { ctx: HudCtx }) {
 // ---------------------------------------------------------------------------------------------
 // v5 · gimbal states: the satin QCam bound to the live camera (rest, hover, drag, snap)
 
-function GimbalStates({ ctx }: { ctx: HudCtx }) {
+export function GimbalStates({ ctx }: { ctx: HudCtx }) {
   const { az, el, dist } = ctx.cam
   return (
     <div
@@ -497,49 +489,3 @@ function GimbalStates({ ctx }: { ctx: HudCtx }) {
     </div>
   )
 }
-
-export const ORBIT_MODULES: HudModule[] = [
-  {
-    family: 'orbit',
-    id: 'v1',
-    label: 'gimbal',
-    desc: 'Azimuth ring, elevation arc, camera node',
-    slot: 'object',
-    interactive: true,
-    render: (ctx) => <GimbalRing ctx={ctx} />,
-  },
-  {
-    family: 'orbit',
-    id: 'v2',
-    label: 'cage',
-    desc: 'Latitude and meridians, for free orbit',
-    slot: 'object',
-    render: (ctx) => <Cage ctx={ctx} />,
-  },
-  {
-    family: 'orbit',
-    id: 'v3',
-    label: 'stations',
-    desc: 'Twelve fixed views, visited ones filled',
-    slot: 'object',
-    interactive: true,
-    render: (ctx) => <Stations ctx={ctx} />,
-  },
-  {
-    family: 'orbit',
-    id: 'v4',
-    label: 'live',
-    desc: 'Shown only while the view is moving',
-    slot: 'object',
-    render: (ctx) => <LiveRing ctx={ctx} />,
-  },
-  {
-    family: 'orbit',
-    id: 'v5',
-    label: 'gimbal states',
-    desc: 'Scales appear only while the hand is on it',
-    slot: 'bl',
-    interactive: true,
-    render: (ctx) => <GimbalStates ctx={ctx} />,
-  },
-]

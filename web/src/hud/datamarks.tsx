@@ -6,7 +6,8 @@
 import { Component, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, ErrorInfo, ReactNode, PointerEvent as RPointerEvent } from 'react'
 import { histogram, section, type Axis } from '../qs/grid'
-import type { FamilyDef, HudCtx, HudModule } from './types'
+import type { HudCtx } from './types'
+import { useNow } from '../useNow'
 import './datamarks.css'
 
 type G = { n: number; data: Float32Array }
@@ -50,10 +51,11 @@ function cached<T>(owner: object, key: string, fn: () => T): T {
 }
 
 /** A family's piece keeps rendering even if one computation trips over odd data. */
-class Safe extends Component<{ children: ReactNode; data: unknown }, { err: boolean }> {
-  state = { err: false }
+export class Safe extends Component<{ children: ReactNode; data: unknown }, { err: boolean; data: unknown }> {
+  state = { err: false, data: this.props.data }
   static getDerivedStateFromError() { return { err: true } }
-  componentDidUpdate(prev: { data: unknown }) { if (this.state.err && prev.data !== this.props.data) this.setState({ err: false }) }
+  // new data gets a fresh try
+  static getDerivedStateFromProps(p: { data: unknown }, s: { data: unknown }) { return p.data !== s.data ? { err: false, data: p.data } : null }
   componentDidCatch(e: Error, info: ErrorInfo) { console.warn('datamarks:', e.message, info.componentStack) }
   render() { return this.state.err ? <span className="qdm-empty">Nothing to show here.</span> : this.props.children }
 }
@@ -278,7 +280,7 @@ function useKept(ctx: HudCtx) {
   return { suf, solid, kept, pct: Math.round((kept / solid) * 100) }
 }
 
-function Readout({ ctx }: { ctx: HudCtx }) {
+export function Readout({ ctx }: { ctx: HudCtx }) {
   const L = ctx.level
   const lp = clamp((L - 0.05) / 0.9, 0, 1) * 100
   return (
@@ -296,7 +298,7 @@ function Readout({ ctx }: { ctx: HudCtx }) {
   )
 }
 
-function Kept({ ctx }: { ctx: HudCtx }) {
+export function Kept({ ctx }: { ctx: HudCtx }) {
   const k = useKept(ctx)
   if (!k) return <Box title="Kept volume" w={250}><Empty>No quantum result yet.</Empty></Box>
   return (
@@ -309,7 +311,7 @@ function Kept({ ctx }: { ctx: HudCtx }) {
   )
 }
 
-function Chip({ ctx }: { ctx: HudCtx }) {
+export function Chip({ ctx }: { ctx: HudCtx }) {
   const k = useKept(ctx)
   return (
     <span className="qdm-chip">
@@ -319,7 +321,7 @@ function Chip({ ctx }: { ctx: HudCtx }) {
   )
 }
 
-function LevelKept({ ctx }: { ctx: HudCtx }) {
+export function LevelKept({ ctx }: { ctx: HudCtx }) {
   const k = useKept(ctx)
   const W = 260
   const suf = k?.suf ?? null, solid = k?.solid ?? 0
@@ -353,7 +355,7 @@ function LevelKept({ ctx }: { ctx: HudCtx }) {
 
 // ── density ────────────────────────────────────────────────────────────────────────────────────
 
-function Density({ ctx }: { ctx: HudCtx }) {
+export function Density({ ctx }: { ctx: HudCtx }) {
   const g = ctx.data.proc
   const NB = 40, W = 360, H = 100, BASE = 16, TOP = 24
   const bins = useMemo(() => (g ? histogram(g, NB) : null), [g])
@@ -440,17 +442,6 @@ function requests(log: Log): Req[] {
   })
 }
 
-/** When a job is running, a clock that ticks so the elapsed time moves between polls. */
-function useNow(on: boolean) {
-  const [now, setNow] = useState(() => Date.now())
-  useEffect(() => {
-    if (!on) return
-    const iv = setInterval(() => setNow(Date.now()), 500)
-    return () => clearInterval(iv)
-  }, [on])
-  return on ? now : Date.now()
-}
-
 /** A value that follows its source at most every `ms` (first and last change always land), so heavy
  *  views keep up with a dragged level or a sweeping plane without recomputing on every frame. */
 function useThrottled<T>(value: T, ms: number): T {
@@ -466,18 +457,19 @@ function useThrottled<T>(value: T, ms: number): T {
   return out
 }
 
-function RunHeader({ ctx }: { ctx: HudCtx }) {
+export function RunHeader({ ctx }: { ctx: HudCtx }) {
   const job = ctx.job?.status === 'running' ? ctx.job : null
-  const now = useNow(!!job)
+  // when a job is running, a clock that ticks so the elapsed time moves between polls
+  const now = useNow(!!job, 500)
   // job.elapsed is from the last poll; carry it forward on the local clock
-  const polled = useRef<{ e: number; at: number } | null>(null)
-  if (job && polled.current?.e !== job.elapsed) polled.current = { e: job.elapsed, at: Date.now() }
+  const [polled, setPolled] = useState<{ e: number; at: number } | null>(null)
+  if (job && polled?.e !== job.elapsed) setPolled({ e: job.elapsed, at: now })
   const proc = ctx.proc
   if (!proc && !job) return <Box title="Runtime" w={300} right={<Live on={false} label="idle" />}><Empty>No quantum run yet.</Empty></Box>
   const run = job?.run ?? proc?.run ?? ctx.q.run
   const mode = job ? 'atlas' : proc?.mode
   const n = ctx.grid?.n ?? ctx.data.grid?.n ?? ctx.n
-  const elapsed = job ? job.elapsed + (polled.current ? (now - polled.current.at) / 1000 : 0) : proc?.seconds ?? NaN
+  const elapsed = job ? job.elapsed + (polled?.e === job.elapsed ? (now - polled.at) / 1000 : 0) : proc?.seconds ?? NaN
   const tiles = job ? { done: job.tiles_done, total: job.tiles_total, cached: job.tiles_cached, shape: job.tile_shape } : proc?.tiles
     ? { done: proc.tiles.jobs, total: proc.tiles.jobs, cached: proc.tiles.cached ?? (proc.cached ? proc.tiles.jobs : 0), shape: proc.tiles.shape ?? [n, n, n] }
     : { done: 1, total: 1, cached: proc?.cached ? 1 : 0, shape: [n, n, n] }
@@ -528,9 +520,9 @@ function stepOf(r: Req, ctx: HudCtx): string | null {
   return null
 }
 
-function Steps({ ctx }: { ctx: HudCtx }) {
+export function Steps({ ctx }: { ctx: HudCtx }) {
   const running = ctx.job?.status === 'running'
-  const now = useNow(running)
+  const now = useNow(running, 500)
   const reqs = requests(ctx.log)
   // consecutive requests of one step make one span
   const spans: { t: string; t0: number; t1: number }[] = []
@@ -579,7 +571,7 @@ function Steps({ ctx }: { ctx: HudCtx }) {
   )
 }
 
-function LogList({ ctx }: { ctx: HudCtx }) {
+export function LogList({ ctx }: { ctx: HudCtx }) {
   const lines = ctx.log.slice(-7)
   if (!lines.length) return <Box title="Log" w={300}><Empty>Nothing logged yet.</Empty></Box>
   return (
@@ -611,7 +603,7 @@ function cacheWord(p: NonNullable<HudCtx['proc']>) {
   if (t?.cached) return `${t.cached}/${t.jobs} hit`
   return 'miss, saved'
 }
-function RunsTable({ ctx }: { ctx: HudCtx }) {
+export function RunsTable({ ctx }: { ctx: HudCtx }) {
   const p = ctx.proc
   if (p) RUNS.set(p.proc_id, { run: p.run, mode: modeWord(p.mode), n: ctx.data.proc?.n ?? ctx.grid?.n ?? ctx.n, level: ctx.level, seconds: p.seconds ?? null, cache: cacheWord(p) })
   const ids = ctx.runs.map((r) => r.id)
@@ -705,7 +697,7 @@ function planTiles(ctx: HudCtx, alt: Tiling | null): Plan | null {
   return { n, mode, shape, counts, ks, phase, halved }
 }
 
-function Tiles({ ctx }: { ctx: HudCtx }) {
+export function Tiles({ ctx }: { ctx: HudCtx }) {
   const [alt, setAlt] = useState<Tiling | null>(null)
   const [hv, setHv] = useState<number | null>(null)
   const plan = planTiles(ctx, alt)
@@ -774,14 +766,16 @@ function Tiles({ ctx }: { ctx: HudCtx }) {
 
 // ── signed distance on the slice ───────────────────────────────────────────────────────────────
 
-function FieldMap({ ctx }: { ctx: HudCtx }) {
+export function FieldMap({ ctx }: { ctx: HudCtx }) {
   const src = ctx.data.proc ?? ctx.data.grid
   const isResult = !!ctx.data.proc
   const L = useThrottled(isResult ? ctx.level : 0.5, 120)
   const slice = useThrottled(`${ctx.slice.axis}${ctx.slice.index}`, 90)
   const live = ctx.report?.grow ?? 0
   const [op, setOp] = useState(live)
-  useEffect(() => setOp(live), [live])
+  // follows the mesh's own offset whenever that changes
+  const [opOf, setOpOf] = useState(live)
+  if (opOf !== live) { setOpOf(live); setOp(live) }
   const [hov, setHov] = useState<[number, number] | null>(null)
   const S = 172
   const n = src?.n ?? 0
@@ -938,7 +932,7 @@ function winLabel(axis: Axis, win: Win, w: number, h: number) {
   return `${axis} ${win.index} · ${U} ${r(win.u0, w)} · ${V} ${r(win.v0, h)}`
 }
 
-function VoxelValues({ ctx }: { ctx: HudCtx }) {
+export function VoxelValues({ ctx }: { ctx: HudCtx }) {
   const g = ctx.data.grid
   const w = 8, h = 6, cell = 16
   const win = useMemo(() => (g ? voxelWindow(g, ctx.slice.axis, clamp(ctx.slice.index, 0, g.n - 1), w, h) : null), [g, ctx.slice.axis, ctx.slice.index])
@@ -964,7 +958,7 @@ function VoxelValues({ ctx }: { ctx: HudCtx }) {
   )
 }
 
-function Coverage({ ctx }: { ctx: HudCtx }) {
+export function Coverage({ ctx }: { ctx: HudCtx }) {
   const g = ctx.data.grid
   const w = 10, h = 7, cell = 24
   const win = useMemo(() => (g ? voxelWindow(g, ctx.slice.axis, clamp(ctx.slice.index, 0, g.n - 1), w, h) : null), [g, ctx.slice.axis, ctx.slice.index])
@@ -1150,7 +1144,7 @@ function sweepLevels(L: number): number[] {
   return out
 }
 
-function Sweep({ ctx }: { ctx: HudCtx }) {
+export function Sweep({ ctx }: { ctx: HudCtx }) {
   const g = ctx.data.proc
   const W = 96, H = 108
   const level = useThrottled(ctx.level, 250)
@@ -1191,62 +1185,3 @@ function Sweep({ ctx }: { ctx: HudCtx }) {
     </Box>
   )
 }
-
-// ── families ───────────────────────────────────────────────────────────────────────────────────
-
-const mod = (family: HudModule['family'], id: string, label: string, desc: string, slot: HudModule['slot'], Body: (p: { ctx: HudCtx }) => ReactNode, interactive?: boolean): HudModule => ({
-  family, id, label, desc, slot, interactive,
-  render: (ctx) => <Safe data={ctx.data.proc ?? ctx.data.grid}><Body ctx={ctx} /></Safe>,
-})
-
-export const DATA_FAMILIES: FamilyDef[] = [
-  {
-    id: 'figures', title: 'Figures', desc: 'The mesh level and what it keeps',
-    modules: [
-      mod('figures', 'v1', 'readout + ruler', 'The level as a large number on a ruler from swell to erode.', 'tl', Readout),
-      mod('figures', 'v2', 'kept volume', 'Cells kept at the level, as a share of the input solid.', 'tr', Kept),
-      mod('figures', 'v3', 'chip', 'Level and kept share in one pill, for the run header.', 'top', Chip),
-      mod('figures', 'v4', 'level vs kept', 'Kept share at every level; the dashed line is the input solid.', 'br', LevelKept),
-    ],
-  },
-  {
-    id: 'density', title: 'Density', desc: 'Cells by value against the level',
-    modules: [
-      mod('density', 'v1', 'density', 'Hover a bin to read it; drag to try a level. Bars at or above the level are ink.', 'bottom', Density, true),
-    ],
-  },
-  {
-    id: 'runtime', title: 'Runtime', desc: 'The run as it happens: counters, steps, log and runs',
-    modules: [
-      mod('runtime', 'v1', 'run header', 'Run, mode and live counters: elapsed, tiles, polls, cache hits, sent and received.', 'tr', RunHeader),
-      mod('runtime', 'v2', 'steps', 'Each pipeline step as a time range, from the requests in the log.', 'bl', Steps),
-      mod('runtime', 'v3', 'log', 'The newest lines of the runtime log.', 'br', LogList),
-      mod('runtime', 'v4', 'runs', 'Runs this session: mode, grid, level, time and cache.', 'br', RunsTable),
-    ],
-  },
-  {
-    id: 'tiles', title: 'Tiles', desc: 'Tiles of the grid and their state',
-    modules: [
-      mod('tiles', 'v1', 'tiles', 'Atlas tiles as cubes or layers: done, running, queued, cached, empty; halved after a size error.', 'bl', Tiles, true),
-    ],
-  },
-  {
-    id: 'field', title: 'Signed distance', desc: 'Distance to the surface on the cutting plane',
-    modules: [
-      mod('field', 'v1', 'signed distance', 'Negative inside, positive outside; grey lines are 1-voxel steps in the 3-voxel band.', 'left', FieldMap, true),
-    ],
-  },
-  {
-    id: 'values', title: 'Voxel values', desc: 'Coverage against 0 or 1 where the surface crosses',
-    modules: [
-      mod('values', 'v1', 'voxel values', 'Coverage, where the 0.5 level is the true surface, beside 0 or 1, about half a voxel fat.', 'bl', VoxelValues),
-      mod('values', 'v2', 'coverage', 'The coverage of each cell where the surface crosses the slice.', 'bl', Coverage),
-    ],
-  },
-  {
-    id: 'levels', title: 'Level sweep', desc: 'One field at five thresholds',
-    modules: [
-      mod('levels', 'v1', 'level sweep', 'One field, five thresholds, with the share kept and the parts at each.', 'bottom', Sweep),
-    ],
-  },
-]
