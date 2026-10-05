@@ -31,7 +31,7 @@ export function Title({ ctx }: { ctx: HudCtx }) {
   }
   return (
     <div className="qs-lab-title">
-      <span className="qs-lab-title__k">Quantum Sculpting · {kicker}</span>
+      <span className="qs-lab-title__k">Quantum Sculptor · {kicker}</span>
       <span className="qs-lab-title__t">{title}</span>
       <p className="qs-lab-title__p">{about}</p>
       <span className="qs-lab-title__m">{file} · {n}³ · {ctx.proc?.run ?? ctx.q.run}</span>

@@ -97,7 +97,7 @@ export function ResearchPage() {
     <div className="notes">
       <div className="notes__col">
         <span className="notes__k">Research</span>
-        <h1 className="notes__t">The research behind Quantum Sculpting</h1>
+        <h1 className="notes__t">The research behind Quantum Sculptor</h1>
         <p className="notes__p">Peiyan is writing this part: the concept, the quantum procedures (Quantum Blur Core, the nations of Evolve), the method and the references. It will live here, beside the Lab that makes the geometry, composes it and sends it out.</p>
         <p className="notes__p notes__p--dim">Placeholder · to be written.</p>
       </div>

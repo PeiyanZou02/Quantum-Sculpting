@@ -20,8 +20,6 @@ import { usePresent } from '../present'
 import { usePresentKeys } from './presentKeys'
 import { useAnimator } from './animator'
 import type { HudCtx, Vec3 } from '../hud/types'
-import { MODEL_EXT } from './modelExt'
-import { ShapePicker } from './Shapes'
 import { live, bump } from '../live'
 import { ownerPalette, nationName } from '../view/nations'
 import { fit, frameOf } from '../frames'
@@ -513,7 +511,6 @@ export function Stage() {
         style={{ background: model ? undefined : 'radial-gradient(circle,var(--qs-dot) 1px,transparent 1.5px) 12px 12px/24px 24px', ...(board ? { width: board.w, height: board.h, flex: 'none' } : null) }}
       >
         {hud.frame && !board && !variantsOf(shown, 'frame').length && <ViewMarks />}
-        {!model && <Landing over={over} />}
         {model && over && <div className="stage__drop">Release to open</div>}
         {model && engine && (
           <QProbeAnchored probe={probe} project={project} n={grid?.n ?? 32} mm={grid?.voxel_size ?? 1} measure={tool === 'measure'}
@@ -672,47 +669,6 @@ function QProbeAnchored({ probe, project, n, mm, measure, hideHover, hidePins, s
       <div ref={ref} style={{ display: 'none' }} />
       <QProbe w={size.w} h={size.h} n={n} probe={probe} project={project} mmPerCell={mm} hideClear measure={measure} hideHover={hideHover} hidePins={hidePins} showPins={showPins} />
     </>
-  )
-}
-
-/** First landing: a shape to start from or your own model, and the four steps ahead. */
-function Landing({ over }: { over: boolean }) {
-  const st = useStore()
-  const file = useRef<HTMLInputElement>(null)
-  return (
-    <div className="landing">
-      <div className="landing__card">
-        <span className="landing__title">{over ? 'Release to open the model' : 'What would you like to sculpt?'}</span>
-        <section className="landing__sec">
-          <span className="landing__k">Start from a shape</span>
-          <ShapePicker big />
-        </section>
-        <section className="landing__sec">
-          <span className="landing__k">Or your own model</span>
-          <button className={'landing__import' + (over ? ' landing__import--over' : '')} onClick={() => file.current?.click()}>
-            <Icon name="upload" size={24} />
-            <span className="landing__ct">Import a model</span>
-            <span className="landing__ext">{MODEL_EXT.join(' ')}</span>
-          </button>
-        </section>
-        <input ref={file} type="file" hidden accept={MODEL_EXT.join(',')} onChange={(e) => {
-          const f = e.target.files?.[0]
-          if (f) st.upload(f)
-          e.target.value = ''
-        }} />
-        <ol className="landing__steps" aria-label="The steps">
-          {[['model', 'Model'], ['grid', 'Voxelise'], ['quantum', 'Quantum'], ['print', 'Mesh']].map(([i, t], k) => (
-            <li key={t}><Icon name={i} size={24} /><span>{String(k + 1).padStart(2, '0')} {t}</span></li>
-          ))}
-        </ol>
-        {st.recent.length > 0 && (
-          <div className="landing__recent">
-            <span className="landing__k">Recent</span>
-            {st.recent.slice(0, 4).map((r) => <button key={r.name} className="landing__file" onClick={() => st.openRecent(r.name)}>{r.name}</button>)}
-          </div>
-        )}
-      </div>
-    </div>
   )
 }
 

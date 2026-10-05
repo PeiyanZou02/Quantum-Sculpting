@@ -1,4 +1,4 @@
-// Quantum Sculpting: an app for sculpting with quantum processes. Two tabs: Lab is the one workspace
+// Quantum Sculptor: an app for sculpting with quantum processes. Two tabs: Lab is the one workspace
 // (parameters, the view with the HUD composed over it, properties from the model to the output, the
 // drawer); Research holds the research. Columns fold and swap sides; the drawer docks under the view or
 // along the whole window.
@@ -17,6 +17,8 @@ import { TooltipLayer } from './qs/Tooltip'
 import { usePresent } from './present'
 import { BarePeek } from './screens/PresentBar'
 import { Column, Drawer, ResearchPage } from './screens/Shell'
+import { Home } from './screens/Home'
+import { HomeDialog } from './screens/HomeDialog'
 import './styles/system.css'
 import './styles/bento.css'
 import './styles/type.css'
@@ -31,6 +33,7 @@ function drawerFor(stage: FocusStage, mode: string): DrawerTab {
 export default function App() {
   const init = useStore((s) => s.init)
   const keyOpen = useStore((s) => s.keyOpen)
+  const hasModel = useStore((s) => !!s.model)
   const bare = usePresent((p) => p.bare)
   const sh = useShell()
   const tab = sh.tab
@@ -59,11 +62,13 @@ export default function App() {
   }, [init])
 
   const lab = tab === 'lab'
-  const sides = lab && !bare
+  // no model open: the start page takes the whole window under the top bar
+  const home = lab && !hasModel
+  const sides = lab && !bare && !home
   // Parameters | view | Properties, or swapped
   const cols = [{ t: 'Parameters', icon: 'sliceTool', body: <InputPane /> }, { t: 'Properties', icon: 'model', body: <OutputPane /> }]
   const [a, b] = sh.swap ? [cols[1], cols[0]] : cols
-  const full = sh.dock === 'full'
+  const full = sh.dock === 'full' && !home
   return (
     <div className={`app ux ux--${tab}` + (bare ? ' app--bare' : '')}>
       {!bare && <TopBar />}
@@ -74,17 +79,19 @@ export default function App() {
         )}
         <div className="ux-center">
           <div className="ux-view"><Stage /></div>
-          {!full && !bare && <Drawer />}
+          {!full && !bare && !home && <Drawer />}
         </div>
         {sides && (
           <Column side="right" title={b.t} icon={b.icon} open={sh.rightOpen} width={sh.right} onWidth={(v) => sh.setSize({ right: v })}
             onFold={(v) => sh.setLayout({ rightOpen: v })} onSwap={() => sh.setLayout({ swap: !sh.swap })}>{b.body}</Column>
         )}
         {tab === 'research' && <ResearchPage />}
+        {home && <Home />}
       </div>
       {full && !bare && <div className="ux-foot"><Drawer /></div>}
       <BarePeek />
       {keyOpen && <KeyDialog />}
+      {sh.homeAsk && <HomeDialog />}
       <Toasts />
       <TooltipLayer />
     </div>

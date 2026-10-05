@@ -195,6 +195,9 @@ interface S {
   stale: { vox: boolean; proc: boolean; mesh: boolean }
   /** Every step that is missing or out of date, in order (Atlas reads its cache; it submits on its own button). */
   runAll: () => Promise<void>
+  /** Back to the start: the model and its results leave the workspace (the file stays under Recent;
+   *  settings, compositions and the Atlas cache are kept). */
+  goHome: () => void
   setUp: (up: UpAxis) => Promise<void>
 
   setVox: (p: Partial<S['vox']>) => void
@@ -584,6 +587,17 @@ export const useStore = create<S>()((set, get) => {
       set({ auto: v })
     },
     stale: { vox: false, proc: false, mesh: false },
+    goHome: () => {
+      try { sessionStorage.removeItem('qs-resume') } catch { /* private mode */ }
+      clearEvolve()
+      set({
+        model: null, modelMesh: null, grid: null, gridData: null, proc: null, procData: null, report: null, resultMesh: null,
+        exported: null, step: 0, evolveSel: null, stale: { vox: false, proc: false, mesh: false },
+      })
+      get().setFocus('model', 'Back at the start', true)
+      get().pushLog('Back at the start')
+      get().refreshRecent()
+    },
     runAll: async () => {
       const g = get
       if (!g().model) return

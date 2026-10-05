@@ -1,6 +1,6 @@
-# Quantum Sculpting — interface
+# Quantum Sculptor — interface
 
-The design layer for Quantum Sculpting: the Quicksilver component library and the Quantum Sculptor
+The design layer for Quantum Sculptor: the Quicksilver component library and its
 screens (design handoff in `../design/handoff/`), built in React + TypeScript + three.js on top of
 the Flask service in `../app/`. The research pipeline (voxelising, Quantum Blur Core, level sets,
 Evolve) lives in `../app/` and is documented in the top-level `README.md`; this folder only talks to
@@ -17,6 +17,8 @@ It is laid out as an app with two tabs:
   the whole window.
 - **Research** holds the research behind the project (a placeholder, being written by Peiyan).
 
+With no model open, Lab is the start page: what Quantum Sculptor is, how a model goes through it,
+and the ways in. The title in the top bar brings it back (it asks first, and offers to export the mesh).
 Start from a built-in shape (the test cup, a sphere, cube, pyramid, cylinder, cone or torus) or
 import your own model. Each step's action sits at the foot of Parameters: Voxelise, Run (Run on Atlas
 with a key, Set API key otherwise; Run Evolve and Play turns), Build the mesh. The built-in shapes run

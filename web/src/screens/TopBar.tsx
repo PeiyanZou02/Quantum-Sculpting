@@ -53,12 +53,15 @@ export function ThemeButton() {
 /** The top bar: the mark, the name and the tabs; Atlas, theme and help on the right. What is loaded
  *  and the latest event live on the drawer row. */
 export function TopBar() {
+  const setHomeAsk = useShell((s) => s.setHomeAsk)
+  const setTab = useShell((s) => s.setTab)
   return (
     <header className="top">
-      <div className="top__brand">
+      <button className="top__brand" onClick={() => (useStore.getState().model ? setHomeAsk(true) : setTab('lab'))}
+        data-tip="Back to the start" data-tip-desc="The start page: what Quantum Sculptor is, and the ways in.">
         <Mark size={18} />
-        <span className="top__name">Quantum Sculpting</span>
-      </div>
+        <span className="top__name">Quantum Sculptor</span>
+      </button>
       <Tabs />
       <div className="top__actions">
         <AtlasStatus />

@@ -1,4 +1,4 @@
-// The Quantum Sculpting mark: one point, blurred. A 5 × 5 field of dots whose radius falls off from the
+// The Quantum Sculptor mark: one point, blurred. A 5 × 5 field of dots whose radius falls off from the
 // centre as a Gaussian, like a voxel after Quantum Blur Core has spread it to its neighbours.
 // public/favicon.svg is drawn from the same numbers by scripts/favicon.mjs; keep the two in step.
 export const MARK_N = 5

@@ -27,6 +27,9 @@ interface Shell {
   rightOpen: boolean
   dock: 'view' | 'full'
   setLayout: (p: Partial<Pick<Shell, 'swap' | 'leftOpen' | 'rightOpen' | 'dock'>>) => void
+  /** Asking whether to leave the model for the start page. */
+  homeAsk: boolean
+  setHomeAsk: (v: boolean) => void
 }
 
 const KEY = 'qs-shell'
@@ -56,5 +59,7 @@ export const useShell = create<Shell>()((set, get) => {
     rightOpen: saved.rightOpen ?? true,
     dock: saved.dock ?? 'view',
     setLayout: (p) => up(p),
+    homeAsk: false,
+    setHomeAsk: (v) => set({ homeAsk: v }),
   }
 })
