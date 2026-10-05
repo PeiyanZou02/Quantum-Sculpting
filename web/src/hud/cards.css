@@ -1,6 +1,7 @@
 /* Present cards: infographic blocks floating in the HUD, with no fill at all, like transparent PNGs laid
    over the view. Drag them off the model where they need to be read. */
-.hud-card { width: 264px; display: flex; flex-direction: column; gap: 10px; padding: 14px 16px 16px; background: none; }
+/* no ground behind a card, so no padding either: its text aligns with the pieces above and below it */
+.hud-card { width: 232px; display: flex; flex-direction: column; gap: 10px; padding: 0; background: none; }
 .hud-card__head { display: flex; justify-content: space-between; align-items: baseline; }
 .hud-card__t { font: 500 12px/1 var(--qs-sans); letter-spacing: var(--qs-track); color: var(--qs-ink); }
 .hud-card__n { font: 400 11px/1 var(--qs-mono); color: var(--qs-ink2); }
@@ -10,8 +11,8 @@
 .hud-card__bar { grid-column: 1 / -1; height: 3px; border-radius: 999px; background: var(--qs-line); overflow: hidden; }
 .hud-card__bar > span { display: block; height: 100%; background: var(--qs-ink); border-radius: 999px; transition: width .25s; }
 .hud-card .slice-map { pointer-events: none; }
-.hud-card--blocks { width: 300px; padding: 4px 4px 6px; }
-.hud-card--blocks .blk { margin: 0; padding: 12px 12px 14px; background: none !important; }
+.hud-card--blocks { width: 272px; padding: 0; }
+.hud-card--blocks .blk { margin: 0; padding: 0 0 14px; background: none !important; }
 .hud-card--blocks .blk + .blk { padding-top: 4px; }
 .hud-card--blocks .lvl-hist, .hud-card--blocks button { pointer-events: none; }
 .hud-card--blocks .qs-ib { display: none; }

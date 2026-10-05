@@ -6,7 +6,7 @@ import { useLayoutEffect, useRef, useState } from 'react'
 import type { ReactNode, RefObject } from 'react'
 import type { HudCtx, HudModule, Rect } from './types'
 import { TIER_OPACITY, boxOf, chosenOf, composeLayout, keyOf, savePng, settle, type Composition, type Placement } from './compose'
-import type { Slot } from './tidy'
+import type { Pad, Slot } from './tidy'
 import type { Look } from '../present'
 import './composer.css'
 
@@ -128,7 +128,7 @@ function Piece({ k, label, ctx, pos, arrange, edit, live, look, dim, ghost, onMo
   const place = pos ? { left: pos.x * ctx.w, top: pos.y * ctx.h, transform: pos.c ? 'translate(-50%, -50%)' : undefined } : undefined
   const zoom = (look?.size ?? 1) * (pos?.z ?? 1)
   return (
-    <div className={cls} data-hud={k} style={place} onPointerDown={edit && !live ? start : undefined}>
+    <div className={cls} data-hud={k} data-out={pos?.out ? '' : undefined} style={pos?.out ? { ...place, visibility: 'hidden' } : place} onPointerDown={edit && !live ? start : undefined}>
       {(arrange || edit) && (
         <div className="hud-piece__bar" data-qs-probe-ui>
           <button className="hud-piece__handle" onPointerDown={start} onDoubleClick={() => onMove?.(k, null)}
@@ -210,8 +210,16 @@ function fitStrips(el: HTMLElement | null) {
   }
 }
 
+/** Room the object's own marks need beside it: the extents' dimension lines and labels. */
+function padOf(chosen: HudModule[]): Pad {
+  const on = (f: string, id: string) => chosen.some((m) => m.family === f && m.id === id)
+  if (on('bounds', 'v2')) return { l: 0, r: 72, t: 0, b: 40 }
+  if (on('bounds', 'v3')) return { l: 0, r: 48, t: 0, b: 0 }
+  return { l: 0, r: 0, t: 0, b: 0 }
+}
+
 /** Draws the chosen modules over the view. `chrome` lets the host put its own controls into slots. */
-export function HudLayer({ ctx, compose, chrome, positions = {}, arrange = false, edit, looks = {}, hl = null, ghost = null, texts = [], autoArrange = false, onCrowded, tidyKey = 0, reserve = 0, onHero, onMove, onText }: {
+export function HudLayer({ ctx, compose, chrome, positions = {}, arrange = false, edit, looks = {}, hl = null, ghost = null, texts = [], autoArrange = false, onCrowded, onLeftOut, tidyKey = 0, reserve = 0, onHero, onMove, onText }: {
   ctx: HudCtx; compose: Composition; chrome?: Partial<Record<(typeof SLOTS)[number], ReactNode>>
   positions?: Record<string, Placement>; arrange?: boolean; edit?: Edit; looks?: Record<string, Look>; hl?: string | null
   /** The piece being previewed from the library (outlined, the rest dimmed). */
@@ -220,6 +228,8 @@ export function HudLayer({ ctx, compose, chrome, positions = {}, arrange = false
   autoArrange?: boolean
   /** After settling: how many pieces found no room even at 55 %. */
   onCrowded?: (n: number) => void
+  /** After a layout: how many pieces the frame had no room for at a readable size (left out of it). */
+  onLeftOut?: (n: number) => void
   /** Bump to lay every piece out afresh for the view (pieces the user placed move too). */
   tidyKey?: number
   /** Room kept free at the bottom when laying out (the present bar). */
@@ -266,8 +276,9 @@ export function HudLayer({ ctx, compose, chrome, positions = {}, arrange = false
         if (!el) return
         const ready = [...el.querySelectorAll<HTMLElement>('.hud-piece[data-hud]')].filter((p) => !p.dataset.hud!.startsWith('chrome:') && boxOf(p).width > 0).length
         if (ready < want && ++tries < 12) { setTimeout(go, 60); return }
-        const hero = composeLayout(el, onMove, slotOf, () => 1, reserve)
-        if (hero) onHero?.(hero)
+        const { hero, out } = composeLayout(el, onMove, slotOf, () => 1, reserve, padOf(chosen))
+        onHero?.(hero)
+        onLeftOut?.(out)
         setTimeout(() => { if (root.current) onCrowded?.(settle(root.current, ctx.rect, onMove, () => true, (k) => positions[k]?.z ?? 1, ghost).stuck) }, 160)
       }
       requestAnimationFrame(() => requestAnimationFrame(go))

@@ -18,7 +18,7 @@ export const TIDY_LEVELS: { id: TidyLevel; t: string; d: string }[] = [
 /** What a piece shows (topics) and how expressive it is (higher wins among pieces that show the same). */
 const INFO: Record<string, [string[], number]> = {
   'frame:v1': [['frame'], 3], 'frame:v2': [['frame'], 2], 'frame:v3': [['frame'], 2], 'frame:v4': [['frame'], 1],
-  'meta:v1': [['history'], 2], 'meta:v2': [['scene'], 2], 'meta:v3': [['history', 'scene'], 3], 'meta:v4': [['qsettings', 'strength', 'gatestyle'], 3],
+  'meta:v1': [['history'], 2], 'meta:v2': [['scene'], 2], 'meta:v3': [['history', 'scene'], 3], 'meta:v4': [['qsettings', 'strength', 'gatestyle'], 3], 'meta:v5': [['title'], 3],
   'steps:v1': [['pipeline'], 2], 'steps:v2': [['pipeline'], 3], 'steps:v3': [['pipeline'], 1], 'steps:v4': [['pipeline'], 1],
   'bars:v1': [['pipeline'], 2], 'bars:v2': [['pipeline', 'progress'], 2], 'bars:v3': [['pipeline'], 3],
   'indexes:v1': [['pipeline'], 1], 'indexes:v2': [['pipeline'], 1],
@@ -52,8 +52,8 @@ const INFO: Record<string, [string[], number]> = {
 const infoOf = (k: string): [string[], number] => INFO[k] ?? [[k], 1]
 
 /** Topics that explain the quantum step, per mode. The frame and the provenance stay with them. */
-const ESSENTIAL_BLUR = new Set(['frame', 'history', 'scene', 'qsettings', 'strength', 'qweights', 'register', 'pairing', 'bitstrings', 'shots', 'engine', 'backend', 'result', 'density', 'explain'])
-const ESSENTIAL_EVOLVE = new Set(['frame', 'history', 'scene', 'result', 'ev-nations', 'ev-territory', 'ev-chronicle', 'ev-relations', 'ev-record'])
+const ESSENTIAL_BLUR = new Set(['frame', 'title', 'history', 'scene', 'qsettings', 'strength', 'qweights', 'register', 'pairing', 'bitstrings', 'shots', 'engine', 'backend', 'result', 'density', 'explain'])
+const ESSENTIAL_EVOLVE = new Set(['frame', 'title', 'history', 'scene', 'result', 'ev-nations', 'ev-territory', 'ev-chronicle', 'ev-relations', 'ev-record'])
 
 /** The piece keys to take off for a tidy level. Text notes are always kept. */
 export function toRemove(keys: string[], level: TidyLevel, mode: string): string[] {
@@ -78,13 +78,13 @@ export interface Curated { id: string; title: string; desc: string; mode?: 'nati
 export const CURATED: Curated[] = [
   {
     id: 'evolve', title: 'Evolve · nations', mode: 'nations',
-    desc: 'The history as a field report: the record, the roster, territory over every turn, the chronicle and the relations.',
-    compose: { frame: 'v3', meta: 'v3', evolve: 'v1,v2,v3,v4,v5' },
+    desc: 'Nations as qubits, turn by turn: the title, the record, this turn’s roster, territory over the whole history with its wars, annexations and splits, the chronicle and the relations.',
+    compose: { frame: 'v3', meta: 'v5', evolve: 'v5,v1,v2,v3,v4' },
   },
   {
     id: 'circuit', title: 'Quantum · circuit', mode: 'blur',
-    desc: 'The blur as a circuit: settings, per-qubit weights, the probed cell’s register, measured shots and the result.',
-    compose: { frame: 'v1', meta: 'v4', blur: 'v2', register: 'v1', shots: 'v2', backend: 'v1', cards: 'v1', selection: 'v3', callout: 'v3' },
+    desc: 'The blur as a circuit: the gates on each axis’s qubits, their weights and angles, how one qubit pairs cells, the register of a cell and the result.',
+    compose: { frame: 'v2', meta: 'v5', pulse: 'v2', blur: 'v2,v3', register: 'v1', cards: 'v1' },
   },
   {
     id: 'specimen', title: 'Specimen · print sheet',
@@ -93,132 +93,178 @@ export const CURATED: Curated[] = [
   },
   {
     id: 'plate', title: 'Plate · object only',
-    desc: 'A plate for a poster: the object, its extents and one line of provenance. Nothing else.',
-    compose: { frame: 'v3', meta: 'v1', bounds: 'v2' },
+    desc: 'A plate for a poster: the object, its extents and a title with one line of provenance. Nothing else.',
+    compose: { frame: 'v3', meta: 'v5', bounds: 'v2' },
   },
 ]
 
 // ── layout ───────────────────────────────────────────────────────────────────────────────────────
+// A plate: one margin all round (inside the frame marks), one gutter between pieces, one scale for
+// every piece so a role reads the same size everywhere on the plate, and the object in the room left.
+// The frame's shape picks the grid:
+//   wide    a column either side of the object, bands above and below it between the columns
+//   square  a band across the top, a column on the right, a band under the object
+//   tall    a band across the top and one across the bottom
+// The scale follows the frame's area (the same plate at any window size) and comes down until every
+// piece fits and the object keeps its room; when even the smallest readable scale is too large, the
+// piece that matters least is left out of this frame.
 export type Slot = 'tl' | 'tr' | 'bl' | 'br' | 'top' | 'bottom' | 'left' | 'right'
 export interface Box { k: string; w: number; h: number; slot: Slot }
-export interface Placed { k: string; x: number; y: number; z: number }
-interface Region { id: string; x: number; y: number; w: number; h: number; flow: 'column' | 'row'; align: 'start' | 'end'; from: 'top' | 'bottom' }
+/** Top-left (view px) and scale of a piece; `out`: left out of this frame for want of room. */
+export interface Placed { k: string; x: number; y: number; z: number; out?: boolean }
+/** Room the object's own marks need around it (extents and their labels), view px. */
+export interface Pad { l: number; r: number; t: number; b: number }
 
 const MIN_Z = 0.7   // below this 11px text stops being readable
+const MAX_Z = 1.6
+const REF = 900     // √(frame area) at which pieces sit at their natural size
+/** Where the frame marks are drawn (frame.tsx): the margin starts a gutter inside them. */
+export const FRAME_INSET = 28
 
-/** The frame's shape decides the grid: portrait frames stack bands above and below the object;
- *  landscape and square frames put columns either side, with bands between them. */
-function regions(W: number, H: number, reserve: number): { list: Region[]; route: (s: Slot) => string[]; m: number } {
-  const r = W / H
-  const m = Math.round(Math.min(72, Math.max(24, Math.min(W, H) * 0.05)))
-  const top = m, bottom = H - m - reserve
-  if (r <= 0.85) {
-    const band = (bottom - top) * (r <= 0.6 ? 0.3 : 0.32)
-    const list: Region[] = [
-      { id: 'top', x: m, y: top, w: W - 2 * m, h: band, flow: 'row', align: 'start', from: 'top' },
-      { id: 'bottom', x: m, y: bottom - band, w: W - 2 * m, h: band, flow: 'row', align: 'start', from: 'bottom' },
-    ]
-    const route = (s: Slot) => (s === 'tl' || s === 'tr' || s === 'top' || s === 'left' ? ['top', 'bottom'] : ['bottom', 'top'])
-    return { list, route, m }
-  }
-  const col = Math.round(Math.min(400, Math.max(220, W * (r >= 1.2 ? 0.24 : 0.28))))
-  const g = 32
-  const inner = { l: m + col + g, r: W - m - col - g }
-  const list: Region[] = [
-    { id: 'left', x: m, y: top, w: col, h: bottom - top, flow: 'column', align: 'start', from: 'top' },
-    { id: 'right', x: W - m - col, y: top, w: col, h: bottom - top, flow: 'column', align: 'end', from: 'top' },
-    { id: 'top', x: inner.l, y: top, w: inner.r - inner.l, h: Math.round((bottom - top) * 0.14), flow: 'row', align: 'start', from: 'top' },
-    { id: 'bottom', x: inner.l, y: bottom - Math.round((bottom - top) * 0.28), w: inner.r - inner.l, h: Math.round((bottom - top) * 0.28), flow: 'row', align: 'start', from: 'bottom' },
-  ]
-  const route = (s: Slot): string[] => {
-    if (s === 'tl' || s === 'left' || s === 'bl') return ['left', 'right', 'bottom', 'top']
-    if (s === 'tr' || s === 'right' || s === 'br') return ['right', 'left', 'bottom', 'top']
-    if (s === 'top') return ['top', 'bottom', 'left', 'right']
-    return ['bottom', 'top', 'left', 'right']
-  }
-  return { list, route, m }
+/** How much a piece matters when a frame cannot hold everything: the lowest is left out first. */
+const KEEP: Record<string, number> = {
+  'meta:v5': 10,
+  'evolve:v1': 9, 'evolve:v2': 8, 'evolve:v5': 7, 'evolve:v3': 6, 'evolve:v4': 5,
+  'pulse:v2': 9, 'blur:v2': 8, 'cards:v1': 8, 'register:v1': 7, 'blur:v3': 6,
+  'cards:v2': 8, 'stages:v1': 7, 'figures:v4': 6, 'meta:v3': 5, 'meta:v1': 5, 'meta:v4': 5,
+}
+const keepOf = (k: string) => (k.startsWith('text:') ? 99 : KEEP[k] ?? infoOf(k)[1])
+
+type Reg = 'T' | 'B' | 'L' | 'R'
+type Shape = 'wide' | 'square' | 'tall'
+const shapeOf = (r: number): Shape => (r >= 1.3 ? 'wide' : r > 0.84 ? 'square' : 'tall')
+/** Where a piece from each slot may go, in order of preference. */
+const ROUTE: Record<Shape, Record<Slot, Reg[]>> = {
+  wide: {
+    tl: ['L', 'R', 'T', 'B'], left: ['L', 'R', 'B'], bl: ['L', 'R', 'B'], top: ['T', 'B', 'L', 'R'],
+    tr: ['R', 'L', 'T', 'B'], right: ['R', 'L', 'B'], br: ['R', 'L', 'B'], bottom: ['B', 'T', 'L', 'R'],
+  },
+  square: {
+    tl: ['T', 'B', 'R'], left: ['T', 'B', 'R'], top: ['T', 'B', 'R'], bl: ['B', 'R', 'T'],
+    tr: ['R', 'T', 'B'], right: ['R', 'B', 'T'], br: ['R', 'B', 'T'], bottom: ['B', 'T', 'R'],
+  },
+  tall: {
+    tl: ['T', 'B'], tr: ['T', 'B'], top: ['T', 'B'], left: ['T', 'B'],
+    bl: ['B', 'T'], br: ['B', 'T'], bottom: ['B', 'T'], right: ['B', 'T'],
+  },
+}
+/** The least room the object keeps, as fractions of the frame (width, height). */
+const HERO: Record<Shape, [number, number]> = { wide: [0.36, 0.5], square: [0.46, 0.4], tall: [0.6, 0.34] }
+
+interface Sized { k: string; w: number; h: number; slot: Slot }
+interface Grid { W: number; H: number; m: number; gut: number; gap: number; shape: Shape }
+
+function gridOf(W: number, H: number): Grid {
+  const gut = Math.round(Math.min(40, Math.max(14, Math.min(W, H) * 0.03)))
+  return { W, H, m: FRAME_INSET + gut, gut, gap: Math.round(gut * 1.5), shape: shapeOf(W / H) }
 }
 
-/** How much of a region a list of boxes needs, packed the region's way. */
-function need(reg: Region, boxes: Box[], gap: number): number {
-  if (reg.flow === 'column') return boxes.reduce((a, b) => a + b.h, 0) + gap * Math.max(0, boxes.length - 1)
-  let rowW = 0, rowH = 0, total = 0
+/** A band's pieces in reading order, each as high and as far left as it goes (bottom-left skyline):
+ *  short pieces stack under one another beside a tall one, and edges line up with edges. */
+function pack(items: Sized[], width: number, gut: number): { at: { x: number; y: number }[]; h: number } {
+  const done: { x: number; y: number; w: number; h: number }[] = []
+  for (const b of items) {
+    let best: { x: number; y: number } | null = null
+    for (const x of [0, ...done.map((p) => p.x + p.w + gut)]) {
+      if (x + b.w > width + 0.5) continue
+      const y = done.filter((p) => p.x < x + b.w && x < p.x + p.w).reduce((a, p) => Math.max(a, p.y + p.h + gut), 0)
+      if (!best || y < best.y - 0.5 || (Math.abs(y - best.y) <= 0.5 && x < best.x)) best = { x, y }
+    }
+    best ??= { x: 0, y: done.reduce((a, p) => Math.max(a, p.y + p.h + gut), 0) }
+    done.push({ ...best, w: b.w, h: b.h })
+  }
+  return { at: done, h: done.reduce((a, p) => Math.max(a, p.y + p.h), 0) }
+}
+const colH = (items: Sized[], gut: number) => items.reduce((a, b) => a + b.h, 0) + gut * Math.max(0, items.length - 1)
+const widest = (items: Sized[]) => items.reduce((a, b) => Math.max(a, b.w), 0)
+
+/** Every piece at scale z on the frame's grid; `ok` when all fit and the object keeps its room. */
+function plan(boxes: Box[], g: Grid, z: number, pad: Pad): { placed: Placed[]; hero: Rect; ok: boolean } {
+  const { W, H, m, gut, gap, shape } = g
+  const fill: Record<Reg, Sized[]> = { T: [], B: [], L: [], R: [] }
+  const colCap = (W - 2 * m) * (shape === 'wide' ? 0.3 : 0.4)
+  const bandCap = (H - 2 * m) * (shape === 'tall' ? 0.4 : 0.32)
+  const geo = () => {
+    const wL = widest(fill.L), wR = widest(fill.R)
+    const midL = m + (wL ? wL + gap : 0), midR = W - m - (wR ? wR + gap : 0)
+    const tW = shape === 'square' ? W - 2 * m : midR - midL, bW = midR - midL
+    const tP = pack(fill.T, tW, gut), bP = pack(fill.B, bW, gut)
+    const hT = tP.h, hB = bP.h
+    const colTop = shape === 'square' && hT ? m + hT + gap : m
+    const hero: Rect = {
+      l: midL + pad.l, r: midR - pad.r,
+      t: (hT ? m + hT + gap : m) + pad.t, b: H - m - (hB ? hB + gap : 0) - pad.b,
+    }
+    return { wL, wR, midL, midR, tW, bW, tP, bP, hT, hB, colTop, hero }
+  }
+  const fits = () => {
+    const q = geo()
+    const [hw, hh] = HERO[shape]
+    return colH(fill.L, gut) <= H - m - q.colTop && colH(fill.R, gut) <= H - m - q.colTop && q.wL <= colCap && q.wR <= colCap
+      && fill.T.every((b) => b.w <= q.tW) && fill.B.every((b) => b.w <= q.bW) && q.hT <= bandCap && q.hB <= bandCap
+      && q.hero.r - q.hero.l >= hw * W && q.hero.b - q.hero.t >= hh * H
+  }
+  let ok = true
   for (const b of boxes) {
-    if (rowW && rowW + gap + b.w > reg.w) { total += rowH + gap; rowW = 0; rowH = 0 }
-    rowW += (rowW ? gap : 0) + b.w
-    rowH = Math.max(rowH, b.h)
+    const s: Sized = { k: b.k, slot: b.slot, w: b.w * z, h: b.h * z }
+    const route = ROUTE[shape][b.slot]
+    const at = route.find((r) => { fill[r].push(s); const f = fits(); fill[r].pop(); return f })
+    if (!at) ok = false
+    fill[at ?? route[0]].push(s)
   }
-  return total + rowH
+  const q = geo()
+  const placed: Placed[] = []
+  // columns: flush left; corner pieces from the bottom slots hang from the foot of the column
+  for (const r of ['L', 'R'] as const) {
+    const items = fill[r]
+    if (!items.length) continue
+    const x = r === 'L' ? m : W - m - q.wR
+    const lower = items.filter((b) => b.slot === 'bl' || b.slot === 'br')
+    const upper = items.filter((b) => !lower.includes(b))
+    let y = q.colTop
+    for (const b of upper) { placed.push({ k: b.k, x, y, z }); y += b.h + gut }
+    let yb = Math.max(y, H - m - colH(lower, gut))
+    for (const b of lower) { placed.push({ k: b.k, x, y: yb, z }); yb += b.h + gut }
+  }
+  // bands: packed from their top-left (pieces side by side share a top edge, so their head rules line
+  // up); the bottom band sits on the bottom margin. When the band is nearly full its columns spread to
+  // span it edge to edge, so the last one lines up with the column or margin beside it.
+  const band = (items: Sized[], p: { at: { x: number; y: number }[] }, x0: number, y0: number, width: number) => {
+    const xs = [...new Set(p.at.map((a) => Math.round(a.x)))].sort((a, b) => a - b)
+    const right = items.reduce((a, b, i) => Math.max(a, p.at[i].x + b.w), 0)
+    const free = width - right
+    const step = xs.length > 1 && free > 0 && free < width * 0.4 ? free / (xs.length - 1) : 0
+    items.forEach((b, i) => placed.push({ k: b.k, x: x0 + p.at[i].x + step * xs.indexOf(Math.round(p.at[i].x)), y: y0 + p.at[i].y, z }))
+  }
+  band(fill.T, q.tP, shape === 'square' ? m : q.midL, m, q.tW)
+  band(fill.B, q.bP, q.midL, H - m - q.hB, q.bW)
+  return { placed, hero: q.hero, ok }
 }
+
+const NOPAD: Pad = { l: 0, r: 0, t: 0, b: 0 }
 
 /** Lays out boxes (natural sizes, CSS px) over a w × h view. `reserve` keeps room at the bottom (the
- *  present bar). Returns top-left positions and scales, and the hero: the room left for the object. */
-export function layout(boxes: Box[], W: number, H: number, reserve = 0): { placed: Placed[]; hero: Rect } {
-  const { list, route, m } = regions(W, H, reserve)
-  const gap = Math.round(Math.max(16, Math.min(W, H) * 0.024))
-  const byId = new Map(list.map((r) => [r.id, r]))
-  const fill = new Map<string, Box[]>(list.map((r) => [r.id, []]))
-  const order = [...boxes].sort((a, b) => rank(a.slot) - rank(b.slot))
-  for (const b of order) {
-    const options = route(b.slot).map((id) => byId.get(id)!).filter(Boolean)
-    const scaled = (reg: Region) => { const z = Math.min(1, reg.w / b.w); return { ...b, w: b.w * z, h: b.h * z } }
-    // its own region if it fits at full size, else the first that does, else the first where it fits at half
-    const reg = options.find((o) => need(o, [...fill.get(o.id)!, scaled(o)], gap) <= o.h)
-      ?? options.find((o) => need(o, [...fill.get(o.id)!, scaled(o)], gap) * MIN_Z <= o.h) ?? options[0]
-    fill.get(reg.id)!.push(b)
-  }
-  const placed: Placed[] = []
-  const used: Record<string, { w: number; h: number }> = {}
-  for (const reg of list) {
-    const items = fill.get(reg.id)!
-    if (!items.length) continue
-    let z = Math.min(1, ...items.map((b) => reg.w / b.w))
-    for (let i = 0; i < 6; i++) {
-      const n = need(reg, items.map((b) => ({ ...b, w: b.w * z, h: b.h * z })), gap)
-      if (n <= reg.h || z <= MIN_Z) break
-      z = Math.max(MIN_Z, z * Math.max(0.7, reg.h / n))
+ *  present bar); `pad` is room the object's own marks need. Returns top-left positions and scales, and
+ *  the hero: the room left for the object. */
+export function layout(boxes: Box[], W: number, H: number, reserve = 0, pad: Pad = NOPAD): { placed: Placed[]; hero: Rect } {
+  const g = gridOf(W, H - reserve)
+  const z0 = Math.min(MAX_Z, Math.max(MIN_Z, Math.sqrt(W * (H - reserve)) / REF))
+  let live = boxes.map((b, i) => ({ b, i })).sort((a, c) => rank(a.b.slot) - rank(c.b.slot) || a.i - c.i).map((x) => x.b)
+  const out: Placed[] = []
+  for (;;) {
+    for (let z = z0; ; z = Math.max(MIN_Z, z * 0.96)) {
+      const p = plan(live, g, z, pad)
+      if (p.ok) return { placed: [...p.placed, ...out], hero: p.hero }
+      if (z <= MIN_Z) break
     }
-    if (reg.flow === 'column') {
-      const lower = items.filter((b) => b.slot === 'bl' || b.slot === 'br')
-      const upper = items.filter((b) => !lower.includes(b))
-      const at = (b: Box) => (reg.align === 'end' ? reg.x + reg.w - b.w * z : reg.x)
-      let y = reg.y
-      for (const b of upper) { placed.push({ k: b.k, x: at(b), y, z }); y += b.h * z + gap }
-      // the lower set hangs from the bottom of the column, unless the upper set already reaches it
-      const lowH = lower.reduce((a, b) => a + b.h * z, 0) + gap * Math.max(0, lower.length - 1)
-      let yb = Math.max(y, reg.y + reg.h - lowH)
-      for (const b of lower) { placed.push({ k: b.k, x: at(b), y: yb, z }); yb += b.h * z + gap }
-      used[reg.id] = { w: Math.max(...items.map((b) => b.w * z)), h: Math.max(y, yb) - reg.y }
-    } else {
-      const rows: Box[][] = [[]]
-      let rowW = 0
-      for (const b of items) {
-        if (rowW && rowW + gap + b.w * z > reg.w) { rows.push([]); rowW = 0 }
-        rows[rows.length - 1].push(b)
-        rowW += (rowW ? gap : 0) + b.w * z
-      }
-      const heights = rows.map((row) => Math.max(...row.map((b) => b.h * z)))
-      const total = heights.reduce((a, h) => a + h, 0) + gap * (rows.length - 1)
-      let y = reg.from === 'bottom' ? reg.y + reg.h - total : reg.y
-      rows.forEach((row, i) => {
-        let x = reg.x
-        for (const b of row) {
-          placed.push({ k: b.k, x, y: y + (reg.from === 'bottom' ? heights[i] - b.h * z : 0), z })
-          x += b.w * z + gap
-        }
-        y += heights[i] + gap
-      })
-      used[reg.id] = { w: reg.w, h: total }
+    // too much for this frame even at the smallest readable scale: leave out what matters least
+    const drop = live.filter((b) => !b.k.startsWith('text:')).sort((a, c) => keepOf(a.k) - keepOf(c.k))[0]
+    if (!drop || live.length <= 1) {
+      const p = plan(live, g, MIN_Z, pad)
+      return { placed: [...p.placed, ...out], hero: p.hero }
     }
+    live = live.filter((b) => b !== drop)
+    out.push({ k: drop.k, x: 0, y: 0, z: 1, out: true })
   }
-  // the object takes the room the pieces leave, inset by a gap
-  const bottom = H - m - reserve
-  const hero: Rect = {
-    l: used.left ? m + used.left.w + gap * 2 : m,
-    r: used.right ? W - m - used.right.w - gap * 2 : W - m,
-    t: used.top ? m + used.top.h + gap * 2 : m + gap,
-    b: used.bottom ? bottom - used.bottom.h - gap * 2 : bottom - gap,
-  }
-  return { placed, hero }
 }
 const rank = (s: Slot) => ({ tl: 0, tr: 0, top: 1, left: 2, right: 2, bottom: 3, bl: 4, br: 4 })[s]

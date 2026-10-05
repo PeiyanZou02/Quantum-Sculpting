@@ -33,16 +33,17 @@ function tally(h: NationsHistory, turn: number) {
   return c
 }
 
-function text(e: NationEvent): [number[], string] {
+/** An event as a sentence: nations (numbers) and words, in reading order. */
+function text(e: NationEvent): (number | string)[] {
   switch (e.type) {
-    case 'war': return [[e.who, e.whom], 'at war; the border cracked']
-    case 'breach': return [[...e.who, e.whom], 'broke the defences of the last']
-    case 'annex': return [[e.who, e.whom], 'annexed']
-    case 'split': return [[e.who, e.whom], 'split; the second broke away']
-    case 'death': return [[e.who], e.cause === 'conquered' ? 'was conquered' : e.cause === 'withered' ? 'withered away' : e.cause === 'war' ? 'fell in war' : e.cause === 'fled' ? 'vanished fleeing' : 'disappeared']
-    case 'exile': return [[e.who], 'left the continent']
-    case 'ally': return [[e.who, e.whom], 'became allies']
-    case 'rift': return [[e.who, e.whom], 'fell out']
+    case 'war': return [e.who, 'and', e.whom, 'at war']
+    case 'breach': return [...e.who, 'broke through', e.whom]
+    case 'annex': return [e.who, 'annexed', e.whom]
+    case 'split': return [e.whom, 'broke away from', e.who]
+    case 'death': return [e.who, e.cause === 'conquered' ? 'was conquered' : e.cause === 'withered' ? 'withered away' : e.cause === 'war' ? 'fell in war' : e.cause === 'fled' ? 'vanished fleeing' : 'disappeared']
+    case 'exile': return [e.who, 'left the continent']
+    case 'ally': return [e.who, 'and', e.whom, 'allied']
+    case 'rift': return [e.who, 'and', e.whom, 'fell out']
   }
 }
 
@@ -98,7 +99,7 @@ export function Territory() {
   const px = paths.x(turn)
   return (
     <div className="hev hev--territory">
-      <Head t="Territory" n={`share per nation · ${h.turns.length - 1} turns`} />
+      <Head t="Territory" n={`share of the cells per nation · ${h.turns.length - 1} turns`} />
       <svg width={W} height={H + MARK + 16} viewBox={`0 0 ${W} ${H + MARK + 16}`} className="hev-svg">
         {paths.out.map((p) => <path key={p.i} d={p.d} fill={nationColor(p.i, theme)} opacity={0.9} />)}
         <rect x={px} width={W - px} height={H} fill="var(--qs-bg)" opacity={0.62} />
@@ -108,9 +109,17 @@ export function Territory() {
           : m.type === 'annex'
             ? <rect key={k} x={m.x - 2.5} y={H + 5} width={5} height={5} fill={m.x <= px ? 'var(--qs-ink)' : 'var(--qs-ink3)'} />
             : <circle key={k} cx={m.x} cy={H + 7.5} r={2.6} fill="none" stroke={m.x <= px ? 'var(--qs-ink)' : 'var(--qs-ink3)'} />)}
-        <text x={0} y={H + MARK + 13} className="hev-ax">T 0</text>
-        <text x={Math.min(Math.max(px, 30), W - 30)} y={H + MARK + 13} textAnchor="middle" className="hev-ax hev-ax--on">T {turn}</text>
-        <text x={W} y={H + MARK + 13} textAnchor="end" className="hev-ax">T {h.turns.length - 1}</text>
+        {(() => {
+          // the playhead's label sits under it; an end label it would touch gives way
+          const end = h.turns.length - 1, lx = Math.min(Math.max(px, 24), W - 24), room = 56
+          return (
+            <>
+              {lx > room && <text x={0} y={H + MARK + 13} className="hev-ax">T 0</text>}
+              <text x={lx} y={H + MARK + 13} textAnchor="middle" className="hev-ax hev-ax--on">T {turn}</text>
+              {lx < W - room && <text x={W} y={H + MARK + 13} textAnchor="end" className="hev-ax">T {end}</text>}
+            </>
+          )
+        })()}
       </svg>
       <div className="hev-legend"><span><svg width="8" height="7"><path d="M4 0l4 7H0z" /></svg>war</span><span><svg width="7" height="7"><rect width="7" height="7" /></svg>annex</span><span><svg width="8" height="8"><circle cx="4" cy="4" r="3" fill="none" stroke="currentColor" /></svg>split</span></div>
     </div>
@@ -127,15 +136,12 @@ export function Chronicle() {
       <Head t="Chronicle" n={`to turn ${turn}`} />
       {rows.length ? (
         <ol className="hev-log">
-          {rows.map(({ t, e }, k) => {
-            const [who, what] = text(e)
-            return (
-              <li key={k}>
-                <span className="hev-lt">T {String(t).padStart(3, '0')}</span>
-                <span className="hev-lw">{who.map((i) => <Chip key={i} i={i} theme={theme} />)}<span>{what}</span></span>
-              </li>
-            )
-          })}
+          {rows.map(({ t, e }, k) => (
+            <li key={k}>
+              <span className="hev-lt">T {String(t).padStart(3, '0')}</span>
+              <span className="hev-lw">{text(e).map((w, j) => (typeof w === 'number' ? <Chip key={j} i={w} theme={theme} /> : <span key={j}>{w}</span>))}</span>
+            </li>
+          ))}
         </ol>
       ) : <p className="hev-empty">No wars, annexations or splits yet.</p>}
     </div>
@@ -143,7 +149,7 @@ export function Chronicle() {
 }
 
 // ── relations: nations on a ring, alliances and this turn's attacks ─────────────────────────────
-const R = 78, S = 200
+const R = 88, S = 220
 export function Relations() {
   const { history: h, turn, theme } = useEvolve()
   if (!h) return <Empty />
@@ -200,7 +206,7 @@ export function Record() {
   ]
   return (
     <div className="hev hev--record">
-      <Head t="Evolve" n={`${h.k} nations founded · turn ${turn}`} />
+      <Head t="Record" n={`${h.k} founded · to turn ${turn}`} />
       <div className="hev-figs">
         {figs.map(([k, v, note]) => (
           <div key={k} className="hev-fig"><span className="hev-k">{k}</span><span className="hev-big">{v}</span><span className="hev-note">{note}</span></div>

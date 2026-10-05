@@ -1,6 +1,7 @@
 // Metadata blocks in the lab style: "HISTORY — BASE … / TYPE …", "SCENE — SAMPLES …, SEED …, MODEL …".
 // Intrinsically sized; the composer puts them in the tl / tr slots.
 import type { HudCtx } from './types'
+import { base, qubitsPerAxis } from './metaFmt'
 import './lab.css'
 
 type Row = [string, string, boolean?] // key, value, dim
@@ -10,10 +11,6 @@ const AX = ['X', 'Y', 'Z']
 const MODE: Record<string, string> = { gaussian: 'Gaussian', emulator: 'Emulator', atlas: 'Atlas', nations: 'Evolve' }
 const modeName = (m: string) => MODE[m] ?? m
 
-function base(path: string) {
-  const i = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'))
-  return i >= 0 ? path.slice(i + 1) : path
-}
 
 /** FNV-1a, 8 hex digits: a stable seed-like tag for a run when there is no job id. */
 function hash(s: string) {
@@ -25,8 +22,6 @@ function hash(s: string) {
   return (h >>> 0).toString(16).padStart(8, '0')
 }
 
-/** Qubits per axis for an n-cell edge: the emulator caps the register at 32 positions. */
-const qubitsPerAxis = (n: number) => Math.ceil(Math.log2(Math.max(2, Math.min(n, 32))))
 
 function Block({ title, tag, rows }: { title: string; tag?: string; rows: Row[] }) {
   return (

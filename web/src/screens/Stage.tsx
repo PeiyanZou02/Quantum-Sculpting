@@ -492,7 +492,7 @@ export function Stage() {
             edit={present && pr.composing && !pr.bare && !pr.recording ? { sel: pr.sel, onSelect: pr.setSel, onRemove: pr.removePiece, onResize: (k, size) => pr.setLook(k, { size }) } : undefined}
             looks={present ? pr.looks : undefined} hl={present ? pr.hl : null} ghost={present ? pr.preview : null}
             texts={present ? pr.texts : undefined} onText={pr.setText}
-            autoArrange={present} onCrowded={pr.setCrowded} tidyKey={present ? pr.tidyKey : 0} reserve={present && !pr.bare && !framed ? 76 : 0} onHero={present ? (r) => engine.frameInto(r) : undefined}
+            autoArrange={present} onCrowded={pr.setCrowded} onLeftOut={pr.setLeftOut} tidyKey={present ? pr.tidyKey : 0} reserve={present && !pr.bare && !framed ? 76 : 0} onHero={present ? (r) => engine.frameInto(r) : undefined}
             positions={Object.fromEntries(Object.entries(pr.pos).filter(([k]) => k.startsWith(pr.mode + '|')).map(([k, v]) => [k.slice(pr.mode.length + 1), v]))}
             onMove={(k, p) => pr.setPos(`${pr.mode}|${k}`, p)}
             chrome={present ? { top: <PresentChrome /> } : {

@@ -3,7 +3,7 @@
 import type { Family, HudModule, Rect } from './types'
 import { FAMILIES } from './registry'
 import { usePresent } from '../present'
-import { layout, type Slot } from './tidy'
+import { layout, type Pad, type Slot } from './tidy'
 
 export type Composition = Partial<Record<Family, string>>   // variant ids, comma-separated, or 'off'
 
@@ -61,7 +61,7 @@ export function presetOf(c: Composition): string | null {
 
 /** Where a piece was put, as fractions of the view: top-left, or its centre when `c`. `auto`: placed by the
  *  view to keep pieces apart (it may move it again); without it, the user put it there. */
-export interface Placement { x: number; y: number; c?: boolean; auto?: boolean; /** auto only: scaled down to fit */ z?: number }
+export interface Placement { x: number; y: number; c?: boolean; auto?: boolean; /** auto only: the layout's scale */ z?: number; /** auto only: left out of this frame for want of room */ out?: boolean }
 export const TIER_OPACITY = { 1: 1, 2: 0.58, 3: 0.3 } as const
 
 export const keyOf = (m: HudModule) => `${m.family}:${m.id}`
@@ -104,7 +104,7 @@ const fixedBlockers = () => [...document.querySelectorAll('.present-bar')].map((
 export function settle(root: HTMLElement, model: Rect | null, onMove: (k: string, p: Placement) => void, fixed: (k: string) => boolean, scaleOf: (k: string) => number = () => 1, skip: string | null = null) {
   const view = root.getBoundingClientRect()
   const pieces = [...root.querySelectorAll<HTMLElement>('.hud-piece[data-hud]')]
-    .filter((p) => !p.parentElement?.closest('.hud-piece'))
+    .filter((p) => !p.parentElement?.closest('.hud-piece') && p.dataset.out == null)
     .map((p) => ({ k: p.dataset.hud!, r: boxOf(p) }))
     .filter((p) => p.r.width > 0 && p.k !== skip)   // a piece only previewed from the library takes no part
   const stays = (k: string) => k.startsWith('chrome:') || fixed(k)
@@ -139,11 +139,13 @@ export async function savePng(el: HTMLElement, name: string, scale = 3) {
   const pi = usePresent.getState().pngInk   // as shown, or forced dark (for light grounds) or light (for dark ones)
   const ink = pi === 'auto' ? null : 'ink-' + pi
   if (ink) el.classList.add(ink)   // re-resolves the theme tokens inside the piece for the capture
+  const { inlineSvgPaint } = await import('../screens/capture')
+  const restore = inlineSvgPaint(el)
   const url = await toPng(el, {
     pixelRatio: scale,
     style: { background: 'none', zoom: el.style.zoom, opacity: el.style.opacity },
     filter: (n) => !(n instanceof Element && n.matches('.hud-piece__bar, [data-no-export], canvas, [data-hud^="chrome:"], .stage__drop, .landing')),
-  }).finally(() => { if (ink) el.classList.remove(ink) })
+  }).finally(() => { restore(); if (ink) el.classList.remove(ink) })
   const a = document.createElement('a')
   a.href = url
   a.download = `quantum-sculptor-${name.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-${stamp()}.png`
@@ -152,13 +154,13 @@ export async function savePng(el: HTMLElement, name: string, scale = 3) {
 
 /** Lays every piece out afresh for the view's shape (hud/tidy.ts): measures each at its natural size,
  *  then places it on the grid around the object. Object and full-view marks stay as they are. */
-export function composeLayout(root: HTMLElement, onMove: (k: string, p: Placement) => void, slotOf: (k: string) => Slot, scaleOf: (k: string) => number, reserve: number): Rect | null {
+export function composeLayout(root: HTMLElement, onMove: (k: string, p: Placement) => void, slotOf: (k: string) => Slot, scaleOf: (k: string) => number, reserve: number, pad?: Pad): { hero: Rect; out: number } {
   const view = root.getBoundingClientRect()
   const boxes = [...root.querySelectorAll<HTMLElement>('.hud-piece[data-hud]')]
     .filter((p) => !p.parentElement?.closest('.hud-piece') && !p.dataset.hud!.startsWith('chrome:'))
     .map((p) => { const r = boxOf(p), z = scaleOf(p.dataset.hud!); return { k: p.dataset.hud!, w: r.width / z, h: r.height / z, slot: slotOf(p.dataset.hud!) } })
     .filter((b) => b.w > 0 && b.h > 0)
-  const { placed, hero } = layout(boxes, view.width, view.height, reserve)
-  for (const q of placed) onMove(q.k, { x: q.x / view.width, y: q.y / view.height, auto: true, z: q.z < 0.999 ? q.z : undefined })
-  return hero
+  const { placed, hero } = layout(boxes, view.width, view.height, reserve, pad)
+  for (const q of placed) onMove(q.k, { x: q.x / view.width, y: q.y / view.height, auto: true, z: Math.abs(q.z - 1) > 0.001 ? q.z : undefined, out: q.out || undefined })
+  return { hero, out: placed.filter((q) => q.out).length }
 }

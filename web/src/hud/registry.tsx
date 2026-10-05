@@ -11,6 +11,7 @@ import * as selection from './selection'
 import * as callout from './callout'
 import * as frame from './frame'
 import * as meta from './meta'
+import { Title } from './title'
 import * as scan from './scan'
 import * as steps from './steps'
 import * as captures from './captures'
@@ -237,6 +238,14 @@ export const META_MODULES: HudModule[] = [
     desc: 'The quantum settings: qubits per axis, strength, reach, style and axes.',
     slot: 'tr',
     render: (ctx) => <meta.Quantum ctx={ctx} />,
+  },
+  {
+    family: 'meta',
+    id: 'v5',
+    label: 'title',
+    desc: 'The plate’s title: what it shows in a sentence, and the model, grid and run in one line.',
+    slot: 'tl',
+    render: (ctx) => <Title ctx={ctx} />,
   },
 ]
 

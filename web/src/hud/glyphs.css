@@ -89,8 +89,8 @@
 .qg-ruler__tick { position: absolute; top: 3px; width: 1px; height: 7px; background: var(--qs-ink4); }
 
 /* qubit table */
-.qg-tab { display: flex; flex-direction: column; width: 272px; }
-.qg-tab__r { display: grid; grid-template-columns: 34px 44px 56px minmax(0, 1fr) 48px; align-items: baseline; padding: 6px 0; border-bottom: 1px solid var(--qs-line); font: 400 11px/1 var(--qs-mono); }
+.qg-tab { display: flex; flex-direction: column; width: 300px; }
+.qg-tab__r { display: grid; grid-template-columns: 40px 52px 56px minmax(0, 1fr) 48px; column-gap: 6px; align-items: baseline; padding: 6px 0; border-bottom: 1px solid var(--qs-line); font: 400 11px/1 var(--qs-mono); }
 .qg-tab__r > :last-child { text-align: right; }
 .qg-tab__h { padding: 0 0 7px; border-bottom-color: var(--qs-ink); font: 400 11px/1 var(--qs-sans); color: var(--qs-ink3); }
 

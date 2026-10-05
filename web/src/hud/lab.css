@@ -24,6 +24,13 @@
 .qs-lab-meta__v--dim { color: var(--qs-ink3); }
 .qs-lab-meta-pair { display: flex; gap: 40px; align-items: flex-start; }
 
+/* the plate's title: kicker, display line, a sentence, provenance */
+.qs-lab-title { display: flex; flex-direction: column; width: 272px; color: var(--qs-ink); }
+.qs-lab-title__k { font: var(--qs-t-label); text-transform: uppercase; letter-spacing: var(--qs-track-label); color: var(--qs-ink2); padding-bottom: 8px; border-bottom: 1px solid var(--qs-ink); }
+.qs-lab-title__t { font: var(--qs-t-display); letter-spacing: -.01em; margin-top: 12px; text-wrap: balance; }
+.qs-lab-title__p { font: var(--qs-t-prose); color: var(--qs-ink2); margin: 8px 0 0; text-wrap: pretty; }
+.qs-lab-title__m { font: var(--qs-t-meta); color: var(--qs-ink); margin-top: 10px; font-variant-numeric: tabular-nums; }
+
 /* small label used across families */
 .qs-lab-label { font: 500 12px/1 var(--qs-sans); letter-spacing: var(--qs-track); color: var(--qs-ink); }
 .qs-lab-small { font: 400 11px/1 var(--qs-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
