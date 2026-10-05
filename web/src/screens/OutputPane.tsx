@@ -1,6 +1,7 @@
 // OUTPUT: what each step produced. Read-only readouts and charts, plus the export.
 import { useContext, useEffect, useEffectEvent, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useStore } from '../store'
+import type { QrngSummary } from '../api'
 import { Segmented } from '../qs/Segmented'
 import { Slider } from '../qs/Slider'
 import { QReadout } from '../qs/QReadout'
@@ -254,6 +255,17 @@ export function SliceOut() {
   )
 }
 
+/** Where an Evolve history's random bytes came from, in the engine's own terms (see app/qrng.py). */
+function diceNote(d: QrngSummary) {
+  return [
+    d.device === 'qpu' ? `IBM processor${d.qpu_seconds != null ? ` · ${d.qpu_seconds} s` : ''}` : 'pseudo-random',
+    d.grade,
+    d.stretched ? `${fmt.int(d.bytes)} bytes, used up in turn ${d.dry_turn}` : `${fmt.int(d.used)} of ${fmt.int(d.bytes)} bytes used`,
+    d.bell ? `Bell S ${d.bell.s.toFixed(2)}` : null,
+    d.reused ? 'same bytes again' : null,
+  ].filter(Boolean).join(' · ')
+}
+
 export function QuantumOut() {
   const proc = useStore((s) => s.proc)
   const procData = useStore((s) => s.procData)
@@ -272,6 +284,7 @@ export function QuantumOut() {
         { k: 'Wars', v: nat.wars, note: `${nat.annexed} annexed · ${nat.died} fell` },
         { k: 'Splits', v: nat.split, note: `${nat.exiled} left the continent` },
         { k: 'Solid cells', v: fmt.int(nat.end), note: `${fmt.int(nat.start)} at the start · +${fmt.int(nat.grown)} grown · −${fmt.int(nat.carved)} carved` },
+        ...(proc.qrng ? [{ k: 'Random numbers', v: proc.qrng.device === 'qpu' ? proc.qrng.backend ?? 'real chip' : 'simulator', note: diceNote(proc.qrng) }] : []),
       ]} />
     </Blk>
   )

@@ -16,6 +16,7 @@ function activity(s: ReturnType<typeof useStore.getState>, p: ReturnType<typeof 
   if (p.recording) return { id: 'rec', t: 'Recording the view', busy: true, tone: 'busy' }
   if (busy.model) return { id: 'model', t: 'Opening the model', busy: true, tone: 'busy' }
   if (busy.vox) return { id: 'vox', t: `Voxelising ${s.vox.n}³`, busy: true, tone: 'busy' }
+  if (job?.status === 'running' && job.kind === 'qrng') return { id: 'atlas', t: job.atlas_status === 'evolving' ? "Evolving from Atlas's random numbers" : `Waiting for random numbers from Atlas · ${job.atlas_status}`, busy: true, tone: 'busy', share: null }
   if (job?.status === 'running') return { id: 'atlas', t: `Running on Atlas · tile ${job.tiles_done} of ${job.tiles_total}`, busy: true, tone: 'busy', share: job.tiles_total ? job.tiles_done / job.tiles_total : null }
   if (busy.proc || busy.evolve) return { id: 'proc', t: evolve ? `Evolving ${q.k} nations over ${q.turns} turns` : `Running the ${q.mode === 'emulator' ? 'emulation' : q.mode === 'gaussian' ? 'Gaussian blur' : 'quantum step'}`, busy: true, tone: 'busy' }
   if (ev.loading) return { id: 'turns', t: 'Loading the Evolve turns', busy: true, tone: 'busy' }

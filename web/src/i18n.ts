@@ -56,6 +56,13 @@ const RULES: [RegExp, string | ((...m: string[]) => string)][] = [
   [/^Atlas 返回了 (\d+) 个数，和输入的 (\d+) 个对不上/, (_, a, b) => `Atlas returned ${a} values; ${b} were sent.`],
   [/^看不懂 Atlas 的返回结构，字段有：(.+)/, (_, f) => `Unexpected Atlas result; fields: ${f}`],
   [/^之前保存的任务已经查不到了，再运行一次会重新提交。（(.+)）/, (_, e) => `A saved job can no longer be found; run again to resubmit (${e}).`],
+  // Evolve's random numbers from Atlas (app/qrng.py, server.evolve_with_atlas)
+  [/^之前保存的任务已经查不到了，再点一次「开始运行」会重新提交。（(.+)）/, (_, e) => `The saved job can no longer be found; run on Atlas again to resubmit (${e}).`],
+  [/^这一池随机字节在本机找不到了/, 'Those random bytes are no longer on this computer. Run on Atlas to ask for new ones.'],
+  [/^接着等上次没等完的那个任务，没有重新提交/, 'Picked up the job that was still waiting from last time; nothing new was submitted.'],
+  [/^comet-qrng-v1 这次没有给出随机字节/, 'Atlas returned no random bytes this time: the measured data held no extractable entropy.'],
+  [/^comet-qrng-v1 返回的随机数不是十六进制/, 'Atlas returned the random numbers in a form this app cannot read.'],
+  [/^看不懂 comet-qrng-v1 的返回结构，字段有：(.+)/, (_, f) => `Unexpected answer from comet-qrng-v1; fields: ${f}`],
   [/^另一个分块失败了，已停止等待/, 'Another tile failed; stopped waiting.'],
   [/^已停止/, 'Stopped.'],
   [/^数据超过了 Atlas 单个任务约 2 MB 的上限，分得再小也不行。（(.+)）/, (_, d) => `The data is over Atlas's ~2 MB per-job limit even at the smallest tiles (${d}).`],
@@ -68,6 +75,7 @@ const RULES: [RegExp, string | ((...m: string[]) => string)][] = [
 const HINTS: [RegExp, string][] = [
   [/API key 无效，或账户未激活。/, 'The API key is invalid or the account is not active. '],
   [/这个 key 没有权限使用该引擎。/, 'This key may not use this engine. '],
+  [/这个账户没有权限这样使用该引擎。/, 'This account may not use the engine this way. '],
   [/请求太频繁，稍等一会儿再试。/, 'Too many requests; polling slows down. '],
   [/Atlas 暂时不可用，稍后重试。/, 'Atlas is temporarily unavailable. '],
   [/：/g, ': '],

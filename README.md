@@ -26,6 +26,16 @@ API). `cd web && pnpm install && pnpm dev` runs it and the service together; aft
 service serves it at <http://127.0.0.1:8765/> and the original interface at `/classic`. See
 `web/README.md`.
 
+On Windows, double-click `build-web.bat` instead: it builds the interface into
+`app/static/studio`. If Node is not installed it first downloads a private copy of the Node LTS
+(from nodejs.org, checksum verified) and pnpm into `%USERPROFILE%\.quantum-sculpting`; nothing
+is installed system-wide, and `node_modules` stays out of the synced project folder. After that
+`run.bat` rebuilds the interface by itself whenever `web/` has changed.
+
+The interface is set in TWK Everett Mono, which is licensed and not in the repository. With the
+three `.woff2` files in `web/public/fonts/` the build picks them up; without them it falls back
+to the system's monospace font.
+
 ## How to use it
 
 1. **Model** — choose a `.stl`, `.obj`, `.ply`, `.glb` or `.off` file, or drag it onto the

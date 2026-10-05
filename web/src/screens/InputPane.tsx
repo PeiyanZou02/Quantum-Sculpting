@@ -205,7 +205,9 @@ export function QuantumIn() {
       )}
       <Panel id="in-q-run" title="Run" aside={q.run}>
         <Input label="Name" value={q.run} onChange={(v) => st.setQ({ run: v.replace(/[^\w-]/g, '_').slice(0, 40) })}
-          help={q.mode === 'nations' ? 'The run name seeds the measurements: the same name gives the same history.' : 'Results are filed under this name.'} />
+          help={q.mode !== 'nations' ? 'Results are filed under this name.'
+            : q.source === 'qrng' ? 'Names the run and its files. With random numbers from Atlas every run is a new history.'
+            : 'The run name seeds the measurements: the same name gives the same history.'} />
       </Panel>
     </>
   )
@@ -217,6 +219,7 @@ function EvolveIn() {
   const n = useStore((s) => s.grid?.n ?? null)
   const setQ = useStore((s) => s.setQ)
   return (
+    <>
     <Panel id="in-q-nations" title="Nations" aside={`${q.k} · ${q.turns} turns`}>
       {n != null && n > NATIONS_MAX_GRID && <Note warn>Evolve works on grids up to {NATIONS_MAX_GRID}³; this one is {n}³.</Note>}
       <Slider label="Nations" value={q.k} min={3} max={16} step={1} defaultValue={12} onChange={(v) => setQ({ k: v })}
@@ -231,6 +234,26 @@ function EvolveIn() {
           value={q.grooves ? 'grooves' : 'flush'} onChange={(v) => setQ({ grooves: v === 'grooves' })} aria-label="Borders" />
       </Row>
     </Panel>
+    <Panel id="in-q-dice" title="Random numbers" aside={q.source !== 'qrng' ? 'this machine' : q.device === 'qpu' ? 'Atlas · real chip' : 'Atlas · simulator'}>
+      <Row label="From" tip="Everything random in a history draws on these: how the model is split into nations, which question each is asked, what each measurement gives.">
+        <Segmented size="s" options={[{ value: 'local', label: 'This machine' }, { value: 'qrng', label: 'Atlas' }]}
+          value={q.source} onChange={(v) => setQ({ source: v as 'local' | 'qrng' })} aria-label="Random numbers from" />
+      </Row>
+      {q.source === 'qrng' ? (
+        <>
+          <Row label="Measured on" tip="The simulator returns pseudo-random bytes, which the engine grades as a baseline. A real chip is an IBM quantum processor reached through Moth's account.">
+            <Segmented size="s" options={[{ value: 'emu', label: 'Simulator' }, { value: 'qpu', label: 'Real chip' }]}
+              value={q.device} onChange={(v) => setQ({ device: v as 'emu' | 'qpu' })} aria-label="Measured on" />
+          </Row>
+          <Note>
+            Run on Atlas asks the comet-qrng-v1 engine for a pool of random bytes: one job, 5 credits
+            {q.device === 'qpu' ? ', about 5 seconds of processor time and two minutes in all.' : '.'} Once the bytes are here, changing a setting
+            evolves from the same bytes again and asks nothing more.
+          </Note>
+        </>
+      ) : <Note>A seeded generator on this computer. Nothing is sent to Atlas.</Note>}
+    </Panel>
+    </>
   )
 }
 

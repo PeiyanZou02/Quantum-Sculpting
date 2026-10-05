@@ -43,6 +43,8 @@ const Q_WHY: Record<string, (v: never) => string> = {
   style: (v: string) => `Gate style ${v}`, axes: (v: number[]) => `Blur axes ${v.map((a) => 'xyz'[a]).join('')}`, shots: (v: number | null) => v ? `${v} shots` : 'Exact (no shots)',
   run: (v: string) => `Run ${v}`, tiling: (v: string) => `Tiling · ${v}`, k: (v: number) => `${v} nations`, turns: (v: number) => `${v} turns`,
   spread: (v: number) => `Growth reach ${v}%`, grooves: (v: boolean) => v ? 'Carve border grooves' : 'Flush borders',
+  source: (v: string) => v === 'qrng' ? 'Random numbers from Atlas' : 'Random numbers from this machine',
+  device: (v: string) => v === 'qpu' ? 'Measured on a real chip' : 'Measured on the simulator',
   mode: (v: string) => `Switched to ${({ gaussian: 'Gaussian', emulator: 'Emulation', atlas: 'Atlas', nations: 'Evolve' } as Record<string, string>)[v] ?? v}`,
 }
 const M_WHY: Record<string, (v: never) => string> = {
@@ -159,10 +161,13 @@ interface S {
   gridData: Grid | null
 
   /** Quantum step. k / turns / spread / grooves are Evolve's (spread = growth reach, % of the grid edge). */
-  q: { mode: Mode; sigma: number; strength: number; reach: number; style: string; axes: number[]; shots: number | null; run: string; tiling: Tiling; k: number; turns: number; spread: number; grooves: boolean }
+  q: { mode: Mode; sigma: number; strength: number; reach: number; style: string; axes: number[]; shots: number | null; run: string; tiling: Tiling; k: number; turns: number; spread: number; grooves: boolean; source: 'local' | 'qrng'; device: 'emu' | 'qpu' }
   proc: ProcMeta | null
   procData: Grid | null
   job: JobView | null
+  /** Evolve's random numbers from Atlas: the job whose bytes are kept on this computer. With one in hand,
+   *  changing a setting evolves from the same bytes again; only Run on Atlas asks for a new pool. */
+  pool: string | null
   atlasJobs: AtlasJobRow[]
 
   m: MeshParams
@@ -388,7 +393,7 @@ export const useStore = create<S>()((set, get) => {
       try {
         const job = await api.job(id)
         set({ job })
-        if (job.version !== version && job.status === 'running') {
+        if (job.kind !== 'qrng' && job.version !== version && job.status === 'running') {
           version = job.version
           try {
             const { grid, meta } = await api.jobPreview(id)
@@ -399,6 +404,29 @@ export const useStore = create<S>()((set, get) => {
               if (get().focus.stage !== 'scan') get().setFocus('scan', `Atlas run ${job.run} · layer by layer`)
             }
           } catch { /* preview not ready */ }
+        }
+        if (job.status === 'done' && job.kind === 'qrng') {
+          // the bytes are on this computer now: this history, and any later change of a setting, evolves from them
+          if (job.pool) set({ pool: job.pool })
+          if (job.meta) {
+            const dice = job.meta.qrng
+            set((s) => ({ proc: job.meta, stale: { ...s.stale, proc: false } }))
+            loadEvolve(job.meta)
+            await adoptProcessed()
+            const from = dice ? `${dice.bytes.toLocaleString()} bytes from ${dice.device === 'qpu' ? dice.backend ?? 'a real chip' : "Atlas's simulator"}` : 'received'
+            get().pushLog(`Random numbers for ${job.run}: ${from} · ${job.elapsed}s`)
+            get().setFocus('evolve', `Evolved ${job.run} from Atlas's random numbers`)
+            if (get().step < 2) set({ step: 2 })
+            if (get().auto) get().buildMesh()
+            else set((s) => ({ stale: { ...s.stale, mesh: !!s.resultMesh } }))
+          } else if (job.stale) {
+            get().pushLog('The grid changed while Atlas was measuring; the bytes are kept and can evolve the new grid', 'warn')
+            if (get().auto) get().process()
+            else set((s) => ({ stale: { ...s.stale, proc: true } }))
+          }
+          watching = null
+          get().refreshAtlasJobs()
+          return
         }
         if (job.status === 'done') {
           if (job.meta) {
@@ -501,10 +529,11 @@ export const useStore = create<S>()((set, get) => {
     grid: null,
     gridData: null,
 
-    q: { mode: 'emulator', sigma: 1, strength: 0.3, reach: 0, style: 'x', axes: [0, 1, 2], shots: null, run: 'run1', tiling: 'cube', k: 12, turns: 60, spread: 4, grooves: false },
+    q: { mode: 'emulator', sigma: 1, strength: 0.3, reach: 0, style: 'x', axes: [0, 1, 2], shots: null, run: 'run1', tiling: 'cube', k: 12, turns: 60, spread: 4, grooves: false, source: 'local', device: 'emu' },
     proc: null,
     procData: null,
     job: null,
+    pool: null,
     atlasJobs: [],
 
     m: {
@@ -539,12 +568,13 @@ export const useStore = create<S>()((set, get) => {
             // Evolve keeps its growth reach (%) under `reach`; ours is `spread`, and q.reach stays the blur's
             const raw = st.processed.params as Partial<S['q']> & { axes?: number[] | null }
             const pp = evolved
-              ? Object.fromEntries(Object.entries({ k: raw.k, turns: raw.turns, spread: raw.reach, grooves: raw.grooves }).filter(([, v]) => v != null))
+              ? Object.fromEntries(Object.entries({ k: raw.k, turns: raw.turns, spread: raw.reach, grooves: raw.grooves, source: raw.source ?? 'local', device: raw.device }).filter(([, v]) => v != null))
               : raw
             set((s) => ({
               proc: st.processed,
               q: { ...s.q, ...pp, axes: (evolved ? s.q.axes : raw.axes) ?? [0, 1, 2], mode: st.processed!.mode, run: st.processed!.run, tiling: st.processed!.tiles?.mode ?? s.q.tiling },
             }))
+            if (st.processed.qrng && st.processed.job_id) set({ pool: st.processed.job_id })
             await adoptProcessed()
             set({ step: 2 })
             if (evolved) loadEvolve(st.processed)
@@ -665,11 +695,22 @@ export const useStore = create<S>()((set, get) => {
     process: (opts) => run('proc', async () => {
       const { q, grid } = get()
       if (!grid) return
-      const mode = opts?.submit || opts?.cachedOnly ? 'atlas' : q.mode
+      // Evolve with Atlas's random numbers: only its own Run asks Atlas for a pool of bytes (that is what
+      // costs credits). With a pool on this computer, every other run evolves from it and asks nothing.
+      const dice = q.mode === 'nations' && q.source === 'qrng'
+      const mode = dice ? 'nations' : opts?.submit || opts?.cachedOnly ? 'atlas' : q.mode
       if (mode === 'atlas' && !opts?.submit && !opts?.cachedOnly) return
+      const pool = dice && !opts?.submit ? get().pool : null
+      if (dice && !opts?.submit && !pool) return
       const t = ticket('proc')
-      const signal = mode === 'atlas' && opts?.submit ? undefined : flight(PROC)
-      const res = await api.process({ ...q, mode, shots: q.shots || null, cached_only: opts?.cachedOnly }, signal)
+      const signal = opts?.submit ? undefined : flight(PROC)
+      let res: Awaited<ReturnType<typeof api.process>>
+      try {
+        res = await api.process({ ...q, mode, shots: q.shots || null, cached_only: dice ? undefined : opts?.cachedOnly, ...(pool ? { qrng_job: pool } : {}) }, signal)
+      } catch (e) {
+        if (pool && e instanceof ApiError && e.status === 404) set({ pool: null })    // those bytes are gone: the next Run on Atlas asks for new ones
+        throw e
+      }
       if (!current('proc', t)) return
       if (res.status === 'missing') {
         clearEvolve()
@@ -678,8 +719,13 @@ export const useStore = create<S>()((set, get) => {
       }
       if ('job_id' in res && res.status === 'running') {
         set({ job: res })
-        get().setFocus('quantum', `Submitted ${res.run} to Atlas`)
-        get().pushLog(`Submitted ${res.run} to Atlas · ${res.tiles_total} tiles`)
+        if (res.kind === 'qrng') {
+          get().setFocus('evolve', `Asked Atlas for the random numbers of ${res.run}`)
+          get().pushLog(`Asked Atlas (comet-qrng-v1, ${q.device === 'qpu' ? 'real chip' : 'simulator'}) for the random numbers of ${res.run}`)
+        } else {
+          get().setFocus('quantum', `Submitted ${res.run} to Atlas`)
+          get().pushLog(`Submitted ${res.run} to Atlas · ${res.tiles_total} tiles`)
+        }
         watchJob(res.job_id)
         return
       }
@@ -693,6 +739,7 @@ export const useStore = create<S>()((set, get) => {
           // Evolve's params.reach is its growth reach in %, not the blur's reach
           mode: mt.mode, strength: evolved ? 0 : pp.strength ?? 0, reach: evolved ? 0 : pp.reach ?? 0, t: Date.now(),
         }] }))
+        if (mt.qrng && mt.job_id) set({ pool: mt.job_id })
         if (evolved) loadEvolve(mt)
         else clearEvolve()
         await adoptProcessed()

@@ -1309,6 +1309,14 @@ def studio(name="index.html"):
     return send_from_directory(STATIC / "studio", name if path.is_file() else "index.html")
 
 
+@app.get("/fonts/<path:name>")
+def studio_fonts(name):
+    """新界面的字体。它的样式表里写的是 /fonts/...：开发服务器直接从 web/public/fonts/ 给，
+    构建之后这些文件在 static/studio/fonts/，要靠这里才取得到。字体是授权的，不在仓库里；
+    没有就 404，界面落到系统的等宽字体上。"""
+    return send_from_directory(STATIC / "studio" / "fonts", name)
+
+
 def main():
     global HOME, ATLAS_BASE, INPUT, GRIDS, OUTPUT
     p = argparse.ArgumentParser(description="Quantum Sculpting")

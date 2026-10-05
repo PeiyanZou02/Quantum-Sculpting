@@ -28,6 +28,12 @@ their steps by themselves, one into the next as settings change; your own models
 (or *Run all*, which does whatever is missing or out of date), since they can be large. The switch
 *Run steps by themselves* sits under the actions.
 
+Evolve's random numbers come from this machine (seeded by the run name) or from Atlas: under
+*Random numbers*, *Atlas* makes the step's action **Run on Atlas**, which asks the comet-qrng-v1
+engine for a pool of random bytes (one job, on the simulator or a real chip). Once the bytes are on
+this computer, changing a setting evolves from the same bytes again without asking; Properties ·
+Evolve result says where they came from. Details in the top-level README.
+
 The drawer's row is the status line: what is running and how far along (Atlas tiles and Evolve turns
 as a share, with a bar; other steps with the time they have taken), or what the workspace waits for,
 then the latest line of the runtime log.

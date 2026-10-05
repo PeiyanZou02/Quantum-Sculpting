@@ -30,7 +30,7 @@ export function StatusBar() {
       {running && (
         <span className="term__run">
           <Dot live blink />
-          <span>{job.run} · {job.tiles_done}/{job.tiles_total} tiles · {job.atlas_status}</span>
+          <span>{job.run} · {job.kind === 'qrng' ? 'random numbers' : `${job.tiles_done}/${job.tiles_total} tiles`} · {job.atlas_status}</span>
           <span className="bar" style={{ width: 120 }}><span style={{ width: `${(job.tiles_done / Math.max(1, job.tiles_total)) * 100}%` }} /></span>
         </span>
       )}

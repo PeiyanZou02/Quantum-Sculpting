@@ -1019,6 +1019,30 @@ class ServerTest(unittest.TestCase):
                               {"mode": "nations", "run": "late", "params": {}})
         self.assertIsNone(self.c.get("/api/state").get_json()["processed"])
 
+    def test_the_built_interface_and_its_fonts_are_served_when_they_exist(self):
+        """新界面构建在 static/studio/ 里：有它，首页就是它，原来的界面在 /classic；没有，首页还是原来的。"""
+        real = server.STATIC
+        with tempfile.TemporaryDirectory() as tmp:
+            static = Path(tmp)
+            (static / "index.html").write_text("classic", encoding="utf-8")
+            server.STATIC = static
+            try:
+                self.assertEqual(self.c.get("/").data, b"classic")
+                self.assertEqual(self.c.get("/studio/").status_code, 404)
+                self.assertEqual(self.c.get("/fonts/Mono-Regular.woff2").status_code, 404)
+                (static / "studio" / "fonts").mkdir(parents=True)
+                (static / "studio" / "index.html").write_text("studio", encoding="utf-8")
+                (static / "studio" / "fonts" / "Mono-Regular.woff2").write_bytes(b"wOF2")
+                with self.c.get("/") as r:
+                    self.assertEqual(r.data, b"studio")
+                with self.c.get("/classic") as r:
+                    self.assertEqual(r.data, b"classic")
+                with self.c.get("/fonts/Mono-Regular.woff2") as r:
+                    self.assertEqual((r.status_code, r.data), (200, b"wOF2"))
+                self.assertEqual(self.c.get("/fonts/../index.html").status_code, 404, "只给字体目录里的文件")
+            finally:
+                server.STATIC = real
+
     def test_every_response_says_which_start_of_the_service_it_came_from(self):
         boots = {self.c.get(path).headers.get("X-Boot") for path in ("/", "/api/state", "/api/grid/input")}
         self.assertEqual(boots, {server.BOOT})

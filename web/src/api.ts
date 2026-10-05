@@ -53,12 +53,18 @@ export interface ProcMeta {
   max: number
   /** Evolve only: what happened over the whole history. */
   nations?: NationsSummary
+  /** Evolve with random numbers from Atlas (comet-qrng-v1): where the bytes came from and how many were used. */
+  qrng?: QrngSummary
 }
 
 export interface KeyStatus { set: boolean; source: 'saved' | 'env' | null; hint: string; base: string; official: boolean }
 
 export interface JobView {
   job_id: string
+  /** 'blur': the grid goes to blur-core in tiles. 'qrng': Evolve asks comet-qrng-v1 for a pool of random bytes. */
+  kind?: 'blur' | 'qrng'
+  /** qrng: the Atlas job whose bytes are now kept on this computer; evolving from them again asks nothing of Atlas. */
+  pool?: string | null
   status: 'running' | 'done' | 'failed'
   atlas_status: string
   run: string
@@ -239,6 +245,12 @@ export interface ProcessParams {
   turns?: number
   spread?: number
   grooves?: boolean
+  /** Evolve's random numbers: this machine's seeded generator, or a pool of bytes from Atlas (comet-qrng-v1). */
+  source?: 'local' | 'qrng'
+  /** qrng: measured on Atlas's simulator or on a real IBM processor. */
+  device?: 'emu' | 'qpu'
+  /** qrng: evolve from the pool this Atlas job returned (kept on this computer) instead of asking for a new one. */
+  qrng_job?: string
 }
 export interface MeshParams {
   method: 'threshold' | 'advect'
@@ -372,6 +384,25 @@ export interface NationsHistory {
 }
 
 export interface NationsFrameMeta { n: number; k: number; box: [number, number][]; turn: number; turns: number; proc_id: number }
+
+/** Where a history's random bytes came from (app/qrng.py). The grade is the engine's own word for them. */
+export interface QrngSummary {
+  bytes: number
+  used: number
+  /** Bytes drawn after the pool ran out (derived from it with SHAKE-256), and the turn it ran out in. */
+  stretched: number
+  dry_turn: number | null
+  /** This result evolved again from a pool that was already on this computer. */
+  reused: boolean
+  /** 'simulator-baseline' or 'hardware-accounted'. */
+  grade: string | null
+  accounted: boolean | null
+  h_bit: number | null
+  device: 'emu' | 'qpu' | null
+  backend: string | null
+  qpu_seconds: number | null
+  bell: { s: number; sigma: number | null; violates: boolean } | null
+}
 
 export interface NationsSummary {
   k: number

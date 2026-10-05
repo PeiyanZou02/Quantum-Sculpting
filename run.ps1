@@ -38,6 +38,14 @@ if ($hash -ne $installed) {
     Set-Content -Path $stamp -Value $hash -Encoding ascii
 }
 
+# The redesigned interface (web\) is served from app\static\studio once it is built. Rebuild it
+# when its sources changed and the tools are already set up; build-web.bat sets them up once.
+$buildWeb = Join-Path $root "build-web.ps1"
+if ((Test-Path $buildWeb) -and (Test-Path (Join-Path $root "web\package.json"))) {
+    & powershell -NoProfile -ExecutionPolicy Bypass -File $buildWeb -IfChanged -NoDownload
+    if ($LASTEXITCODE -ne 0) { Write-Host "The interface could not be rebuilt; serving what was built before." }
+}
+
 $serverArgs = @((Join-Path $root "app\server.py"), "--port", $Port)
 if (-not $NoBrowser) { $serverArgs += "--open" }
 & $py @serverArgs
