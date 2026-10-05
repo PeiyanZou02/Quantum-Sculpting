@@ -13,6 +13,45 @@ import type { Camera } from './qs/QCam'
 export type Step = -1 | 0 | 1 | 2 | 3
 export type View = 'model' | 'voxels' | 'processed' | 'result' | 'scan'
 export type MeshTab = 'threshold' | 'push' | 'export'
+/** The stage being worked on. The workspace view, the side tab and the log follow it; there is no manual view switch. */
+export type Stage = 'model' | 'voxels' | 'quantum' | 'evolve' | 'mesh' | 'scan'
+export interface Focus {
+  stage: Stage
+  /** What the person just did, shown over the view ("Grid size 64³"). */
+  why: string
+  /** Set when a new model starts the pipeline: the focus moves on with each stage as it finishes. */
+  follow: boolean
+  t: number
+}
+const STAGE_VIEW: Record<Stage, View> = { model: 'model', voxels: 'voxels', quantum: 'processed', evolve: 'processed', mesh: 'result', scan: 'scan' }
+/** The view for the focus: the stage's own, or the nearest earlier one that exists yet. */
+export function viewFor(stage: Stage, s: { modelMesh: unknown; gridData: unknown; procData: unknown; resultMesh: unknown }): View {
+  const have: Record<View, boolean> = { model: !!s.modelMesh, voxels: !!s.gridData, processed: !!s.procData, result: !!s.resultMesh, scan: !!s.procData && !!s.gridData }
+  const chain: View[] = ['result', 'processed', 'voxels', 'model']
+  const want = STAGE_VIEW[stage]
+  if (have[want]) return want
+  const from = want === 'scan' ? 1 : chain.indexOf(want)
+  return chain.slice(from).find((v) => have[v]) ?? 'model'
+}
+const VOX_WHY: Record<string, (v: never) => string> = {
+  n: (v: number) => `Grid size ${v}³`, fill: (v: string) => `Inside · ${({ holes: 'fill enclosed', capped: 'cap and fill', none: 'shell only' } as Record<string, string>)[v] ?? v}`,
+  values: (v: string) => `Cell values · ${v}`, pad: (v: number) => `Padding ${v}`,
+}
+const Q_WHY: Record<string, (v: never) => string> = {
+  sigma: (v: number) => `Sigma ${v}`, strength: (v: number) => `Strength ${v.toFixed(2)}`, reach: (v: number) => `Reach ${v.toFixed(2)}`,
+  style: (v: string) => `Gate style ${v}`, axes: (v: number[]) => `Blur axes ${v.map((a) => 'xyz'[a]).join('')}`, shots: (v: number | null) => v ? `${v} shots` : 'Exact (no shots)',
+  run: (v: string) => `Run ${v}`, tiling: (v: string) => `Tiling · ${v}`, k: (v: number) => `${v} nations`, turns: (v: number) => `${v} turns`,
+  spread: (v: number) => `Growth reach ${v}%`, grooves: (v: boolean) => v ? 'Carve border grooves' : 'Flush borders',
+  mode: (v: string) => `Switched to ${({ gaussian: 'Gaussian', emulator: 'Emulation', atlas: 'Atlas', nations: 'Evolve' } as Record<string, string>)[v] ?? v}`,
+}
+const M_WHY: Record<string, (v: never) => string> = {
+  level: (v: number) => `Level ${v.toFixed(2)}`, method: (v: string) => v === 'advect' ? 'Push the surface' : 'Threshold surface',
+  amount: (v: number) => `Push ${v}`, field: (v: string) => `Field · ${v}`, refine: (v: number) => `Refine ×${v}`, vfilter: (v: string) => `Smooth · ${v}`,
+  vwidth: (v: number) => `Smooth width ${v}`, grow: (v: number) => `Thicken ${v}`, close: (v: number) => `Close gaps ${v}`, smooth: (v: number) => `${v} smoothing passes`,
+  keep: (v: string) => v === 'all' ? 'Keep all large parts' : 'Keep largest part', height: (v: number) => `Print height ${v} mm`,
+}
+const why = (table: Record<string, (v: never) => string>, p: object) =>
+  Object.entries(p).map(([k, v]) => table[k]?.(v as never)).filter(Boolean).join(' · ') || 'Changed a setting'
 
 export const HOME_CAM: Camera = { az: 35, el: 22, dist: 2.4 }
 
@@ -70,6 +109,9 @@ export const TURNS_PER_SECOND = 6
 
 interface S {
   step: Step
+  focus: Focus
+  /** Point the workspace at a stage. The view follows; `follow` lets it move on with the pipeline. */
+  setFocus: (stage: Stage, why: string, follow?: boolean) => void
   meshTab: MeshTab
   view: View
   camera: Camera
@@ -242,7 +284,8 @@ export const useStore = create<S>()((set, get) => {
     set({ model: info, up: info.up, grid: null, gridData: null, proc: null, procData: null, report: null, resultMesh: null, exported: null })
     const { mesh } = await api.modelMesh()
     set({ modelMesh: mesh })
-    set({ step: 0, view: 'model' })
+    set({ step: 0 })
+    if (chain) get().setFocus('model', `Opened ${info.builtin ? 'the test cup' : info.file}`, true)
     get().pushLog(`Model ${info.file} · ${info.faces.toLocaleString()} faces`)
     if (chain) get().voxelize()
   }
@@ -323,7 +366,10 @@ export const useStore = create<S>()((set, get) => {
             const { grid, meta } = await api.jobPreview(id)
             set({ procData: grid })
             // layer-tiled runs: the scan plane follows the real progress
-            if (meta.frontier != null) set({ view: 'scan', scan: { z: meta.frontier, playing: false }, slice: { axis: 'z', index: Math.max(0, meta.frontier - 1) } })
+            if (meta.frontier != null) {
+              set({ scan: { z: meta.frontier, playing: false }, slice: { axis: 'z', index: Math.max(0, meta.frontier - 1) } })
+              if (get().focus.stage !== 'scan') get().setFocus('scan', `Atlas run ${job.run} · layer by layer`)
+            }
           } catch { /* preview not ready */ }
         }
         if (job.status === 'done') {
@@ -332,6 +378,7 @@ export const useStore = create<S>()((set, get) => {
             clearEvolve()
             await adoptProcessed()
             get().pushLog(`Atlas run ${job.run} done · ${job.tiles_total} tiles · ${job.elapsed}s`)
+            if (get().focus.stage === 'scan' || get().focus.stage === 'quantum') get().setFocus('quantum', `Atlas run ${job.run} done`)
             get().buildMesh()
           }
           if (job.stale) get().pushLog('Grid changed during the run; result cached but not applied', 'warn')
@@ -356,6 +403,12 @@ export const useStore = create<S>()((set, get) => {
 
   return {
     step: -1,
+    focus: { stage: 'model', why: '', follow: false, t: 0 },
+    setFocus: (stage, why, follow = false) => {
+      const f = get().focus
+      if (f.stage === stage && f.why === why && f.follow === follow) return
+      set({ focus: { stage, why, follow, t: Date.now() } })
+    },
     meshTab: 'threshold',
     view: 'model',
     camera: HOME_CAM,
@@ -468,6 +521,8 @@ export const useStore = create<S>()((set, get) => {
             set({ step: 2 })
             if (evolved) loadEvolve(st.processed)
           }
+          // land where the work was: Evolve's history, or the furthest stage the service has
+          get().setFocus(st.processed?.mode === 'nations' ? 'evolve' : st.processed ? 'mesh' : st.grid ? 'voxels' : 'model', 'Picked up where you left off', true)
           // run only the steps the service doesn't already have
           if (!st.grid) get().voxelize()
           else if (!st.processed) get().process(get().q.mode === 'atlas' ? { cachedOnly: true } : undefined)
@@ -483,10 +538,11 @@ export const useStore = create<S>()((set, get) => {
       if (s >= 1 && !st.model) return
       if (s >= 2 && !st.grid) return
       if (s >= 3 && !st.proc) return
-      set({ step: s, view: (['model', 'model', 'voxels', 'processed', 'result'] as View[])[s + 1] })
+      set({ step: s })
+      get().setFocus((['model', 'model', 'voxels', st.proc?.mode === 'nations' ? 'evolve' : 'quantum', 'mesh'] as Stage[])[s + 1], 'Opened the step')
       if (s === 3 && !st.resultMesh) get().buildMesh()
     },
-    setView: (v) => set({ view: v }),
+    setView: (v) => set({ view: v }),     // internal: the view follows the focus (see the subscription below)
     setCamera: (c) => set({ camera: c }),
     setSlice: (p) => set((s) => ({ slice: { ...s.slice, ...p } })),
 
@@ -503,11 +559,13 @@ export const useStore = create<S>()((set, get) => {
     }),
     setUp: (up) => run('model', async () => {
       set({ up })
+      get().setFocus('model', `Up axis ${up}`)
       if (get().model) await adoptModel(await api.orient(up))
     }),
 
     setVox: (p) => {
       set((s) => ({ vox: { ...s.vox, ...p } }))
+      if (get().model) get().setFocus('voxels', why(VOX_WHY, p))
       if (get().model) debounce('vox', 250, () => get().voxelize())
     },
     voxelize: () => run('vox', async () => {
@@ -524,6 +582,7 @@ export const useStore = create<S>()((set, get) => {
       })
       set({ step: Math.max(st.step, 1) as Step })
       get().pushLog(`Voxelised ${info.n}³ · ${info.solid.toLocaleString()} solid cells`)
+      if (get().focus.follow) get().setFocus('voxels', `Voxelised ${info.n}³`, true)
       // Atlas waits for an explicit submit; it may still find a cached result for these settings
       get().process(get().q.mode === 'atlas' ? { cachedOnly: true } : undefined)
     }),
@@ -531,6 +590,7 @@ export const useStore = create<S>()((set, get) => {
     setQ: (p) => {
       set((s) => ({ q: { ...s.q, ...p } }))
       const { q, proc } = get()
+      if (get().grid) get().setFocus(q.mode === 'nations' ? 'evolve' : 'quantum', why(Q_WHY, p))
       // Local modes update live as the dials turn; Atlas waits for an explicit submit
       // Evolve computes a whole history: wait a little longer for the slider to settle
       if (get().grid) debounce('proc', q.mode === 'nations' ? 400 : 120, () => get().process(q.mode === 'atlas' ? { cachedOnly: true } : undefined))
@@ -552,6 +612,7 @@ export const useStore = create<S>()((set, get) => {
       }
       if ('job_id' in res && res.status === 'running') {
         set({ job: res })
+        get().setFocus('quantum', `Submitted ${res.run} to Atlas`)
         get().pushLog(`Submitted ${res.run} to Atlas · ${res.tiles_total} tiles`)
         watchJob(res.job_id)
         return
@@ -570,6 +631,8 @@ export const useStore = create<S>()((set, get) => {
         else clearEvolve()
         await adoptProcessed()
         if (!current('proc', t)) return
+        // following a new model: Evolve stops on its history (that is the result to look at); other modes go on to the mesh
+        if (get().focus.follow) get().setFocus(evolved ? 'evolve' : 'quantum', evolved ? `Evolved ${pp.k} nations` : `${mt.mode === 'emulator' ? 'Emulation' : mt.mode} done`, !evolved)
         if (get().step < 2) set({ step: 2 })
         if (res.meta.cached) get().pushLog(`Atlas result for ${res.meta.run} read from cache`)
         debounce('mesh', 150, () => get().buildMesh())
@@ -582,6 +645,7 @@ export const useStore = create<S>()((set, get) => {
       const turn = Math.max(0, Math.min(ev.turns, Math.round(t)))
       const epoch = evolveEpoch
       if (turn !== ev.turn) set((s) => ({ evolve: { ...s.evolve, turn } }))
+      if (get().focus.stage !== 'evolve') get().setFocus('evolve', `Turn ${turn}`)
       try {
         const owner = await frame(turn)
         // only the latest request lands
@@ -600,6 +664,7 @@ export const useStore = create<S>()((set, get) => {
       stopPlayer()
       if (ev.turn >= ev.turns) get().setTurn(0)
       set((s) => ({ evolve: { ...s.evolve, playing: true } }))
+      get().setFocus('evolve', 'Playing the turns')
       player = setInterval(() => {
         const e = get().evolve
         if (!e.playing || !e.history) { get().pause(); return }
@@ -627,6 +692,7 @@ export const useStore = create<S>()((set, get) => {
 
     setM: (p) => {
       set((s) => ({ m: { ...s.m, ...p } }))
+      if (get().proc) get().setFocus('mesh', why(M_WHY, p))
       debounce('mesh', 200, () => get().buildMesh())
     },
     buildMesh: () => run('mesh', async () => {
@@ -635,10 +701,12 @@ export const useStore = create<S>()((set, get) => {
       const { report, mesh } = await api.mesh(get().m, flight(MESH))
       if (!current('mesh', t)) return
       set({ report, resultMesh: mesh, step: 3 })
+      if (get().focus.follow) get().setFocus('mesh', `Surface · ${report.faces.toLocaleString()} faces`)
     }),
     exportStl: () => run('export', async () => {
       const res = await api.export(get().m)
       set({ exported: res })
+      get().setFocus('mesh', `Exported ${res.file}`)
       get().pushLog(`Exported ${res.folder}/${res.file}`)
     }),
 
@@ -652,4 +720,10 @@ export const useStore = create<S>()((set, get) => {
     },
     clearKey: () => run('key', async () => set({ key: await api.clearKey() })),
   }
+})
+
+// The workspace view is never picked by hand: it is the focus's view, or the nearest one that exists yet.
+useStore.subscribe((s) => {
+  const v = viewFor(s.focus.stage, s)
+  if (v !== s.view) useStore.setState({ view: v })
 })

@@ -30,7 +30,7 @@ const QUESTION_DESC: Record<NationAsk, string> = {
   defend: 'Yes builds a wall near its borders; no splits off its far half as a new nation, if it is big enough.',
   explore: 'Yes heals gaps and grows outward in a cone; no makes its outermost voxels fall off.',
 }
-const DID: Record<NationAction, string> = {
+export const DID: Record<NationAction, string> = {
   attack: 'Attacked', fortify: 'Built a wall', grow: 'Grew outward', flee: 'Fled outward',
   split: 'Split', wither: 'Withered', waver: 'Too small to split',
 }
@@ -58,7 +58,7 @@ function list(ids: number[], theme: Theme): ReactNode {
 }
 
 /** One event as a sentence. */
-function say(e: NationEvent, theme: Theme): ReactNode {
+export function say(e: NationEvent, theme: Theme): ReactNode {
   const N = (i: number) => <Nat i={i} theme={theme} />
   switch (e.type) {
     case 'annex': return <>{N(e.who)} annexed {N(e.whom)}.</>
@@ -185,7 +185,7 @@ function Pill({ on, tip, desc, onClick, children, num, disabled, label }: {
 }
 
 /** A nation: its colour and letter. Colour is never alone. */
-function Nat({ i, theme, gone }: { i: number; theme: Theme; gone?: boolean }) {
+export function Nat({ i, theme, gone }: { i: number; theme: Theme; gone?: boolean }) {
   return (
     <span className={'ev-nat' + (gone ? ' ev-nat--gone' : '')}>
       <i style={{ background: nationColor(i, theme) }} />{nationName(i)}

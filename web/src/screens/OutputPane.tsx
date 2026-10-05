@@ -166,7 +166,7 @@ export function SliceOut() {
   const canScan = !!procData && !!gridData
   const live = st.job?.status === 'running'
   const sweep = () => {
-    if (!scanning) st.setView('scan')
+    if (!scanning) st.setFocus('scan', 'Scan sweep')
     st.setSlice({ axis: 'z', index: slice.index >= n - 1 || !scanning ? 0 : slice.index })
     st.setScan({ playing: true })
   }
@@ -190,7 +190,7 @@ export function SliceOut() {
             title={scan.playing ? 'Pause the sweep' : 'Sweep the plane bottom to top: result below, original above'}
             on={scan.playing} onClick={() => (scan.playing ? st.setScan({ playing: false }) : sweep())} />
           <IconButton name="scan" title={scanning ? 'Leave the scan view' : 'Scan view: result below the plane, original above'} on={scanning} disabled={!canScan}
-            onClick={() => (scanning ? st.setView('processed') : st.setView('scan'))} />
+            onClick={() => (scanning ? st.setFocus(st.proc?.mode === 'nations' ? 'evolve' : 'quantum', 'Left the scan') : st.setFocus('scan', 'Scan view'))} />
         </div>
         <span className="qs-mono" style={{ color: 'var(--qs-ink3)' }}>
           {live && st.job?.frontier != null ? 'following the Atlas run' : scanning ? 'scan · linked to the plane' : hud.slice ? 'plane shown in the view' : ''}

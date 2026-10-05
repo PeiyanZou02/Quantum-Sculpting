@@ -2,7 +2,7 @@
 // Panels (parameters, properties, scene, runtime, Atlas jobs) dock left, right or under the viewport;
 // drag a tab to move it. The layout is saved per browser.
 import { useEffect, useState } from 'react'
-import { useStore } from './store'
+import { useStore, type Stage as FocusStage } from './store'
 import { onNet, onRestart } from './api'
 import './styles/layout.css'
 import { TopBar } from './screens/TopBar'
@@ -13,6 +13,7 @@ import { ScenePanel } from './screens/ScenePanel'
 import { QuantumPanel } from './screens/QuantumPanel'
 import { EvolvePanel } from './screens/EvolvePanel'
 import { RuntimePanel, AtlasPanel } from './screens/Terminal'
+import { EvolveLog } from './screens/EvolveLog'
 import { KeyDialog } from './screens/KeyDialog'
 import { Toasts } from './screens/Toasts'
 import { TooltipLayer } from './qs/Tooltip'
@@ -20,7 +21,7 @@ import { usePresent } from './present'
 import { PresentBar } from './screens/PresentBar'
 import { PresentPanel } from './screens/PresentPanel'
 import { Dock, type PanelDef } from './dock/Dock'
-import { closePanel, findPanel, loadLayout, movePanel, saveLayout, type DockLayout } from './dock/layout'
+import { closePanel, findPanel, loadLayout, movePanel, saveLayout, setActive, type DockLayout } from './dock/layout'
 import './styles/system.css'
 import './styles/bento.css'
 
@@ -32,6 +33,7 @@ const PANELS: PanelDef[] = [
   { id: 'evolve', title: 'Evolve', icon: 'entangle', render: () => <EvolvePanel /> },
   { id: 'runtime', title: 'Runtime', icon: 'terminal', render: () => <RuntimePanel /> },
   { id: 'atlas', title: 'Atlas jobs', icon: 'atlas', render: () => <AtlasPanel /> },
+  { id: 'evlog', title: 'Evolve log', icon: 'entangle', render: () => <EvolveLog /> },
 ]
 const IDS = PANELS.map((p) => p.id)
 const DEFAULT_LAYOUT: DockLayout = {
@@ -41,12 +43,18 @@ const DEFAULT_LAYOUT: DockLayout = {
       { id: 'a-scene', tabs: ['scene'], active: 'scene', size: 0.62 },
       { id: 'a-props', tabs: ['props', 'quantum', 'evolve'], active: 'props', size: 1.38 },
     ],
-    bottom: [{ id: 'a-runtime', tabs: ['runtime', 'atlas'], active: 'runtime', size: 1 }],
+    bottom: [{ id: 'a-runtime', tabs: ['runtime', 'evlog', 'atlas'], active: 'runtime', size: 1 }],
   },
   width: { left: 320, right: 330 },
   height: { bottom: 190 },
 }
 const KEY = 'qs-dock-v3'
+/** The tabs brought forward for each stage of the focus, wherever they are docked (later ones win within one area). */
+function tabsFor(stage: FocusStage, mode: string): string[] {
+  const log = stage === 'evolve' ? 'evlog' : (stage === 'quantum' || stage === 'scan') && mode === 'atlas' ? 'atlas' : 'runtime'
+  const side = stage === 'evolve' ? 'evolve' : stage === 'quantum' || stage === 'scan' ? 'quantum' : 'props'
+  return [log, side]
+}
 
 export default function App() {
   const init = useStore((s) => s.init)
@@ -56,6 +64,20 @@ export default function App() {
   const drawer = usePresent((p) => p.drawer)
   const [layout, setLayout] = useState(() => loadLayout(KEY, DEFAULT_LAYOUT, IDS))
   const onLayout = (l: DockLayout) => { setLayout(l); saveLayout(KEY, l) }
+
+  // the side tab and the drawer follow what you are working on
+  useEffect(() => useStore.subscribe((s, prev) => {
+    if (s.focus.stage === prev.focus.stage && s.q.mode === prev.q.mode) return
+    setLayout((l) => {
+      let n = l
+      for (const id of tabsFor(s.focus.stage, s.q.mode)) {
+        const f = findPanel(n, id)
+        if (f) n = setActive(n, f.area.id, id)
+      }
+      if (n !== l) saveLayout(KEY, n)
+      return n
+    })
+  }), [])
 
   useEffect(() => {
     const st = useStore.getState()

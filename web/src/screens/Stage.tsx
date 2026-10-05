@@ -3,11 +3,10 @@
 // popovers (right). In the view: tool shelf (top-left), info, axis gizmo and navigation (top-right).
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
-import { useStore, type Layer, type Shading, type Tool, type View } from '../store'
+import { useStore, type Layer, type Shading, type Tool, type View, type Stage as StageName } from '../store'
 import { Engine, type LayerName, type ViewName } from '../view/engine'
 import { loadBundled, makeEntangleMaterial, type ShaderTables } from '../view/entangle'
 import { QProbe, useProbe, type ProbeHit } from '../qs/QProbe'
-import { Segmented } from '../qs/Segmented'
 import { QPill } from '../qs/QPill'
 import { Icon, IconButton } from '../qs/Icon'
 import { Popover, PopSection, Check } from '../qs/Popover'
@@ -337,7 +336,7 @@ export function Stage() {
         labels: [
           ['Model', model ? (model.builtin ? 'test_cup.stl' : model.file) : '—'],
           ['Voxelise', grid ? `${grid.n}³ · ${bits * 3} qubits` : '—'],
-          ['Quantum', st.proc ? `${modeName} · ${st.job?.status === 'running' ? 'running' : 'live'}` : '—'],
+          [st.q.mode === 'nations' ? 'Evolve' : 'Quantum', st.proc ? `${modeName} · ${st.job?.status === 'running' ? 'running' : 'live'}` : '—'],
           ['Mesh', st.report ? `Level ${m.level.toFixed(2)}` : '—'],
         ],
       },
@@ -350,7 +349,7 @@ export function Stage() {
       atlasJobs: st.atlasJobs,
       setSlice: (p) => st.setSlice(p),
       setLevel: (v) => st.setM({ level: Math.min(0.95, Math.max(0.05, v)) }),
-      goStep: (i) => { const v = (['model', 'voxels', 'processed', 'result'] as View[])[i]; if (avail[v]) st.setView(v) },
+      goStep: (i) => { const v = (['model', 'voxels', 'processed', 'result'] as View[])[i]; if (avail[v]) st.setFocus((['model', 'voxels', st.proc?.mode === 'nations' ? 'evolve' : 'quantum', 'mesh'] as StageName[])[i], 'Picked on the view') },
     }
   }
 
@@ -376,14 +375,7 @@ export function Stage() {
   return (
     <main className="stage">
       <div className="stage__bar">
-        <Segmented<View>
-          options={[
-            { value: 'model', label: 'Model', disabled: !avail.model }, { value: 'voxels', label: 'Voxels', disabled: !avail.voxels },
-            { value: 'processed', label: 'Processed', disabled: !avail.processed }, { value: 'result', label: 'Result', disabled: !avail.result },
-            { value: 'scan', label: 'Scan', disabled: !avail.scan },
-          ]}
-          value={view} onChange={st.setView}
-        />
+        <FocusStrip />
         <div className="stage__tools">
           {busy && <span className="stage__busy"><Spinner /> {busy}</span>}
           <Popover icon="visibility" title="Visibility" desc="Draw other layers faintly with this view, and choose which ones the probe reads." on={ghostCount > 0} width={300}>
@@ -784,6 +776,50 @@ function Legend({ level, mode }: { level: number; mode: Shading }) {
         <div style={{ position: 'absolute', left: `${level * 100}%`, top: -3, bottom: -3, width: 1, background: 'var(--qs-ink)' }} />
       </div>
       <span className="qs-small" style={{ color: 'var(--qs-ink2)' }}>1 · {mode === 'entangle' ? 'film phase' : 'value'} · shown ≥ {level.toFixed(2)}</span>
+    </div>
+  )
+}
+
+/** What the workspace is showing and why. Not a switch: it follows what you do — the step whose
+ *  parameters you touch, a model being opened, Evolve's turns, an Atlas run coming back in layers. */
+function FocusStrip() {
+  const focus = useStore((s) => s.focus)
+  const view = useStore((s) => s.view)
+  const st = {
+    model: useStore((s) => !!s.model), grid: useStore((s) => !!s.gridData), proc: useStore((s) => !!s.procData),
+    mesh: useStore((s) => !!s.resultMesh), mode: useStore((s) => s.q.mode), shown: useStore((s) => s.proc?.mode ?? null),
+  }
+  const working = useStore((s) => s.busy.model ? 'opening' : s.busy.vox ? 'voxelising' : s.busy.proc || s.busy.evolve ? (s.q.mode === 'nations' ? 'evolving' : 'processing') : s.busy.mesh ? 'meshing' : null)
+  const ev = useStore((s) => s.evolve)
+  const evolve = st.mode === 'nations'
+  const steps: { id: StageName; t: string; done: boolean }[] = [
+    { id: 'model', t: 'Model', done: st.model },
+    { id: 'voxels', t: 'Voxels', done: st.grid },
+    { id: evolve ? 'evolve' : 'quantum', t: evolve ? 'Evolve' : 'Quantum', done: st.proc },
+    { id: 'mesh', t: 'Mesh', done: st.mesh },
+  ]
+  const at = focus.stage === 'scan' ? (evolve ? 'evolve' : 'quantum') : focus.stage
+  // the stage's own view may not exist yet: say what is on screen meanwhile
+  const VIEW_T: Record<View, string> = { model: 'original mesh', voxels: 'input voxels', processed: evolve ? 'nations' : 'quantum result', result: 'surface', scan: 'scan sweep' }
+  const wanted: Record<StageName, View> = { model: 'model', voxels: 'voxels', quantum: 'processed', evolve: 'processed', mesh: 'result', scan: 'scan' }
+  // the stage's own result is not the one on screen yet: another view, or the previous mode's result
+  const stale = (focus.stage === 'evolve' && st.shown !== 'nations') || (focus.stage === 'quantum' && st.shown === 'nations')
+  const waiting = st.model && (wanted[focus.stage] !== view || stale)
+  if (!st.model) return <div className="focus-strip"><span className="focus-strip__why">Open a model to begin</span></div>
+  return (
+    <div className="focus-strip" aria-live="polite">
+      <ol className="focus-strip__steps" aria-label="Pipeline">
+        {steps.map((x) => (
+          <li key={x.id} className={'focus-strip__s' + (x.id === at ? ' focus-strip__s--on' : '') + (x.done ? ' focus-strip__s--done' : '')}
+            aria-current={x.id === at ? 'step' : undefined}>{x.t}</li>
+        ))}
+        {focus.stage === 'scan' && <li className="focus-strip__s focus-strip__s--on focus-strip__s--extra">Scan</li>}
+      </ol>
+      <span key={focus.t} className="focus-strip__why">
+        {focus.why || `Showing the ${VIEW_T[view]}`}
+        {focus.stage === 'evolve' && ev.history ? <em> · turn {ev.turn} / {ev.turns}</em> : null}
+        {waiting ? <em> · showing the {stale ? 'previous result' : VIEW_T[view]} until {working ? `${working} is done` : 'it is ready'}</em> : null}
+      </span>
     </div>
   )
 }

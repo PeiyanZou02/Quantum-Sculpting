@@ -268,3 +268,16 @@ button.sec__head { all: unset; display: flex; align-items: baseline; gap: 10px; 
   .jobrow { grid-template-columns: 24px 1fr 76px; }
   .jobrow > span:nth-child(3), .jobrow > span:nth-child(4), .jobrow > span:nth-child(5) { display: none; }
 }
+
+/* focus strip: what the workspace shows and why; follows what you do, not a switch */
+.focus-strip { display: flex; align-items: center; gap: 14px; min-width: 0; flex: 1 1 auto; }
+.focus-strip__steps { display: inline-flex; align-items: center; gap: 2px; margin: 0; padding: 2px; list-style: none; height: 28px; box-sizing: border-box; border-radius: 999px; border: 1px solid var(--qs-ctl); flex: none; }
+.focus-strip__s { display: inline-flex; align-items: center; height: 22px; padding: 0 10px; border-radius: 999px; font: 400 12px/1 var(--qs-sans); color: var(--qs-ink4); transition: background var(--qs-snap) var(--qs-ease), color var(--qs-snap) var(--qs-ease); }
+.focus-strip__s--done { color: var(--qs-ink2); }
+.focus-strip__s--on { background: var(--qs-ink); color: var(--qs-bg); }
+.focus-strip__why { font: 400 12px/1.3 var(--qs-sans); color: var(--qs-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; animation: focus-in .4s var(--qs-ease); }
+.focus-strip__why em { font-style: normal; color: var(--qs-ink3); }
+@keyframes focus-in { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .focus-strip__why { animation: none; } }
+/* the parameter step the workspace is following */
+.sec--focus { box-shadow: inset 2px 0 0 var(--qs-ink); }

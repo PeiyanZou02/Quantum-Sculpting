@@ -1,7 +1,7 @@
 // INPUT: only the things you set, in pipeline order. Each step folds to a one-line summary;
 // the scrollbar carries an index (01–04) to jump between them. Results live in the Output column.
 import { useRef, useState, type ReactNode } from 'react'
-import { useStore, NATIONS_MAX_GRID } from '../store'
+import { useStore, NATIONS_MAX_GRID, type Stage as StageName } from '../store'
 import type { Fill, Field as FieldKind, UpAxis, Values, VFilter } from '../api'
 import { QPill } from '../qs/QPill'
 import { Segmented, AxisToggle } from '../qs/Segmented'
@@ -30,13 +30,17 @@ function useFold() {
   return { isOpen: (id: string) => open[id] !== false, toggle }
 }
 
-function Step({ id, title, summary, state, off, fold, children }: {
+/** Touching a step's parameters points the workspace at that step (when it has something to show). */
+function Step({ id, title, summary, state, off, fold, stage, children }: {
   id: string; no?: string; title: string; summary: ReactNode; state?: ReactNode; off?: boolean
-  fold: ReturnType<typeof useFold>; children: ReactNode
+  fold: ReturnType<typeof useFold>; stage: StageName; children: ReactNode
 }) {
   const open = fold.isOpen(id)
+  const setFocus = useStore((s) => s.setFocus)
+  const on = useStore((s) => s.focus.stage === stage || (stage === 'quantum' && s.focus.stage === 'scan'))
   return (
-    <section className={'sec' + (off ? ' sec--off' : '') + (open ? '' : ' sec--folded')} data-mark={id}>
+    <section className={'sec' + (off ? ' sec--off' : '') + (open ? '' : ' sec--folded') + (on && !off ? ' sec--focus' : '')} data-mark={id}
+      onPointerDown={() => { if (!off && !on) setFocus(stage, `Editing ${title}`) }}>
       <button className="sec__head" onClick={() => fold.toggle(id)} aria-expanded={open}>
         <span className="sec__title">{title}</span>
         <span className="sec__state">{state}</span>
@@ -74,7 +78,7 @@ function ModelIn({ fold }: F) {
   const file = useRef<HTMLInputElement>(null)
   const { model } = st
   return (
-    <Step id="in-01" no="01" title="Model" fold={fold}
+    <Step id="in-01" no="01" title="Model" fold={fold} stage="model"
       summary={model ? `${model.builtin ? 'test cup' : model.file} · up ${fmt.up(model.up)}` : 'no model'}
       state={st.busy.model ? <Spinner /> : model ? <Dot live /> : <Dot />}>
       <div className="row">
@@ -102,7 +106,7 @@ function VoxIn({ fold }: F) {
   const { vox, model } = st
   const fill = { holes: 'enclosed', capped: 'capped', none: 'shell' }[vox.fill]
   return (
-    <Step id="in-02" no="02" title="Voxelise" fold={fold} off={!model}
+    <Step id="in-02" no="02" title="Voxelise" fold={fold} stage="voxels" off={!model}
       summary={`${vox.n}³ · ${fill} · ${vox.values} · pad ${vox.pad}`}
       state={st.busy.vox ? <Spinner /> : st.grid ? <Dot live /> : <Dot />}>
       <div className="seg-block">
@@ -162,7 +166,7 @@ function QuantumIn({ fold }: F) {
     : q.mode === 'nations' ? `evolve · ${q.k} nations · ${q.turns} turns · reach ${q.spread}% · ${q.run}`
     : `${MODE_LABEL[q.mode]} · s ${fmt.f2(q.strength)} · r ${fmt.f2(q.reach)} · ${q.style} · ${q.run}`
   return (
-    <Step id="in-03" no="03" title="Quantum" fold={fold} off={!grid} summary={summary}
+    <Step id="in-03" no="03" title={q.mode === 'nations' ? 'Evolve' : 'Quantum'} fold={fold} stage={q.mode === 'nations' ? 'evolve' : 'quantum'} off={!grid} summary={summary}
       state={running ? <><Spinner /> {job.tiles_done}/{job.tiles_total}</> : st.busy.proc ? <Spinner /> : proc ? <Dot live /> : <Dot />}>
       <div className="seg-block ev-modes">
         <Segmented options={[{ value: 'gaussian', label: 'Gaussian' }, { value: 'emulator', label: 'Emulation' }, { value: 'atlas', label: 'Atlas' }, { value: 'nations', label: 'Evolve' }]}
@@ -252,7 +256,7 @@ function MeshIn({ fold }: F) {
   const { m, proc, grid, report } = st
   const n = grid?.n ?? 32
   return (
-    <Step id="in-04" no="04" title="Mesh" fold={fold} off={!proc}
+    <Step id="in-04" no="04" title="Mesh" fold={fold} stage="mesh" off={!proc}
       summary={`${m.method === 'advect' ? `push ${m.amount}` : 'threshold'} · level ${fmt.f2(m.level)} · ×${m.refine} · ${m.height} mm`}
       state={st.busy.mesh ? <Spinner /> : report ? <Dot live /> : <Dot />}>
       <Slider label="Level" value={m.level} min={0.05} max={0.95} step={0.01} defaultValue={0.5} onChange={(v) => st.setM({ level: v })}

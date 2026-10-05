@@ -154,3 +154,20 @@ circle.ev-g__hit { fill: transparent; stroke: none; }
 @media (prefers-reduced-motion: reduce) {
   .ev-nrow, .ev-g__edge, .ev-g__attack, .ev-g__node, .ev-g__dot, .ev-log__turn > ul { transition: none; }
 }
+
+/* Evolve log (bottom drawer): one line per turn, streaming with the playhead */
+.evlog { display: flex; flex-direction: column; min-height: 0; height: 100%; }
+.evlog__empty { margin: 0; padding: 14px 16px; font: 400 12px/1.5 var(--qs-sans); color: var(--qs-ink2); display: flex; gap: 8px; align-items: center; }
+.evlog__state { font: 400 11px/1 var(--qs-mono); color: var(--qs-ink2); white-space: nowrap; }
+.evlog__scroll { flex: 1; min-height: 0; overflow: auto; padding: 0 8px 8px; }
+.evlog__row { all: unset; box-sizing: border-box; display: grid; grid-template-columns: 52px 58px 1fr; gap: 10px; width: 100%; padding: 4px 8px; border-radius: 6px; cursor: pointer; font: 400 11px/1.5 var(--qs-mono); color: var(--qs-ink2); }
+.evlog__row:hover { background: var(--qs-faint); }
+.evlog__row:focus-visible { box-shadow: 0 0 0 2px var(--qs-line); }
+.evlog__row--on { background: var(--qs-sel); color: var(--qs-ink); }
+.evlog__row--conflict .evlog__t { color: var(--qs-ink); font-weight: 500; }
+.evlog__t, .evlog__alive { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.evlog__alive { color: var(--qs-ink3); }
+.evlog__msg { display: flex; flex-wrap: wrap; column-gap: 12px; font-family: var(--qs-sans); font-size: 12px; color: var(--qs-ink); min-width: 0; }
+.evlog__tally { color: var(--qs-ink3); font-family: var(--qs-mono); font-size: 11px; }
+.evlog__ev--quiet { color: var(--qs-ink2); }
+@media (max-width: 640px) { .evlog__row { grid-template-columns: 44px 1fr; } .evlog__alive { display: none; } }

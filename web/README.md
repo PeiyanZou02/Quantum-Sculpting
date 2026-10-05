@@ -45,11 +45,32 @@ pnpm lint       # oxlint
 - **Input** (left): only parameters, 01 model → 04 mesh. Steps fold to a one-line summary; the
   scrollbar carries an index to jump between them. Evolve (Peiyan's nations mode) adds its
   parameters here and its own panel: turns, nations, relationships and the chronicle.
-- **Display** (centre): what the workspace shows (model, voxels, processed, result, scan), the
-  layers, lighting, and the overlays and HUD elements, each switchable under *Overlays*.
+- **Display** (centre): the workspace, with the layers, lighting, and the overlays and HUD elements,
+  each switchable under *Overlays*. What it shows is not picked by hand; it follows the focus (below).
 - **Output** (right): readouts only: model, grid, slice, quantum result, print check, export.
-- **Runtime terminal** (bottom): resizable drawer with the event and request log, and the Atlas
-  jobs list (Atlas mode only).
+- **Runtime terminal** (bottom): resizable drawer with the event and request log, the Evolve log
+  (one line per turn, streaming as the turns play) and the Atlas jobs list (Atlas mode only).
+
+### Focus: what the workspace shows
+
+There is no Model / Voxels / Processed / Result switch. The workspace follows the step you are
+working on, and the strip over it says which step that is and what you just did ("Grid size 64³").
+
+| You… | Workspace shows | Side tab | Drawer |
+| --- | --- | --- | --- |
+| open a model or the test cup | each stage in turn as it finishes, ending on the surface (on Evolve's history in Evolve mode) | Properties | Runtime |
+| touch Model or change the up axis | the original mesh | Properties | Runtime |
+| touch Voxelise or change a setting there | the input voxels | Properties | Runtime |
+| touch Quantum or change a setting there | the quantum result | Quantum | Runtime (Atlas jobs in Atlas mode) |
+| an Atlas run tiled in layers comes back | the scan, following the run | Quantum | Atlas jobs |
+| choose Evolve, change its settings, play or scrub turns | the nations, turn by turn | Evolve | Evolve log |
+| touch Mesh, change a setting there, or export | the surface | Properties | Runtime |
+| press the sweep or scan button under Slice | the scan sweep | Quantum | Runtime |
+
+Downstream steps still update silently (a new grid is processed and meshed again), but the view
+stays on the step you are working on. When that step's own result is not ready yet, the strip says
+what is shown meanwhile. Moving a panel elsewhere in the dock is fine: the tab is brought forward
+wherever it is.
 
 Panels live in a dock: drag them between zones, resize the zones, show or hide them. The layout is
 remembered per browser. A new tab starts empty, on the landing guide; a reload during work picks up
