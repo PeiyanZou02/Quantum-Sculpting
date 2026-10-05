@@ -4,7 +4,7 @@
 // This panel follows the turn on screen: the turn player, each nation's question, odds and answer,
 // the relationship graph, and the chronicle of the whole history.
 import { useCallback, useMemo, useState, type ReactNode } from 'react'
-import { useStore, TURNS_PER_SECOND } from '../store'
+import { useStore, TURNS_PER_SECOND, type Morph } from '../store'
 import type { NationAction, NationAsk, NationEvent, NationsHistory, NationTurn } from '../api'
 import { ScrollArea } from '../qs/ScrollArea'
 import { SectionTabs } from './SectionTabs'
@@ -21,6 +21,9 @@ const MARKERS = [
   { id: 'ev-relations', label: 'Relationships', icon: 'entangle' },
   { id: 'ev-chronicle', label: 'Chronicle', icon: 'scan' },
 ]
+
+const MORPH_NEXT: Record<Morph, Morph> = { off: 'short', short: 'long', long: 'off' }
+const MORPH_LABEL: Record<Morph, string> = { off: 'Snap', short: 'Morph', long: 'Slow' }
 
 const ALLIED = 0.5 // nations.ALLIED: a tie this strong is an alliance
 
@@ -250,7 +253,8 @@ function EmptyState() {
 // 1 · Turn ───────────────────────────────────────────────────────────────────────────────────────
 function TurnBlk({ rec, history, theme }: { rec: NationTurn; history: NationsHistory; theme: Theme }) {
   const ev = useStore((s) => s.evolve)
-  const { setTurn, play, pause } = useStore.getState()
+  const morph = useStore((s) => s.morph)
+  const { setTurn, play, pause, setMorph } = useStore.getState()
   const alive = rec.size.filter((v) => v > 0).length
   const voxels = rec.size.reduce((a, v) => a + v, 0)
   const atEnd = ev.turn >= ev.turns
@@ -278,6 +282,10 @@ function TurnBlk({ rec, history, theme }: { rec: NationTurn; history: NationsHis
             <Icon name="chevRight" size={12} />
           </Pill>
         </span>
+        <Pill on={morph !== 'off'} tip={`Between turns: ${MORPH_LABEL[morph].toLowerCase()}`} desc="Snap, morph, or slow morph from one turn to the next"
+          onClick={() => setMorph(MORPH_NEXT[morph])}>
+          {MORPH_LABEL[morph]}
+        </Pill>
         {tally.length > 0 && (
           <span className="ev-tally">
             {tally.map(([label, c]) => <span key={label} className="ev-tag"><span>{label}</span><b>{c}</b></span>)}

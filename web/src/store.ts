@@ -106,6 +106,10 @@ export const EVOLVE_EMPTY: Evolve = { turn: 0, turns: 0, playing: false, owner: 
 export const NATIONS_MAX_GRID = 128
 /** Playback speed of the turns. */
 export const TURNS_PER_SECOND = 6
+/** How Evolve moves between turns: snap, or morph over a short or long tween. */
+export type Morph = 'off' | 'short' | 'long'
+/** Tween length per setting; short sits a little under one turn at TURNS_PER_SECOND so play stays continuous. */
+export const MORPH_MS: Record<Morph, number> = { off: 0, short: 140, long: 380 }
 
 interface S {
   step: Step
@@ -192,6 +196,9 @@ interface S {
   /** Play the turns at TURNS_PER_SECOND from here (from 0 when at the end). */
   play: () => void
   pause: () => void
+  /** Evolve's morph between turns (per viewer, remembered). */
+  morph: Morph
+  setMorph: (m: Morph) => void
   cancelWatch: () => void
   refreshAtlasJobs: () => Promise<void>
 
@@ -677,6 +684,13 @@ export const useStore = create<S>()((set, get) => {
     pause: () => {
       stopPlayer()
       if (get().evolve.playing) set((s) => ({ evolve: { ...s.evolve, playing: false } }))
+    },
+    morph: (() => {
+      try { const v = localStorage.getItem('qs-morph'); return v === 'off' || v === 'long' ? v : 'short' } catch { return 'short' }
+    })(),
+    setMorph: (m) => {
+      try { localStorage.setItem('qs-morph', m) } catch { /* per-viewer */ }
+      set({ morph: m })
     },
 
     cancelWatch: () => {

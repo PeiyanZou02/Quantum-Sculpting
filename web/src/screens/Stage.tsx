@@ -3,7 +3,7 @@
 // popovers (right). In the view: tool shelf (top-left), info, axis gizmo and navigation (top-right).
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
-import { useStore, type Layer, type Shading, type Tool, type View, type Stage as StageName } from '../store'
+import { useStore, MORPH_MS, type Layer, type Shading, type Tool, type View, type Stage as StageName } from '../store'
 import { Engine, type LayerName, type ViewName } from '../view/engine'
 import { loadBundled, makeEntangleMaterial, type ShaderTables } from '../view/entangle'
 import { QProbe } from '../qs/QProbe'
@@ -22,7 +22,7 @@ import { PresentChrome } from './PresentBar'
 import type { HudCtx, Vec3 } from '../hud/types'
 import { MODEL_EXT } from './modelExt'
 import { live, bump } from '../live'
-import { ownerGrid, ownerToColors } from '../view/nations'
+import { ownerPalette } from '../view/nations'
 import { fit, frameOf } from '../frames'
 
 const MODE_LABEL: Record<string, string> = { gaussian: 'Gaussian', emulator: 'Emulation', atlas: 'Atlas', nations: 'Evolve' }
@@ -114,9 +114,9 @@ export function Stage() {
   useEffect(() => {
     if (!engine) return
     if (!nations) { engine.setVoxels('processed', procData, m.level, valued); return }
-    engine.setVoxels('processed', ownerGrid(nations.owner, nations.n), 0.5, false)
-    const cells = engine.cellsOf('processed')
-    if (cells) engine.setVoxelColors('processed', ownerToColors(nations.owner, cells, nations.n, theme))
+    // from turn to turn the territory morphs (snaps when off or when the viewer asks for less motion)
+    const still = matchMedia('(prefers-reduced-motion: reduce)').matches
+    engine.setLabels('processed', nations.owner, nations.n, ownerPalette(theme), still ? 0 : MORPH_MS[useStore.getState().morph])
   }, [engine, procData, m.level, valued, nations, theme])
   useEffect(() => { engine?.setMesh('result', resultMesh) }, [engine, resultMesh])
   useEffect(() => { engine?.show(view as ViewName) }, [engine, view, gridData, procData, resultMesh, modelMesh])
