@@ -98,6 +98,7 @@ class Viewer {
   constructor(host) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    this.renderer.localClippingEnabled = true;         // 扫描视图用裁剪面把两层体素各切掉一半
     host.prepend(this.renderer.domElement);
 
     this.scene = new THREE.Scene();
@@ -125,11 +126,27 @@ class Viewer {
     this.meshMaterial = new THREE.MeshStandardMaterial({
       roughness: 0.9, metalness: 0, flatShading: true, side: THREE.DoubleSide,
     });
-    this.voxelMaterial = new THREE.MeshLambertMaterial({ color: 0xffffff });
+    // 原来的体素和处理后的体素各用一份材质：扫描时一个只画扫描面以上，一个只画以下
+    this.voxelMaterials = {
+      voxels: new THREE.MeshLambertMaterial({ color: 0xffffff }),
+      processed: new THREE.MeshLambertMaterial({ color: 0xffffff }),
+    };
+    this.cut = {
+      voxels: new THREE.Plane(new THREE.Vector3(0, 0, 1), 0),       // 留下面以上的
+      processed: new THREE.Plane(new THREE.Vector3(0, 0, -1), 0),   // 留下面以下的
+    };
+    this.scanning = false;
+    this.scanner = new THREE.Group();                  // 扫描面：一张半透明的片和它的边
+    this.scanner.visible = false;
+    this.scanFill = new THREE.MeshBasicMaterial({
+      transparent: true, opacity: 0.1, side: THREE.DoubleSide, depthWrite: false,
+    });
+    this.scanEdge = new THREE.LineBasicMaterial();
     this.lineMaterial = new THREE.LineBasicMaterial();
     this.layers = {};
     this.active = null;
     this.n = 0;
+    this.root.add(this.scanner);
     this.applyTheme();
 
     this.framed = false;
@@ -170,7 +187,7 @@ class Viewer {
 
   // 把相机对准某一层的内容：瘦高的模型在整个网格里只占一小条，按网格取景会很小
   focus(name) {
-    const layer = this.layers[name];
+    const layer = this.layers[name === 'scan' ? 'voxels' : name];
     if (!layer) { this.resetView(); return; }
     this.scene.updateMatrixWorld(true);
     const sphere = new THREE.Box3().setFromObject(layer).getBoundingSphere(new THREE.Sphere());
@@ -183,6 +200,8 @@ class Viewer {
     this.colors = { solid: color('--gray-700'), low: color('--gray-500'), high: color('--gray-1000') };
     this.meshMaterial.color.copy(this.colors.solid);
     this.lineMaterial.color.copy(color('--gray-500'));
+    this.scanFill.color.copy(color('--gray-1000'));
+    this.scanEdge.color.copy(color('--gray-1000'));
     this.dirty = true;
   }
 
@@ -207,7 +226,41 @@ class Viewer {
     floor.rotation.x = Math.PI / 2;
     floor.position.set(c, c, -0.5);
     this.frame.add(outline, floor);
+
+    for (const child of [...this.scanner.children]) {
+      this.scanner.remove(child);
+      child.geometry.dispose();
+    }
+    const h = n / 2;
+    const rim = [[-h, -h], [h, -h], [h, h], [-h, h]].map(([x, y]) => new THREE.Vector3(x, y, 0));
+    this.scanner.add(new THREE.Mesh(new THREE.PlaneGeometry(n, n), this.scanFill),
+      new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(rim), this.scanEdge));
+    this.scanner.position.set(c, c, -0.5);
     this.dirty = true;
+  }
+
+  // 扫描面停在第 z 层的底面（z 可以是小数）：它下面画处理后的体素，上面画原来的。null 是不扫描。
+  // 只动裁剪面，不重建体素，所以 256³ 也能一帧一帧地走
+  setScan(z) {
+    const on = z !== null;
+    if (on !== this.scanning) {
+      this.scanning = on;
+      for (const [name, material] of Object.entries(this.voxelMaterials)) {
+        material.clippingPlanes = on ? [this.cut[name]] : null;
+        material.needsUpdate = true;
+      }
+    }
+    if (on && this.n) {
+      // 网格坐标里第 z 层的底面在 z - 0.5，换成画面里的高度正好是 z / n
+      this.cut.processed.constant = z / this.n;
+      this.cut.voxels.constant = -z / this.n;
+      this.scanner.position.z = z - 0.5;
+    }
+    this.dirty = true;
+  }
+
+  shows(name) {
+    return this.active === 'scan' ? name === 'voxels' || name === 'processed' : name === this.active;
   }
 
   clear(name) {
@@ -222,7 +275,7 @@ class Viewer {
 
   put(name, object) {
     this.clear(name);
-    object.visible = name === this.active;
+    object.visible = this.shows(name);
     this.layers[name] = object;
     this.root.add(object);
     this.dirty = true;
@@ -267,7 +320,8 @@ class Viewer {
         }
       }
     }
-    const mesh = new THREE.InstancedMesh(this.box, this.voxelMaterial, cells.length / 4);
+    const material = this.voxelMaterials[name] || this.voxelMaterials.voxels;
+    const mesh = new THREE.InstancedMesh(this.box, material, cells.length / 4);
     const matrix = new THREE.Matrix4();
     const color = new THREE.Color();
     const span = Math.max(1 - threshold, 1e-6);
@@ -284,7 +338,8 @@ class Viewer {
 
   show(name) {
     this.active = name;
-    for (const [key, layer] of Object.entries(this.layers)) layer.visible = key === name;
+    for (const [key, layer] of Object.entries(this.layers)) layer.visible = this.shows(key);
+    this.scanner.visible = name === 'scan';
     this.frame.visible = this.n > 0;
     this.dirty = true;
   }
@@ -292,7 +347,7 @@ class Viewer {
 
 // ── 状态 ────────────────────────────────────────────────────────────────
 
-const VIEWS = ['model', 'voxels', 'processed', 'result'];
+const VIEWS = ['model', 'voxels', 'processed', 'result', 'scan'];
 const MODE_LABEL = { gaussian: '高斯替身', emulator: '本地模拟', atlas: 'Atlas' };
 const MODE_HELP = {
   gaussian: '普通的高斯模糊，只用来检查流程是否走得通，和量子效果无关。',
@@ -532,6 +587,8 @@ async function doVoxelize(signal) {
   state.gridData = data;
   state.proc = state.procData = state.report = state.meshError = null;
   state.adopt = state.partial = false;                 // 服务端换了网格，旧的处理结果已经作废
+  stopScan();
+  scan.z = scan.goal = 0;
   $('pad-input').value = info.pad;
   viewer.setGrid(info.n);
   viewer.setTransform('model', info.transform);
@@ -713,6 +770,8 @@ async function submitAtlas() {
 async function watchAtlas(job) {
   state.atlasJob = job.job_id;
   state.run = job;
+  stopScan();
+  scan.z = scan.goal = 0;                              // 扫描面从底下重新开始
   revealJobs();
   render();
   let seen = -1, lastPartial = 0;
@@ -763,8 +822,10 @@ async function showPartial(jobId) {
     state.proc = state.report = null;
     state.partial = true;
     viewer.clear('result');
-    state.view = 'processed';
+    // 一层一层往上算的：用扫描视图，扫描面走到已经连续算完的那一层。别的切法照旧一块一块显示
+    state.view = meta.frontier == null ? 'processed' : 'scan';
     paintProcessed();
+    if (meta.frontier != null) scanTo(meta.frontier, 2);
   } catch (e) { /* 正好算完了，取不到也没关系 */ }
 }
 
@@ -797,8 +858,77 @@ function atlasFinished(cached, meta) {
   state.atlasStatus = ['ok', cached ? '已读取缓存的结果，没有重新提交。'
     : `完成：${jobs}${reused}用时 ${formatWait(meta.seconds)}。`];
   state.adopt = true;
-  state.view = 'result';
+  // 刚看着它一层层算完的：留在扫描视图，让扫描面走到顶；其他情况直接看结果
+  const watched = !cached && state.view === 'scan' && state.grid;
+  state.view = watched ? 'scan' : 'result';
+  if (watched) scanTo(state.grid.n, 2);
   invalidate(STAGE.process);
+}
+
+// ── 扫描 ────────────────────────────────────────────────────────────────
+// 一个水平面从下往上走，它下面画量子结果，上面画原来的体素。按层分块提交 Atlas 时，这个面跟着
+// 真实的进度走（服务端报告已经连续算完到第几层）；有了结果以后可以重放，也可以拖着它上下看。
+
+const SCAN_SECONDS = 10;                               // 从底到顶放一遍的时间
+const scan = { z: 0, goal: 0, speed: 0, last: 0, frame: null, timer: null };
+
+// 下一步：平时跟着屏幕刷新走；页面没在画的时候（比如切到了后台）屏幕刷新不来，就靠定时器接着走
+function scanNext() {
+  scan.frame = requestAnimationFrame(scanStep);
+  scan.timer = setTimeout(() => scanStep(performance.now()), 300);
+}
+
+// 让扫描面在 seconds 秒里走到 goal 层
+function scanTo(goal, seconds) {
+  const n = state.grid.n;
+  scan.goal = Math.min(Math.max(goal, 0), n);
+  scan.speed = Math.max(Math.abs(scan.goal - scan.z) / seconds, n / 120);
+  if (scan.frame === null && scan.z !== scan.goal) {
+    scan.last = performance.now();
+    scanNext();
+  }
+  renderScan();
+}
+
+function scanStep(now) {
+  stopScan(false);
+  if (!state.grid) return;
+  const step = scan.speed * Math.min((now - scan.last) / 1000, 1);   // 画面卡了也按真实时间走
+  scan.last = now;
+  const left = scan.goal - scan.z;
+  scan.z = Math.abs(left) <= step ? scan.goal : scan.z + Math.sign(left) * step;
+  if (scan.z !== scan.goal) scanNext();
+  renderScan();
+}
+
+function stopScan(here = true) {
+  if (scan.frame !== null) cancelAnimationFrame(scan.frame);
+  clearTimeout(scan.timer);
+  scan.frame = null;
+  if (here) scan.goal = scan.z;                        // 停在现在的位置；false 只是取消已经排好的下一步
+}
+
+function playScan(fromBottom) {
+  if (!state.grid) return;
+  if (fromBottom) scan.z = 0;
+  scanTo(state.grid.n, SCAN_SECONDS * (1 - scan.z / state.grid.n));
+}
+
+function renderScan() {
+  const on = currentView() === 'scan';
+  $('scan-bar').hidden = !on;
+  viewer.setScan(on ? scan.z : null);
+  if (!on) return;
+  const n = state.grid.n;
+  const live = !!state.atlasJob;                       // 跟着 Atlas 的进度走的时候不能自己拖
+  const slider = $('scan-z');
+  slider.max = n;
+  slider.value = Math.round(scan.z);
+  slider.disabled = live;
+  paintSlider(slider);
+  $('scan-out').textContent = `${Math.round(scan.z)} / ${n} 层`;
+  $('scan-play').textContent = scan.frame !== null && !live ? '暂停' : scan.z >= n ? '重放' : '播放';
+  $('scan-play').disabled = live;
 }
 
 // ── Atlas 任务列表 ─────────────────────────────────────────────────────────
@@ -1327,7 +1457,8 @@ const dims = (extents) => extents.join(' × ');
 
 function available(view) {
   return { model: !!state.model && !!state.grid, voxels: !!state.gridData,
-    processed: !!state.procData, result: !!state.report }[view];
+    processed: !!state.procData, result: !!state.report,
+    scan: !!state.gridData && !!state.procData }[view];
 }
 
 function currentView() {
@@ -1342,6 +1473,12 @@ function footText(view) {
   if (view === 'voxels') return `${g.n}³ 网格 · ${fmt(g.solid)} 个实体格子`;
   if (view === 'processed') return `阈值 ${level().toFixed(2)} · ${fmt(state.procCount)} 个格子在阈值以上`;
   if (view === 'result') return `${fmt(r.faces)} 个面 · ${r.parts} 块 · ${dims(r.extents)} mm`;
+  if (view === 'scan') {
+    if (state.atlasJob) return 'Atlas 正在一层一层往上算，扫描面以下是已经算完的';
+    const t = state.proc && state.proc.tiles;
+    return '扫描面以下是量子结果，以上是原来的体素'
+      + (t && t.mode === 'layers' && t.jobs > 1 ? ' · 这个结果就是这样从下往上一层层算出来的' : '');
+  }
   return '';
 }
 
@@ -1446,6 +1583,7 @@ function render() {
     if (showJobs) resumeJobs();
     else clearTimeout(jobs.timer);
   }
+  renderScan();
   renderRun();
   renderKey();
   drawSlice();
@@ -1542,7 +1680,24 @@ function bind() {
     }
   });
 
-  bindSeg('view-seg', (value) => { state.view = value; render(); });
+  bindSeg('view-seg', (value) => {
+    state.view = value;
+    render();
+    if (value === 'scan' && !state.atlasJob) playScan(true);   // 切过来就从底下放一遍
+  });
+  $('scan-play').addEventListener('click', () => {
+    if (scan.frame !== null) {
+      stopScan();
+      renderScan();
+    } else {
+      playScan(scan.z >= state.grid.n);
+    }
+  });
+  $('scan-z').addEventListener('input', (e) => {      // 拖着看：停下播放，面跟着手走
+    stopScan();
+    scan.z = scan.goal = Number(e.target.value);
+    renderScan();
+  });
   $('reset-view').addEventListener('click', () => viewer.focus(currentView()));
 
   bindSeg('slice-source-seg', (value) => { state.slicePref = value; drawSlice(); });

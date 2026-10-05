@@ -527,7 +527,8 @@ def process():
         if busy:      # 两边同时提交会把还没提交的分块各交一遍
             abort(409, f"「{busy['run']}」还在 Atlas 上运行，等它结束再提交。")
         # 每一块都已经有缓存：直接拼起来，不用再找 Atlas
-        todo = [t for t in tiling.split(grid, shape) if t.data.any()]
+        every = list(tiling.split(grid, shape))
+        todo = [t for t in every if t.data.any()]
         found = [_load_cached(_tile_stem(t, params, run)) for t in todo]
         if all(arr is not None for arr, _ in found):
             raw = np.zeros(grid.shape, dtype=np.float64)
@@ -547,7 +548,7 @@ def process():
                "stale": False, "note": None, "tiles_total": len(todo), "tiles_done": 0,
                "tiles_cached": 0, "tile_shape": list(shape), "version": 0, "partial": None,
                "cancel": False, "lock": threading.Lock(), "run": run, "params": params,
-               "tiling": tile_mode}
+               "tiling": tile_mode, "layers": _layers(grid.shape[0], shape, every), "done": set()}
         S.jobs[job["id"]] = job
         threading.Thread(target=_run_atlas_job, daemon=True,
                          args=(job, grid, grid_id, params, meta, key, tile_mode)).start()
@@ -583,11 +584,13 @@ def _run_atlas_job(job, grid, grid_id, params, meta, key, tile_mode):
         bits = atlas_bits()
         while True:
             shape = tiling.tile_shape(grid.shape[0], tile_mode, bits)
-            todo = [t for t in tiling.split(grid, shape) if t.data.any()]
+            every = list(tiling.split(grid, shape))
+            todo = [t for t in every if t.data.any()]
             raw = np.zeros(grid.shape, dtype=np.float64)
             with job["lock"]:
                 job.update(tiles_total=len(todo), tiles_done=0, tiles_cached=0,
-                           tile_shape=list(shape), partial=grid.copy())   # 没算完的块先显示原样
+                           tile_shape=list(shape), partial=grid.copy(),   # 没算完的块先显示原样
+                           layers=_layers(grid.shape[0], shape, every), done=set())
                 job["version"] += 1
             try:
                 first_id = _run_tiles(client, job, todo, raw, params, meta["run"])
@@ -637,6 +640,7 @@ def _run_tiles(client, job, todo, raw, params, run):
             for tile in group:
                 tiling.place(raw, tile, result)
                 job["partial"][tile.slices] = np.clip(raw[tile.slices], 0.0, 1.0)
+                job["done"].add(tile.index)
             job["tiles_done"] += len(group)
             job["tiles_cached"] += len(group) if cached else len(group) - 1
             job["version"] += 1
@@ -717,6 +721,26 @@ def _atlas_tile(client, job, tile, params, run):
     return result, False, job_id
 
 
+def _layers(n, shape, tiles):
+    """水平方向不切、只沿竖直方向分成一层层的块时：每块几层、共几块、哪几块是空的。别的切法返回 None。"""
+    if shape[0] != n or shape[1] != n or shape[2] == n:
+        return None
+    return {"thickness": shape[2], "count": n // shape[2],
+            "empty": {t.index[2] for t in tiles if not t.data.any()}}
+
+
+def _frontier(job):
+    """一层层往上算的时候，从底下数已经连续算完到第几层（界面上的扫描面就停在这里）。"""
+    layers = job["layers"]
+    if not layers:
+        return None
+    done = {index[2] for index in job["done"]}
+    k = 0
+    while k < layers["count"] and (k in layers["empty"] or k in done):
+        k += 1
+    return k * layers["thickness"]
+
+
 def running_job():
     return next((job for job in S.jobs.values() if job["status"] == "running"), None)
 
@@ -728,7 +752,7 @@ def _job_view(job):
             "error": job["error"], "meta": job["meta"], "stale": job["stale"], "note": job["note"],
             "tiles_total": job["tiles_total"], "tiles_done": job["tiles_done"],
             "tiles_cached": job["tiles_cached"], "tile_shape": job["tile_shape"],
-            "version": job["version"]}
+            "version": job["version"], "frontier": _frontier(job)}
 
 
 @app.get("/api/process/<job_id>/preview")
@@ -741,7 +765,8 @@ def job_preview(job_id):
         partial = job["partial"]
         if partial is None:
             abort(404)
-        return binary(*compact(partial, {"n": int(partial.shape[0]), "version": job["version"]}))
+        return binary(*compact(partial, {"n": int(partial.shape[0]), "version": job["version"],
+                                         "frontier": _frontier(job)}))
 
 
 @app.get("/api/process/<job_id>")

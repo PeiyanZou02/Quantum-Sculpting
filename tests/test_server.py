@@ -401,10 +401,26 @@ class ServerTest(unittest.TestCase):
         self.assertEqual((again["status"], again["meta"]["cached"]), ("done", True))
         self.assertEqual(self.fake.submits, before + 4)
 
-        # 换成按层分块：又是 4 个新任务，每个是 64×64×16
-        job = self.wait_for_job(self.post("/api/process", {**body, "tiling": "layers"}).get_json()["job_id"])
+        self.assertIsNone(job["frontier"], "立方块不是一层一层往上算的")
+
+        # 换成按层分块：又是 4 个新任务，每个是 64×64×16。算到第几层会报出来，只升不降
+        running = self.post("/api/process", {**body, "tiling": "layers"}).get_json()
+        seen = [running["frontier"]]
+        for _ in range(400):
+            job = self.c.get(f"/api/process/{running['job_id']}").get_json()
+            seen.append(job["frontier"])
+            preview = self.c.get(f"/api/process/{running['job_id']}/preview")
+            if preview.status_code == 200:
+                seen.append(json.loads(preview.headers["X-Meta"])["frontier"])
+            if job["status"] != "running":
+                break
+            time.sleep(0.01)
+        self.assertEqual(job["status"], "done", job["error"])
         self.assertEqual(job["meta"]["tiles"]["shape"], [64, 64, 16])
         self.assertEqual(self.fake.submits, before + 8)
+        self.assertEqual(seen, sorted(seen))
+        self.assertTrue(set(seen) <= {0, 16, 32, 48, 64}, seen)
+        self.assertEqual((seen[0], seen[-1]), (0, 64))
 
     def test_identical_and_uniform_tiles_are_not_submitted_twice(self):
         self.post("/api/key", {"key": TEST_KEY})

@@ -43,6 +43,23 @@ enter the key once.
 
 The interface is in Chinese.
 
+## Scan view
+
+The preview has a fifth view, *scan*: a horizontal plane sweeps from the bottom of the grid to
+the top, with the quantum result drawn below it and the original voxels above it, like a CT
+scan or a print growing layer by layer.
+
+- With any processed result, switching to the view plays the sweep once (10 seconds). The bar
+  at the bottom left pauses, replays, or lets you drag the plane to any layer.
+- During an Atlas run tiled in layers, the plane follows the real progress: the service
+  reports the height up to which every slab has come back, and the plane rises to it. This is
+  the one part of a real quantum run that can be shown as it happens — what goes on inside a
+  single job cannot be observed. When the run ends the view stays on the finished sweep.
+- For a result that was not computed in layers the sweep is only a before-and-after
+  comparison; the caption says which case you are looking at.
+
+Only two clipping planes move while it plays, so it is smooth at 256³ as well.
+
 ## Atlas jobs panel
 
 The panel appears only in Atlas mode (or while a run is in progress). With the Gaussian
