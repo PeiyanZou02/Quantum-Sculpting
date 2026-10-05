@@ -5,22 +5,11 @@ import { useCallback, useEffect, useMemo, useState, useSyncExternalStore, type P
 import { useStore } from '../store'
 import type { Mode, ProcMeta } from '../api'
 import { ScrollArea } from '../qs/ScrollArea'
-import { SectionTabs } from './SectionTabs'
+import { Panel } from '../ui/Panel'
 import { QCircuit, type QGate } from '../qs/QCircuit'
 import { at, histogram } from '../qs/grid'
 import { fmt } from './fmt'
 import './quantum.css'
-
-const MARKERS = [
-  { id: 'q-register', label: 'Register', icon: 'dots' },
-  { id: 'q-circuit', label: 'Circuit', icon: 'quantum' },
-  { id: 'q-blur', label: 'How the blur works', icon: 'entangle' },
-  { id: 'q-pulse', label: 'Pulse schedule', icon: 'play' },
-  { id: 'q-atlas', label: 'Atlas', icon: 'atlas' },
-  { id: 'q-shots', label: 'Shots and error', icon: 'probe' },
-  { id: 'q-runs', label: 'Runs', icon: 'replay' },
-  { id: 'q-levels', label: 'Levels', icon: 'layers' },
-]
 
 const ATLAS_LIMIT = 65536
 const GATES: QGate[] = ['x', 'y', 'xy', 'yx']
@@ -108,18 +97,7 @@ function usePrefersStill() {
 }
 
 function Blk({ id, label, note, tools, children }: { id: string; label: string; note?: ReactNode; tools?: ReactNode; children: ReactNode }) {
-  return (
-    <div className="blk" data-mark={id}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', minHeight: 22, gap: 8 }}>
-        <span className="blk__title">{label}</span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-          {note != null && <span className="qp-num qp-num--dim" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{note}</span>}
-          {tools}
-        </span>
-      </div>
-      {children}
-    </div>
-  )
+  return <Panel id={id} title={label} aside={note} tools={tools}>{children}</Panel>
 }
 
 /** A key figure as a compact row (Lab is for reading numbers; the big infographic figures are Present's). */
@@ -153,8 +131,9 @@ function useBits() {
 export function QuantumPanel() {
   const [sel, setSel] = useState<number | null>(null)
   return (
-    <div className="panel" aria-label="Quantum">
-      <ScrollArea markers={MARKERS} className="pane-scroll pane-scroll--tabs" bar={false} renderIndex={(ix) => <SectionTabs {...ix} label="Quantum sections" />}>
+    <div className="side-page" aria-label="Quantum">
+      <header className="side-page__head"><span className="side-page__t">Quantum</span></header>
+      <ScrollArea className="side-page__scroll" bar={false}>
         <RegisterBlk sel={sel} setSel={setSel} />
         <CircuitBlk />
         <BlurBlk sel={sel} />

@@ -6,7 +6,7 @@ import { Slider } from '../qs/Slider'
 import { QReadout } from '../qs/QReadout'
 import { QPill } from '../qs/QPill'
 import { ScrollArea } from '../qs/ScrollArea'
-import { SectionTabs } from './SectionTabs'
+import { Panel } from '../ui/Panel'
 import { IconButton } from '../qs/Icon'
 import { LevelHistogram } from '../qs/LevelHistogram'
 import { histogram, solidPerLayer, type Axis } from '../qs/grid'
@@ -14,13 +14,11 @@ import { SectionMap } from './SectionMap'
 import { fmt } from './fmt'
 import { PresentStyle } from './presentStyle'
 
-const MARKERS = [
-  { id: 'out-model', label: 'Model', icon: 'model' }, { id: 'out-grid', label: 'Grid', icon: 'grid' },
-  { id: 'out-slice', label: 'Slice', icon: 'slice' }, { id: 'out-quantum', label: 'Quantum result', icon: 'quantum' },
-  { id: 'out-print', label: 'Print check', icon: 'print' }, { id: 'out-export', label: 'Export', icon: 'export' },
-]
 
+/** A block: a folding panel in Lab; plain (title and content) when drawn as a HUD card. */
 function Blk({ id, label, note, tools, children }: { id: string; label: string; note?: ReactNode; tools?: ReactNode; children: ReactNode }) {
+  const card = useContext(PresentStyle)
+  if (!card) return <Panel id={id} title={label} aside={note} tools={tools}>{children}</Panel>
   return (
     <div className="blk" data-mark={id}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', minHeight: 22 }}>
@@ -63,12 +61,13 @@ function Figures({ items }: { items: Fig[] }) {
   )
 }
 
-const Empty = ({ children }: { children: ReactNode }) => <p className="qs-help">{children}</p>
+const Empty = ({ children }: { children: ReactNode }) => <p className="qs-help ux-note">{children}</p>
 
 export function OutputPane() {
   return (
-    <div className="panel" aria-label="Properties">
-      <ScrollArea markers={MARKERS} className="pane-scroll pane-scroll--tabs" bar={false} renderIndex={(ix) => <SectionTabs {...ix} label="Properties sections" />}>
+    <div className="side-page" aria-label="Properties">
+      <header className="side-page__head"><span className="side-page__t">Properties</span></header>
+      <ScrollArea className="side-page__scroll" bar={false}>
         <ModelOut />
         <GridOut />
         <SliceOut />

@@ -156,9 +156,16 @@ export async function savePng(el: HTMLElement, name: string, scale = 3) {
  *  then places it on the grid around the object. Object and full-view marks stay as they are. */
 export function composeLayout(root: HTMLElement, onMove: (k: string, p: Placement) => void, slotOf: (k: string) => Slot, scaleOf: (k: string) => number, reserve: number, pad?: Pad): { hero: Rect; out: number } {
   const view = root.getBoundingClientRect()
+  // a slot strip may be shrunk to fit between the corners (fitStrips): measure its pieces unshrunk
+  root.querySelectorAll<HTMLElement>(':scope > .hud-slot').forEach((el) => { el.style.zoom = '' })
   const boxes = [...root.querySelectorAll<HTMLElement>('.hud-piece[data-hud]')]
     .filter((p) => !p.parentElement?.closest('.hud-piece') && !p.dataset.hud!.startsWith('chrome:'))
-    .map((p) => { const r = boxOf(p), z = scaleOf(p.dataset.hud!); return { k: p.dataset.hud!, w: r.width / z, h: r.height / z, slot: slotOf(p.dataset.hud!) } })
+    // natural size: what is drawn, without the zoom a previous layout applied (the piece's own size stays)
+    .map((p) => {
+      const body = p.querySelector<HTMLElement>(':scope > .hud-piece__body')
+      const r = boxOf(p), z = (parseFloat(body?.style.zoom || '1') || 1) / scaleOf(p.dataset.hud!)
+      return { k: p.dataset.hud!, w: r.width / z, h: r.height / z, slot: slotOf(p.dataset.hud!) }
+    })
     .filter((b) => b.w > 0 && b.h > 0)
   const { placed, hero } = layout(boxes, view.width, view.height, reserve, pad)
   for (const q of placed) onMove(q.k, { x: q.x / view.width, y: q.y / view.height, auto: true, z: Math.abs(q.z - 1) > 0.001 ? q.z : undefined, out: q.out || undefined })

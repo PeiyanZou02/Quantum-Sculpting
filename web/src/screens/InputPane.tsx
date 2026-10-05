@@ -1,217 +1,218 @@
-// INPUT: only the things you set, in pipeline order. Each step folds to a one-line summary;
-// the scrollbar carries an index (01–04) to jump between them. Results live in the Output column.
-import { useRef, useState, type ReactNode } from 'react'
+// Lab · inputs. Everything you set, and nothing you read: results live in the properties on the right.
+// After Blender's properties editor: a rail of step tabs (Model, Voxelise, Quantum or Evolve, Mesh),
+// one step at a time, each made of panels that fold. The rail follows the focus, so the step you open
+// is the step the workspace shows, and the other way round. Steps and panels follow Peiyan's page.
+import { useRef } from 'react'
 import { useStore, NATIONS_MAX_GRID, type Stage as StageName } from '../store'
 import type { Fill, Field as FieldKind, UpAxis, Values, VFilter } from '../api'
-import { QPill } from '../qs/QPill'
 import { Segmented, AxisToggle } from '../qs/Segmented'
 import { Slider, Select, Input } from '../qs/Slider'
+import { Icon } from '../qs/Icon'
 import { ScrollArea } from '../qs/ScrollArea'
-import { SectionTabs } from './SectionTabs'
-import { Dot, Spinner } from './parts'
+import { Panel, Row, Note, Button, Buttons } from '../ui/Panel'
+import { Spinner } from './parts'
 import { fmt } from './fmt'
 import { MODEL_EXT } from './modelExt'
-import './evolve.css'
 
-const MARKERS = [
-  { id: 'in-01', label: 'Model', icon: 'model' }, { id: 'in-02', label: 'Voxelise', icon: 'grid' },
-  { id: 'in-03', label: 'Quantum', icon: 'quantum' }, { id: 'in-04', label: 'Mesh', icon: 'print' },
-]
+type Step = 'model' | 'voxels' | 'quantum' | 'mesh'
+const stepOf = (s: StageName): Step => (s === 'evolve' || s === 'scan' ? 'quantum' : s)
 
-
-function useFold() {
-  const [open, setOpen] = useState<Record<string, boolean>>(() => {
-    try { return JSON.parse(localStorage.getItem('qs-fold') ?? '{}') } catch { return {} }
-  })
-  const toggle = (id: string) => setOpen((o) => {
-    const n = { ...o, [id]: o[id] === false }
-    try { localStorage.setItem('qs-fold', JSON.stringify(n)) } catch { /* per-viewer */ }
-    return n
-  })
-  return { isOpen: (id: string) => open[id] !== false, toggle }
-}
-
-/** Touching a step's parameters points the workspace at that step (when it has something to show). */
-function Step({ id, title, summary, state, off, fold, stage, children }: {
-  id: string; no?: string; title: string; summary: ReactNode; state?: ReactNode; off?: boolean
-  fold: ReturnType<typeof useFold>; stage: StageName; children: ReactNode
-}) {
-  const open = fold.isOpen(id)
+/** The left column of Lab: the step rail and the open step's panels. `only` shows one step without the rail (Explore). */
+export function InputPane({ only }: { only?: Step }) {
+  const focus = useStore((s) => s.focus.stage)
   const setFocus = useStore((s) => s.setFocus)
-  const on = useStore((s) => s.focus.stage === stage || (stage === 'quantum' && s.focus.stage === 'scan'))
+  const st = {
+    model: useStore((s) => !!s.model), grid: useStore((s) => !!s.grid), proc: useStore((s) => !!s.proc), mesh: useStore((s) => !!s.report),
+    mode: useStore((s) => s.q.mode),
+    busy: useStore((s) => (s.busy.model ? 'model' : s.busy.vox ? 'voxels' : s.busy.proc || s.busy.evolve ? 'quantum' : s.busy.mesh ? 'mesh' : null)),
+  }
+  const evolve = st.mode === 'nations'
+  const step = only ?? stepOf(focus)
+  const RAIL: { id: Step; icon: string; t: string; done: boolean; off: boolean }[] = [
+    { id: 'model', icon: 'model', t: 'Model', done: st.model, off: false },
+    { id: 'voxels', icon: 'grid', t: 'Voxelise', done: st.grid, off: !st.model },
+    { id: 'quantum', icon: evolve ? 'entangle' : 'quantum', t: evolve ? 'Evolve' : 'Quantum', done: st.proc, off: !st.grid },
+    { id: 'mesh', icon: 'print', t: 'Mesh', done: st.mesh, off: !st.proc },
+  ]
+  const open = (r: (typeof RAIL)[number]) => setFocus(r.id === 'quantum' ? (evolve ? 'evolve' : 'quantum') : r.id, `Editing ${r.t.toLowerCase()}`)
+  const cur = RAIL.find((r) => r.id === step)!
   return (
-    <section className={'sec' + (off ? ' sec--off' : '') + (open ? '' : ' sec--folded') + (on && !off ? ' sec--focus' : '')} data-mark={id}
-      onPointerDown={() => { if (!off && !on) setFocus(stage, `Editing ${title}`) }}>
-      <button className="sec__head" onClick={() => fold.toggle(id)} aria-expanded={open}>
-        <span className="sec__title">{title}</span>
-        <span className="sec__state">{state}</span>
-        <span className={'sec__chev' + (open ? ' sec__chev--open' : '')} />
-      </button>
-      {open ? children : <div className="sec__summary">{summary}</div>}
-    </section>
-  )
-}
-
-export function InputPane() {
-  const fold = useFold()
-  return (
-    <div className="panel" aria-label="Parameters">
-      <ScrollArea markers={MARKERS} className="pane-scroll pane-scroll--tabs" bar={false} renderIndex={(ix) => <SectionTabs {...ix} label="Parameter sections" />}>
-        <ModelIn fold={fold} />
-        <VoxIn fold={fold} />
-        <QuantumIn fold={fold} />
-        <MeshIn fold={fold} />
-        <div style={{ height: 40 }} />
-      </ScrollArea>
+    <div className={'lab-in' + (only ? ' lab-in--only' : '')}>
+      {!only && (
+        <nav className="lab-rail" aria-label="Steps">
+          {RAIL.map((r, i) => (
+            <button key={r.id} className={'lab-rail__b' + (r.id === step ? ' lab-rail__b--on' : '')} disabled={r.off} onClick={() => open(r)}
+              aria-current={r.id === step ? 'step' : undefined} data-tip={`${String(i + 1).padStart(2, '0')} ${r.t}`} data-tip-side="right">
+              <Icon name={r.icon} size={16} />
+              {st.busy === r.id ? <span className="lab-rail__busy" /> : r.done ? <span className="lab-rail__done" /> : null}
+            </button>
+          ))}
+        </nav>
+      )}
+      <div className="lab-in__page">
+        <header className="lab-in__head">
+          <span className="lab-in__no">{String(RAIL.indexOf(cur) + 1).padStart(2, '0')}</span>
+          <span className="lab-in__t">{cur.t}</span>
+          {st.busy === cur.id && <Spinner />}
+        </header>
+        <ScrollArea className="lab-in__scroll" bar={false}>
+          {step === 'model' && <ModelIn />}
+          {step === 'voxels' && <VoxIn />}
+          {step === 'quantum' && <QuantumIn />}
+          {step === 'mesh' && <MeshIn />}
+          <div style={{ height: 24 }} />
+        </ScrollArea>
+      </div>
     </div>
   )
 }
 
-type F = { fold: ReturnType<typeof useFold> }
-
+// ── 01 model ─────────────────────────────────────────────────────────────────────────────────────
 const UP: { value: UpAxis; label: string }[] = [
   { value: '+z', label: '+Z · 3D print' }, { value: '+y', label: '+Y · Blender, glTF' }, { value: '+x', label: '+X' },
   { value: '-z', label: '−Z · upside down' }, { value: '-y', label: '−Y' }, { value: '-x', label: '−X' },
 ]
 
-function ModelIn({ fold }: F) {
+function ModelIn() {
   const st = useStore()
   const file = useRef<HTMLInputElement>(null)
   const { model } = st
   return (
-    <Step id="in-01" no="01" title="Model" fold={fold} stage="model"
-      summary={model ? `${model.builtin ? 'test cup' : model.file} · up ${fmt.up(model.up)}` : 'no model'}
-      state={st.busy.model ? <Spinner /> : model ? <Dot live /> : <Dot />}>
-      <div className="row">
+    <>
+      <Panel id="in-model-source" title="Source" aside={model ? (model.builtin ? 'test cup' : model.file) : 'none'}>
         <input ref={file} type="file" hidden accept={MODEL_EXT.join(',')} onChange={(e) => {
           const f = e.target.files?.[0]
           if (f) st.upload(f)
           e.target.value = ''
         }} />
-        <QPill kind="commit" size="s" label="Choose file" onClick={() => file.current?.click()} />
-        <QPill kind="hair" size="s" label="Use test cup" onClick={st.useTestCup} />
-      </div>
-      {st.recent.length > 0 && (
-        <Select label="From input/" value={model?.file ?? ''}
-          options={[{ value: '', label: model ? '—' : 'Choose a model…' }, ...st.recent.map((r) => ({ value: r.name, label: `${r.name} · ${r.mb} MB` }))]}
-          onChange={(v) => v && st.openRecent(v)} />
-      )}
-      <Select label="Up axis in the file" value={st.up} options={UP} onChange={(v) => st.setUp(v)} />
-      {model?.lying && <p className="qs-help qs-help--warn">! Looks like it is lying along {model.lying}. Try another up axis.</p>}
-    </Step>
+        <Buttons>
+          <Button kind="primary" onClick={() => file.current?.click()} tip="Open a mesh" desc={MODEL_EXT.join(' ')}>Open file…</Button>
+          <Button onClick={st.useTestCup} tip="Test cup" desc="80 × 80 × 90 mm, ready in a second">Test cup</Button>
+        </Buttons>
+        {st.recent.length > 0 && (
+          <Select label="Recent" value={model?.file ?? ''}
+            options={[{ value: '', label: model ? '—' : 'Choose…' }, ...st.recent.map((r) => ({ value: r.name, label: `${r.name} · ${r.mb} MB` }))]}
+            onChange={(v) => v && st.openRecent(v)} />
+        )}
+      </Panel>
+      <Panel id="in-model-orient" title="Orientation">
+        <Select label="Up axis" value={st.up} options={UP} onChange={(v) => st.setUp(v)} help="Which axis is up in the file." />
+        {model?.lying && <Note warn>Looks like it is lying along {model.lying}. Try another up axis.</Note>}
+      </Panel>
+    </>
   )
 }
 
-function VoxIn({ fold }: F) {
+// ── 02 voxelise ──────────────────────────────────────────────────────────────────────────────────
+function VoxIn() {
   const st = useStore()
-  const { vox, model } = st
-  const fill = { holes: 'enclosed', capped: 'capped', none: 'shell' }[vox.fill]
+  const { vox } = st
   return (
-    <Step id="in-02" no="02" title="Voxelise" fold={fold} stage="voxels" off={!model}
-      summary={`${vox.n}³ · ${fill} · ${vox.values} · pad ${vox.pad}`}
-      state={st.busy.vox ? <Spinner /> : st.grid ? <Dot live /> : <Dot />}>
-      <div className="seg-block">
-        <span className="qs-field-label">Grid size</span>
-        <Segmented size="s" options={[16, 32, 64, 128, 256].map((n) => ({ value: String(n), label: `${n}³` }))} value={String(vox.n)} onChange={(v) => st.setVox({ n: +v })} />
-      </div>
-      <Select<Fill> label="Inside" value={vox.fill} onChange={(v) => st.setVox({ fill: v })} options={[
-        { value: 'holes', label: 'Fill enclosed interiors' },
-        { value: 'capped', label: 'Cap the bottom, then fill' },
-        { value: 'none', label: 'Shell only' },
-      ]} />
-      <Select<Values> label="Cell values" value={vox.values} onChange={(v) => st.setVox({ values: v })}
-        options={[{ value: 'coverage', label: 'Coverage · 0.5 = surface' }, { value: 'binary', label: '0 or 1 · ½ voxel fat' }]} />
-      <Slider label="Padding · cells" value={vox.pad} min={0} max={6} step={1} ticks={6} onChange={(v) => st.setVox({ pad: v })} />
-    </Step>
+    <>
+      <Panel id="in-vox-grid" title="Grid" aside={`${vox.n}³`}>
+        <Row label="Resolution">
+          <Segmented size="s" options={[16, 32, 64, 128, 256].map((n) => ({ value: String(n), label: `${n}` }))} value={String(vox.n)} onChange={(v) => st.setVox({ n: +v })} aria-label="Resolution" />
+        </Row>
+        <Slider label="Padding" value={vox.pad} min={0} max={6} step={1} format={(v) => `${v} cells`} onChange={(v) => st.setVox({ pad: v })} help="Empty cells kept around the model." />
+      </Panel>
+      <Panel id="in-vox-fill" title="Fill">
+        <Select<Fill> label="Inside" value={vox.fill} onChange={(v) => st.setVox({ fill: v })} options={[
+          { value: 'holes', label: 'Fill enclosed' },
+          { value: 'capped', label: 'Cap, then fill' },
+          { value: 'none', label: 'Shell only' },
+        ]} help="How the inside is filled. Cap first for scans that are open underneath." />
+        <Select<Values> label="Cell values" value={vox.values} onChange={(v) => st.setVox({ values: v })}
+          options={[{ value: 'coverage', label: 'Coverage' }, { value: 'binary', label: '0 or 1' }]}
+          help="Coverage stores how much of each cell the model occupies, so 0.5 is the true surface. 0 or 1 comes out about half a voxel fat." />
+      </Panel>
+    </>
   )
 }
 
-/** θ_k = π · strength · ((1 − reach) · 2^−k + reach), as in app/emulator.py. Drawn next to the sliders it explains. */
+// ── 03 quantum ───────────────────────────────────────────────────────────────────────────────────
+/** θ_k = π · strength · ((1 − reach) · 2^−k + reach), as in app/emulator.py. */
 function QubitBars() {
   const q = useStore((s) => s.q)
   const n = useStore((s) => s.grid?.n ?? 32)
   const bits = Math.ceil(Math.log2(Math.min(n, 32)))
   const th = Array.from({ length: bits }, (_, k) => q.strength * ((1 - q.reach) * 2 ** -k + q.reach))
-  const W = 300, H = 48, bw = W / bits
+  const W = 240, H = 36, bw = W / bits
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <div className="qs-field-head"><span>Rotation per qubit</span><output>θ / π</output></div>
-      <svg width="100%" viewBox={`0 -12 ${W} ${H + 26}`} style={{ overflow: 'visible' }}>
-        <line x1="0" x2={W} y1={H} y2={H} stroke="var(--qs-ink4)" />
-        <line x1="0" x2={W} y1={0} y2={0} stroke="var(--qs-ink4)" strokeDasharray="2 3" />
-        {th.map((t, k) => (
-          <g key={k}>
-            <rect x={k * bw + 6} y={H - t * H} width={bw - 12} height={Math.max(0.5, t * H)} fill="var(--qs-ink)" />
-            <text x={k * bw + bw / 2} y={H + 12} textAnchor="middle" fontFamily="TWK Everett Mono, ui-monospace, monospace" fontSize="11" fill="var(--qs-ink2)">q{k}</text>
-            <text x={k * bw + bw / 2} y={H - t * H - 4} textAnchor="middle" fontFamily="TWK Everett Mono, ui-monospace, monospace" fontSize="11" fill="var(--qs-ink)">{t.toFixed(2)}</text>
-          </g>
-        ))}
-      </svg>
-    </div>
+    <svg width="100%" viewBox={`0 -12 ${W} ${H + 26}`} className="lab-qbars" aria-label="Rotation per qubit, θ / π">
+      <line x1="0" x2={W} y1={H} y2={H} className="lab-qbars__base" />
+      {th.map((t, k) => (
+        <g key={k}>
+          <rect x={k * bw + 5} y={H - t * H} width={bw - 10} height={Math.max(0.5, t * H)} />
+          <text x={k * bw + bw / 2} y={H + 12} textAnchor="middle" className="lab-qbars__k">q{k}</text>
+          <text x={k * bw + bw / 2} y={H - t * H - 4} textAnchor="middle">{t.toFixed(2)}</text>
+        </g>
+      ))}
+    </svg>
   )
 }
 
+const MODES = [{ value: 'gaussian', label: 'Gauss' }, { value: 'emulator', label: 'Emulate' }, { value: 'atlas', label: 'Atlas' }, { value: 'nations', label: 'Evolve' }]
 const MODE_HELP = {
   gaussian: 'A plain blur, to check the pipeline.',
-  emulator: 'Quantum Blur Core approximated locally. Live.',
+  emulator: 'Quantum Blur Core, approximated locally. Live.',
   atlas: 'Runs on Atlas blur-core-v1. Cached in grids/.',
   nations: 'Nations, one qubit each, evolve turn by turn. Local.',
 }
-const MODE_LABEL = { gaussian: 'gaussian', emulator: 'emulation', atlas: 'atlas', nations: 'evolve' }
 
-function QuantumIn({ fold }: F) {
+export function QuantumIn() {
   const st = useStore()
   const { q, grid, job, key, proc } = st
   const running = job?.status === 'running'
-  const summary = q.mode === 'gaussian' ? `gaussian · σ ${q.sigma}`
-    : q.mode === 'nations' ? `evolve · ${q.k} nations · ${q.turns} turns · reach ${q.spread}% · ${q.run}`
-    : `${MODE_LABEL[q.mode]} · s ${fmt.f2(q.strength)} · r ${fmt.f2(q.reach)} · ${q.style} · ${q.run}`
   return (
-    <Step id="in-03" no="03" title={q.mode === 'nations' ? 'Evolve' : 'Quantum'} fold={fold} stage={q.mode === 'nations' ? 'evolve' : 'quantum'} off={!grid} summary={summary}
-      state={running ? <><Spinner /> {job.tiles_done}/{job.tiles_total}</> : st.busy.proc ? <Spinner /> : proc ? <Dot live /> : <Dot />}>
-      <div className="seg-block ev-modes">
-        <Segmented options={[{ value: 'gaussian', label: 'Gauss' }, { value: 'emulator', label: 'Emulate' }, { value: 'atlas', label: 'Atlas' }, { value: 'nations', label: 'Evolve' }]}
-          value={q.mode} onChange={(v) => st.setQ({ mode: v as typeof q.mode })} aria-label="Quantum mode" />
-        <p className="qs-help">{MODE_HELP[q.mode]}</p>
-      </div>
+    <>
+      <Panel id="in-q-engine" title="Engine" aside={running ? <><Spinner /> {job.tiles_done}/{job.tiles_total}</> : st.busy.proc ? <Spinner /> : null}>
+        <Segmented size="s" options={MODES} value={q.mode} onChange={(v) => st.setQ({ mode: v as typeof q.mode })} aria-label="Quantum engine" />
+        <Note>{MODE_HELP[q.mode]}</Note>
+      </Panel>
       {q.mode === 'gaussian' ? (
-        <Slider label="Sigma" value={q.sigma} min={0.3} max={3} step={0.1} defaultValue={1} onChange={(v) => st.setQ({ sigma: v })} />
+        <Panel id="in-q-gauss" title="Blur">
+          <Slider label="Sigma" value={q.sigma} min={0.3} max={3} step={0.1} defaultValue={1} onChange={(v) => st.setQ({ sigma: v })} />
+        </Panel>
       ) : q.mode === 'nations' ? (
         <EvolveIn />
       ) : (
         <>
-          <Slider label="Strength" value={q.strength} min={0} max={1} step={0.01} defaultValue={0.3} onChange={(v) => st.setQ({ strength: v })} />
-          <Slider label="Reach" value={q.reach} min={0} max={1} step={0.01} defaultValue={0} onChange={(v) => st.setQ({ reach: v })} />
-          <QubitBars />
-          <div className="pair">
+          <Panel id="in-q-blur" title="Blur">
+            <Slider label="Strength" value={q.strength} min={0} max={1} step={0.01} defaultValue={0.3} onChange={(v) => st.setQ({ strength: v })} help="How far each qubit rotates: θ = strength · π for the lowest." />
+            <Slider label="Reach" value={q.reach} min={0} max={1} step={0.01} defaultValue={0} onChange={(v) => st.setQ({ reach: v })} help="How much of the rotation the higher qubits keep: 0 blurs locally, 1 mixes far cells as much as near ones." />
+            <Panel id="in-q-qubits" title="Rotation per qubit" aside="θ / π" sub defaultOpen={false}>
+              <QubitBars />
+            </Panel>
+          </Panel>
+          <Panel id="in-q-circuit" title="Circuit" defaultOpen={false}>
             <Select label="Gate style" value={q.style} onChange={(v) => st.setQ({ style: v })} options={[
               { value: 'x', label: 'x · Rx' }, { value: 'y', label: 'y · Ry' }, { value: 'xy', label: 'xy · Rx, Ry' }, { value: 'yx', label: 'yx · Ry, Rx' },
             ]} />
-            <Input label="Shots" type="number" value={q.shots ?? ''} placeholder="exact" min={1} step={1000} onChange={(v) => st.setQ({ shots: v ? Math.max(1, +v) : null })} />
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span className="qs-field-label">Blur axes</span>
-            <AxisToggle value={q.axes.map((a) => 'xyz'[a] as 'x' | 'y' | 'z')} onChange={(v) => { if (v.length) st.setQ({ axes: v.map((a) => 'xyz'.indexOf(a)).sort() }) }} />
-          </div>
-          {grid && grid.tiles.cube.jobs > 1 && (
-            <div className="seg-block">
-              <span className="qs-field-label">Tiling</span>
-              <Segmented size="s" options={[{ value: 'cube', label: 'Cubes' }, { value: 'layers', label: 'Layers · scannable' }]} value={q.tiling} onChange={(v) => st.setQ({ tiling: v as 'cube' | 'layers' })} />
-            </div>
-          )}
+            <Input label="Shots" type="number" value={q.shots ?? ''} placeholder="exact" min={1} step={1000} onChange={(v) => st.setQ({ shots: v ? Math.max(1, +v) : null })} help="Leave empty for the exact state." />
+            <Row label="Axes">
+              <AxisToggle value={q.axes.map((a) => 'xyz'[a] as 'x' | 'y' | 'z')} onChange={(v) => { if (v.length) st.setQ({ axes: v.map((a) => 'xyz'.indexOf(a)).sort() }) }} />
+            </Row>
+            {grid && grid.tiles.cube.jobs > 1 && (
+              <Row label="Tiling">
+                <Segmented size="s" options={[{ value: 'cube', label: 'Cubes' }, { value: 'layers', label: 'Layers' }]} value={q.tiling} onChange={(v) => st.setQ({ tiling: v as 'cube' | 'layers' })} />
+              </Row>
+            )}
+          </Panel>
         </>
       )}
-      <Input label="Run name" value={q.run} onChange={(v) => st.setQ({ run: v.replace(/[^\w-]/g, '_').slice(0, 40) })}
-        help={q.mode === 'nations' ? 'The run name seeds the measurements: the same name gives the same history, another name another one.' : undefined} />
-      {q.mode === 'atlas' && (
-        <div className="row">
-          <QPill kind={key?.set && !running ? 'commit' : 'disabled'} size="s"
-            label={running ? 'Running on Atlas' : proc?.mode === 'atlas' && proc.cached ? 'Cached · submit again' : 'Submit to Atlas'}
-            loading={running} onClick={() => st.process({ submit: true })} />
-          {!key?.set && <QPill kind="ghost" size="s" label="Set API key" onClick={() => st.set({ keyOpen: true })} />}
-        </div>
-      )}
-    </Step>
+      <Panel id="in-q-run" title="Run" aside={q.run}>
+        <Input label="Name" value={q.run} onChange={(v) => st.setQ({ run: v.replace(/[^\w-]/g, '_').slice(0, 40) })}
+          help={q.mode === 'nations' ? 'The run name seeds the measurements: the same name gives the same history.' : 'Results are filed under this name.'} />
+        {q.mode === 'atlas' && (
+          <Buttons>
+            <Button kind="primary" disabled={!key?.set || running} onClick={() => st.process({ submit: true })}>
+              {running ? 'Running on Atlas…' : proc?.mode === 'atlas' && proc.cached ? 'Cached · submit again' : 'Submit to Atlas'}
+            </Button>
+            {!key?.set && <Button onClick={() => st.set({ keyOpen: true })}>Set API key</Button>}
+          </Buttons>
+        )}
+      </Panel>
+    </>
   )
 }
 
@@ -221,74 +222,71 @@ function EvolveIn() {
   const n = useStore((s) => s.grid?.n ?? null)
   const setQ = useStore((s) => s.setQ)
   return (
-    <>
-      {n != null && n > NATIONS_MAX_GRID && (
-        <p className="qs-help qs-help--warn">! Evolve works on grids up to {NATIONS_MAX_GRID}³; this one is {n}³. Choose a smaller grid size under Voxelise.</p>
-      )}
-      <Slider label="Nations" value={q.k} min={3} max={16} step={1} ticks={13} defaultValue={12} onChange={(v) => setQ({ k: v })}
-        help="Regions the model is split into at the start, one qubit each. Nations can split later; at most 16 are alive at once." />
-      <Slider label="Turns" value={q.turns} min={5} max={300} step={5} ticks={10} defaultValue={60} onChange={(v) => setQ({ turns: v })}
-        help="How long the history runs. It stops early if every nation dies; a shorter run is exactly the beginning of a longer one." />
-      <Slider label="Growth reach · % of the grid" value={q.spread} min={0} max={8} step={0.5} ticks={8} defaultValue={4} format={(v) => `${v.toFixed(1)}%`}
+    <Panel id="in-q-nations" title="Nations" aside={`${q.k} · ${q.turns} turns`}>
+      {n != null && n > NATIONS_MAX_GRID && <Note warn>Evolve works on grids up to {NATIONS_MAX_GRID}³; this one is {n}³.</Note>}
+      <Slider label="Nations" value={q.k} min={3} max={16} step={1} defaultValue={12} onChange={(v) => setQ({ k: v })}
+        help="Regions the model is split into at the start, one qubit each. At most 16 are alive at once." />
+      <Slider label="Turns" value={q.turns} min={5} max={300} step={5} defaultValue={60} onChange={(v) => setQ({ turns: v })}
+        help="How long the history runs. A shorter run is exactly the beginning of a longer one." />
+      <Slider label="Growth reach" value={q.spread} min={0} max={8} step={0.5} defaultValue={4} format={(v) => `${v.toFixed(1)} %`}
         onChange={(v) => setQ({ spread: v })}
-        help="How far walls and new growth may reach beyond the original surface. At 0 the shape only loses voxels: annexing, cracks, fleeing and withering." />
-      <div className="seg-block">
-        <span className="qs-field-label">Final borders</span>
-        <Segmented size="s" options={[{ value: 'flush', label: 'Flush' }, { value: 'grooves', label: 'Carve grooves' }]}
-          value={q.grooves ? 'grooves' : 'flush'} onChange={(v) => setQ({ grooves: v === 'grooves' })} aria-label="Final borders" />
-        <p className="qs-help">Grooves cut a one-voxel channel along every border of the last turn, so the nations still read on a one-colour print.</p>
-      </div>
-    </>
+        help="How far walls and growth may reach beyond the original surface, as a share of the grid. At 0 the shape only loses voxels." />
+      <Row label="Borders" tip="Grooves cut a one-voxel channel along every border of the last turn, so the nations still read on a one-colour print.">
+        <Segmented size="s" options={[{ value: 'flush', label: 'Flush' }, { value: 'grooves', label: 'Grooves' }]}
+          value={q.grooves ? 'grooves' : 'flush'} onChange={(v) => setQ({ grooves: v === 'grooves' })} aria-label="Borders" />
+      </Row>
+    </Panel>
   )
 }
 
+// ── 04 mesh ──────────────────────────────────────────────────────────────────────────────────────
 const FILTERS: { value: VFilter; label: string }[] = [
   { value: 'none', label: 'None' }, { value: 'gaussian', label: 'Gaussian' }, { value: 'mean', label: 'Mean' },
   { value: 'median', label: 'Median' }, { value: 'curvature', label: 'Laplacian flow' },
 ]
 const FIELDS: { value: FieldKind; label: string }[] = [
-  { value: 'threshold', label: 'Toward the result (stable)' },
-  { value: 'difference', label: 'Amplify the difference' },
-  { value: 'gradient', label: 'Along the density gradient' },
+  { value: 'threshold', label: 'Toward the result' },
+  { value: 'difference', label: 'Amplify difference' },
+  { value: 'gradient', label: 'Along the gradient' },
 ]
 
-function MeshIn({ fold }: F) {
+function MeshIn() {
   const st = useStore()
-  const { m, proc, grid, report } = st
+  const { m, grid } = st
   const n = grid?.n ?? 32
   return (
-    <Step id="in-04" no="04" title="Mesh" fold={fold} stage="mesh" off={!proc}
-      summary={`${m.method === 'advect' ? `push ${m.amount}` : 'threshold'} · level ${fmt.f2(m.level)} · ×${m.refine} · ${m.height} mm`}
-      state={st.busy.mesh ? <Spinner /> : report ? <Dot live /> : <Dot />}>
-      <Slider label="Level" value={m.level} min={0.05} max={0.95} step={0.01} defaultValue={0.5} onChange={(v) => st.setM({ level: v })}
-        help="Relative to the original solid (1). Lower swells and fuses; higher erodes." />
-      <div className="seg-block">
-        <span className="qs-field-label">Surface from</span>
-        <Segmented size="s" options={[{ value: 'threshold', label: 'Threshold' }, { value: 'advect', label: 'Push the surface' }]}
-          value={m.method} onChange={(v) => st.setM({ method: v as 'threshold' | 'advect' })} />
-      </div>
-      {m.method === 'advect' && (
-        <>
-          <Slider label="Push · quantum cells" value={m.amount} min={0} max={8} step={0.25} ticks={8} onChange={(v) => st.setM({ amount: v })} />
-          <Select<FieldKind> label="Field" value={m.field} options={FIELDS} onChange={(v) => st.setM({ field: v })} />
-        </>
-      )}
-      <Select label="Refine" value={String(m.refine)} onChange={(v) => st.setM({ refine: +v })}
-        options={[1, 2, 4, 8].filter((r) => n * r <= 256).map((r) => ({ value: String(r), label: r === 1 ? '×1 · quantum grid' : `×${r} · ${n * r}³` }))} />
-      <span className="sub">Voxel operations</span>
-      <div className="pair">
+    <>
+      <Panel id="in-mesh-surface" title="Surface" aside={`${m.method === 'advect' ? 'push' : 'threshold'} ${fmt.f2(m.level)}`}>
+        <Slider label="Level" value={m.level} min={0.05} max={0.95} step={0.01} defaultValue={0.5} onChange={(v) => st.setM({ level: v })}
+          help="Relative to the original solid (1). Lower swells and fuses; higher erodes." />
+        <Row label="From">
+          <Segmented size="s" options={[{ value: 'threshold', label: 'Threshold' }, { value: 'advect', label: 'Push' }]}
+            value={m.method} onChange={(v) => st.setM({ method: v as 'threshold' | 'advect' })} aria-label="Surface from" />
+        </Row>
+        {m.method === 'advect' && (
+          <>
+            <Slider label="Push" value={m.amount} min={0} max={8} step={0.25} format={(v) => `${v} cells`} onChange={(v) => st.setM({ amount: v })} help="How far the quantum result moves the surface, in quantum cells." />
+            <Select<FieldKind> label="Field" value={m.field} options={FIELDS} onChange={(v) => st.setM({ field: v })} />
+          </>
+        )}
+        <Select label="Refine" value={String(m.refine)} onChange={(v) => st.setM({ refine: +v })}
+          options={[1, 2, 4, 8].filter((r) => n * r <= 256).map((r) => ({ value: String(r), label: r === 1 ? '×1 · quantum grid' : `×${r} · ${n * r}³` }))} />
+      </Panel>
+      <Panel id="in-mesh-vox" title="Voxel operations" defaultOpen={false}>
         <Select<VFilter> label="Smooth" value={m.vfilter} options={FILTERS} onChange={(v) => st.setM({ vfilter: v })} />
-        <Slider label="Width" value={m.vwidth} min={0.5} max={4} step={0.25} ticks={7} disabled={m.vfilter === 'none'} onChange={(v) => st.setM({ vwidth: v })} />
-      </div>
-      <Slider label="Thicken / shrink" value={m.grow} min={-4} max={4} step={0.25} ticks={8} origin={0} defaultValue={0} onChange={(v) => st.setM({ grow: v })} />
-      <Slider label="Close gaps" value={m.close} min={0} max={4} step={0.5} ticks={8} defaultValue={0} onChange={(v) => st.setM({ close: v })} />
-      <span className="sub">Mesh</span>
-      <Slider label="Smoothing passes" value={m.smooth} min={0} max={30} step={1} ticks={6} defaultValue={5} onChange={(v) => st.setM({ smooth: v })} />
-      <div className="seg-block">
-        <span className="qs-field-label">Fragments</span>
-        <Segmented size="s" options={[{ value: 'largest', label: 'Largest part' }, { value: 'all', label: 'All large parts' }]} value={m.keep} onChange={(v) => st.setM({ keep: v as 'largest' | 'all' })} />
-      </div>
-      <Input label="Print height" type="number" value={m.height} min={5} max={1000} step={1} suffix="mm" onChange={(v) => st.setM({ height: Math.max(5, Math.min(1000, +v || 90)) })} />
-    </Step>
+        <Slider label="Width" value={m.vwidth} min={0.5} max={4} step={0.25} disabled={m.vfilter === 'none'} onChange={(v) => st.setM({ vwidth: v })} />
+        <Slider label="Thicken" value={m.grow} min={-4} max={4} step={0.25} origin={0} defaultValue={0} onChange={(v) => st.setM({ grow: v })} help="Positive thickens, negative shrinks, in voxels." />
+        <Slider label="Close gaps" value={m.close} min={0} max={4} step={0.5} defaultValue={0} onChange={(v) => st.setM({ close: v })} />
+      </Panel>
+      <Panel id="in-mesh-mesh" title="Mesh" defaultOpen={false}>
+        <Slider label="Smoothing" value={m.smooth} min={0} max={30} step={1} defaultValue={5} format={(v) => `${v} passes`} onChange={(v) => st.setM({ smooth: v })} />
+        <Row label="Keep">
+          <Segmented size="s" options={[{ value: 'largest', label: 'Largest' }, { value: 'all', label: 'All large' }]} value={m.keep} onChange={(v) => st.setM({ keep: v as 'largest' | 'all' })} aria-label="Fragments" />
+        </Row>
+      </Panel>
+      <Panel id="in-mesh-print" title="Print">
+        <Input label="Height" type="number" value={m.height} min={5} max={1000} step={1} suffix="mm" onChange={(v) => st.setM({ height: Math.max(5, Math.min(1000, +v || 90)) })} />
+      </Panel>
+    </>
   )
 }

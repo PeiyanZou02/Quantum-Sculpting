@@ -1,5 +1,5 @@
-// Flat 2D slider: hairline track, ink fill to the value, a small square thumb, tick marks.
-// Label and value sit on one line above it (the research layout's "field-head").
+// Form controls in the app's one language. A number is a Blender-style field: label on the left, a field
+// that fills to the value; drag across it, double-click (or Enter) to type, arrows to step.
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import './forms.css'
@@ -23,9 +23,10 @@ export interface SliderProps {
   help?: ReactNode
 }
 
-export function Slider({ label, value, min, max, step = 0.01, onChange, onCommit, format, ticks = 10, origin, defaultValue, disabled, help }: SliderProps) {
+export function Slider({ label, value, min, max, step = 0.01, onChange, onCommit, format, origin, defaultValue, disabled, help }: SliderProps) {
   const ref = useRef<HTMLDivElement>(null)
   const [drag, setDrag] = useState(false)
+  const [typing, setTyping] = useState<string | null>(null)
   const span = max - min || 1
   const f = (v: number) => (Math.min(max, Math.max(min, v)) - min) / span
   const o = f(origin ?? min)
@@ -39,56 +40,64 @@ export function Slider({ label, value, min, max, step = 0.01, onChange, onCommit
     return snap(min + ((clientX - r.left) / r.width) * span)
   }
   const decimals = Math.max(0, -Math.floor(Math.log10(step)))
+  const commitTyped = () => {
+    if (typing == null) return
+    const t = typing.trim()
+    const v = t === '' && defaultValue != null ? defaultValue : parseFloat(t)
+    setTyping(null)
+    if (Number.isFinite(v)) { const s = snap(v); onChange(s); onCommit?.(s) }
+  }
+  const tip = typeof help === 'string' ? help : undefined
   return (
-    <div className={'qs-slider' + (disabled ? ' qs-slider--off' : '')}>
-      <div className="qs-field-head" data-tip={typeof help === 'string' && typeof label === 'string' ? label : undefined} data-tip-desc={typeof help === 'string' ? help : undefined}>
-        <span>{label}</span>
-        <output>{format ? format(value) : value.toFixed(decimals)}</output>
+    <div className={'ux-row ux-num' + (disabled ? ' ux-num--off' : '')}>
+      <span className="ux-row__k" data-tip={tip && typeof label === 'string' ? label : undefined} data-tip-desc={tip}>{label}</span>
+      <div className="ux-row__v">
+        {typing != null ? (
+          <input className="ux-num__in" autoFocus value={typing} onChange={(e) => setTyping(e.target.value)}
+            onBlur={commitTyped} onKeyDown={(e) => { if (e.key === 'Enter') commitTyped(); if (e.key === 'Escape') setTyping(null) }} />
+        ) : (
+          <div
+            ref={ref}
+            className={'ux-num__f' + (drag ? ' ux-num__f--drag' : '')}
+            role="slider"
+            aria-label={typeof label === 'string' ? label : undefined}
+            aria-valuetext={String(format ? format(value) : value)}
+            tabIndex={disabled ? -1 : 0}
+            aria-valuemin={min}
+            aria-valuemax={max}
+            aria-valuenow={value}
+            data-tip={tip ? undefined : 'Drag, or double-click to type'}
+            onPointerDown={(e) => {
+              if (disabled || e.button !== 0 || e.detail > 1) return
+              e.currentTarget.setPointerCapture(e.pointerId)
+              setDrag(true)
+              onChange(at(e.clientX))
+            }}
+            onPointerMove={(e) => drag && onChange(at(e.clientX))}
+            onPointerUp={(e) => {
+              if (!drag) return
+              setDrag(false)
+              onCommit?.(at(e.clientX))
+            }}
+            onDoubleClick={() => !disabled && setTyping(value.toFixed(decimals))}
+            onKeyDown={(e) => {
+              // arrows step (Shift: ten steps), Page Up/Down ten steps, Home/End the ends, Enter types
+              const k = e.key
+              if (k === 'Enter') { e.preventDefault(); setTyping(value.toFixed(decimals)); return }
+              const d = k === 'ArrowRight' || k === 'ArrowUp' ? 1 : k === 'ArrowLeft' || k === 'ArrowDown' ? -1 : k === 'PageUp' ? 10 : k === 'PageDown' ? -10 : 0
+              if (!d && k !== 'Home' && k !== 'End') return
+              e.preventDefault()
+              const v = k === 'Home' ? min : k === 'End' ? max : snap(value + d * step * (e.shiftKey ? 10 : 1))
+              onChange(v)
+              onCommit?.(v)
+            }}
+          >
+            <span className="ux-num__fill" style={{ left: `${Math.min(o, p) * 100}%`, width: `${Math.abs(p - o) * 100}%` }} />
+            <span className="ux-num__v">{format ? format(value) : value.toFixed(decimals)}</span>
+          </div>
+        )}
       </div>
-      <div
-        ref={ref}
-        className={'qs-slider__track' + (drag ? ' qs-slider__track--drag' : '')}
-        role="slider"
-        aria-label={typeof label === 'string' ? label : undefined}
-        aria-valuetext={String(format ? format(value) : value)}
-        tabIndex={disabled ? -1 : 0}
-        aria-valuemin={min}
-        aria-valuemax={max}
-        aria-valuenow={value}
-        onPointerDown={(e) => {
-          if (disabled) return
-          e.currentTarget.setPointerCapture(e.pointerId)
-          setDrag(true)
-          onChange(at(e.clientX))
-        }}
-        onPointerMove={(e) => drag && onChange(at(e.clientX))}
-        onPointerUp={(e) => {
-          if (!drag) return
-          setDrag(false)
-          onCommit?.(at(e.clientX))
-        }}
-        onDoubleClick={() => defaultValue != null && (onChange(defaultValue), onCommit?.(defaultValue))}
-        onKeyDown={(e) => {
-          // arrows step (Shift: ten steps), Page Up/Down ten steps, Home/End the ends
-          const k = e.key
-          const d = k === 'ArrowRight' || k === 'ArrowUp' ? 1 : k === 'ArrowLeft' || k === 'ArrowDown' ? -1 : k === 'PageUp' ? 10 : k === 'PageDown' ? -10 : 0
-          if (!d && k !== 'Home' && k !== 'End') return
-          e.preventDefault()
-          const v = k === 'Home' ? min : k === 'End' ? max : snap(value + d * step * (e.shiftKey ? 10 : 1))
-          onChange(v)
-          onCommit?.(v)
-        }}
-      >
-        <svg className="qs-slider__ticks" preserveAspectRatio="none" viewBox="0 0 100 6">
-          {Array.from({ length: ticks + 1 }, (_, i) => (
-            <line key={i} x1={(i / ticks) * 100} x2={(i / ticks) * 100} y1={i % 5 === 0 ? 0 : 2} y2="6" vectorEffect="non-scaling-stroke" />
-          ))}
-        </svg>
-        <div className="qs-slider__rail" />
-        <div className="qs-slider__fill" style={{ left: `${Math.min(o, p) * 100}%`, width: `${Math.abs(p - o) * 100}%` }} />
-        <div className="qs-slider__thumb" style={{ left: `${p * 100}%` }} />
-      </div>
-      {help && typeof help !== 'string' && <p className="qs-help">{help}</p>}
+      {help && typeof help !== 'string' && <p className="ux-note">{help}</p>}
     </div>
   )
 }
@@ -137,8 +146,8 @@ export function Select<T extends string>({ label, value, options, onChange, help
     else if (e.key === 'Tab') setOpen(false)
   }
   return (
-    <div className="qs-select-field">
-      {label && <span className="qs-field-label" data-tip={typeof help === 'string' && typeof label === 'string' ? label : undefined} data-tip-desc={typeof help === 'string' ? help : undefined}>{label}</span>}
+    <div className={label ? 'ux-row' : 'ux-row ux-row--wide'}>
+      {label && <span className="ux-row__k" data-tip={typeof help === 'string' && typeof label === 'string' ? label : undefined} data-tip-desc={typeof help === 'string' ? help : undefined}>{label}</span>}
       <button ref={btn} type="button" className={'qs-dd' + (open ? ' qs-dd--open' : '')} disabled={disabled}
         aria-haspopup="listbox" aria-expanded={open} onClick={() => (open ? setOpen(false) : openList())} onKeyDown={key}>
         <span className="qs-dd__v">{cur?.label ?? '—'}</span>
@@ -158,7 +167,7 @@ export function Select<T extends string>({ label, value, options, onChange, help
         </div>,
         document.body,
       )}
-      {help && typeof help !== 'string' && <span className="qs-help">{help}</span>}
+      {help && typeof help !== 'string' && <span className="ux-note">{help}</span>}
     </div>
   )
 }
@@ -169,14 +178,14 @@ export function Input({ label, value, onChange, type = 'text', placeholder, min,
   placeholder?: string; min?: number; max?: number; step?: number; suffix?: ReactNode; help?: ReactNode
 }) {
   return (
-    <label className="qs-input-field">
-      <span className="qs-field-label" data-tip={typeof help === 'string' && typeof label === 'string' ? label : undefined} data-tip-desc={typeof help === 'string' ? help : undefined}>{label}</span>
+    <label className="ux-row">
+      <span className="ux-row__k" data-tip={typeof help === 'string' && typeof label === 'string' ? label : undefined} data-tip-desc={typeof help === 'string' ? help : undefined}>{label}</span>
       <span className="qs-input">
         <input type={type} value={value} placeholder={placeholder} min={min} max={max} step={step} spellCheck={false}
           onChange={(e) => onChange(e.target.value)} />
         {suffix && <span className="qs-input__suffix">{suffix}</span>}
       </span>
-      {help && typeof help !== 'string' && <span className="qs-help">{help}</span>}
+      {help && typeof help !== 'string' && <span className="ux-note">{help}</span>}
     </label>
   )
 }

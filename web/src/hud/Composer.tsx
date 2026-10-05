@@ -276,7 +276,7 @@ export function HudLayer({ ctx, compose, chrome, positions = {}, arrange = false
         if (!el) return
         const ready = [...el.querySelectorAll<HTMLElement>('.hud-piece[data-hud]')].filter((p) => !p.dataset.hud!.startsWith('chrome:') && boxOf(p).width > 0).length
         if (ready < want && ++tries < 12) { setTimeout(go, 60); return }
-        const { hero, out } = composeLayout(el, onMove, slotOf, () => 1, reserve, padOf(chosen))
+        const { hero, out } = composeLayout(el, onMove, slotOf, (k) => looks[k]?.size ?? 1, reserve, padOf(chosen))
         onHero?.(hero)
         onLeftOut?.(out)
         setTimeout(() => { if (root.current) onCrowded?.(settle(root.current, ctx.rect, onMove, () => true, (k) => positions[k]?.z ?? 1, ghost).stuck) }, 160)

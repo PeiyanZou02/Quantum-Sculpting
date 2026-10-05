@@ -329,6 +329,24 @@ export function Stage() {
     ro.observe(el)
     return () => ro.disconnect()
   }, [])
+  // Compose frames the object for its plate; Lab and Explore get their own camera back on return
+  const labCam = useRef<ReturnType<Engine['cameraState']> | null>(null)
+  useEffect(() => {
+    if (!engine) return
+    if (present) labCam.current = engine.cameraState()
+    else if (labCam.current) { engine.setCameraState(labCam.current); labCam.current = null }
+  }, [engine, present])
+  // Compose: when the view changes size (panels, resizers, the window), lay the pieces out again for
+  // it, unless some were placed by hand (those stay where they were put)
+  useEffect(() => {
+    if (!present || vsize.w < 50) return
+    const t = setTimeout(() => {
+      const p = usePresent.getState()
+      const mine = Object.entries(p.pos).filter(([k]) => k.startsWith('present|') && !k.startsWith('present|chrome:'))
+      if (mine.length && mine.every(([, v]) => v.auto)) p.tidyUp()
+    }, 220)
+    return () => clearTimeout(t)
+  }, [present, vsize.w, vsize.h])
   const hudCtx = (e: Engine): HudCtx => {
     const a = e.angles(), lens = e.lens()
     const done = [!!model, !!gridData, !!procData, !!st.report]
@@ -434,7 +452,7 @@ export function Stage() {
           <IconButton name="drag" title="Arrange" desc="Drag the readouts and marks around the view. Double-click a handle to send a piece back." on={pr.arrange} onClick={() => pr.setArrange(!pr.arrange)} />
           <ShadingOptions tables={tables} />
           <button className="stage__present" disabled={!model} onClick={() => pr.setMode('present')}
-            data-tip="Present this result" data-tip-desc="Open it full-window in a composed HUD to photograph, record or diagram it. Your pins and view come along.">Present →</button>
+            data-tip="Compose" data-tip-desc="Open the composer with this view: HUD, frames and export. Your pins and view come along.">Compose</button>
         </div>
       </div>
 

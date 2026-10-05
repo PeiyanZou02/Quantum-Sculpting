@@ -25,7 +25,7 @@ export interface QPillProps {
 /** Quicksilver button: Geist Mono pill, 999px radius, 1px hairline, 150ms transitions. */
 export function QPill({ label, kind = 'line', size = 'm', dot, arrow, loading = false, pressed, onClick, title, className, style }: QPillProps) {
   const disabled = kind === 'disabled'
-  const showArrow = arrow ?? kind === 'commit'
+  const showArrow = arrow ?? false
   const cls = ['qs-pill', `qs-pill--${size}`, `qs-pill--${kind}`, loading && 'qs-pill--loading', className].filter(Boolean).join(' ')
   return (
     <button

@@ -7,20 +7,13 @@ import { useCallback, useMemo, useState, type ReactNode } from 'react'
 import { useStore, TURNS_PER_SECOND } from '../store'
 import type { NationAction, NationAsk, NationEvent, NationsHistory, NationTurn } from '../api'
 import { ScrollArea } from '../qs/ScrollArea'
-import { SectionTabs } from './SectionTabs'
+import { Panel } from '../ui/Panel'
 import { Slider } from '../qs/Slider'
 import { Icon } from '../qs/Icon'
 import { Spinner } from './parts'
 import { fmt } from './fmt'
 import { nationColor, nationName, type Theme } from '../view/nations'
 import './evolve.css'
-
-const MARKERS = [
-  { id: 'ev-turn', label: 'Turn', icon: 'play' },
-  { id: 'ev-nations', label: 'Nations', icon: 'dots' },
-  { id: 'ev-relations', label: 'Relationships', icon: 'entangle' },
-  { id: 'ev-chronicle', label: 'Chronicle', icon: 'scan' },
-]
 
 const ALLIED = 0.5 // nations.ALLIED: a tie this strong is an alliance
 
@@ -150,18 +143,7 @@ function useWidth() {
 }
 
 function Blk({ id, label, note, tools, children }: { id: string; label: string; note?: ReactNode; tools?: ReactNode; children: ReactNode }) {
-  return (
-    <div className="blk" data-mark={id}>
-      <div className="ev-head">
-        <span className="blk__title">{label}</span>
-        <span className="ev-head__r">
-          {note != null && <span className="ev-head__note">{note}</span>}
-          {tools}
-        </span>
-      </div>
-      {children}
-    </div>
-  )
+  return <Panel id={id} title={label} aside={note} tools={tools}>{children}</Panel>
 }
 
 function Hero({ k, v, unit, note }: { k: string; v: ReactNode; unit?: string; note?: ReactNode }) {
@@ -205,8 +187,9 @@ export function EvolvePanel() {
   const saga = useMemo(() => (history ? digest(history) : null), [history])
   const rec = history ? history.turns[Math.min(turn, history.turns.length - 1)] : null
   return (
-    <div className="panel ev" aria-label="Evolve">
-      <ScrollArea markers={rec ? MARKERS : MARKERS.slice(0, 1)} className="pane-scroll pane-scroll--tabs" bar={false} renderIndex={(ix) => <SectionTabs {...ix} label="Evolve sections" />}>
+    <div className="side-page ev" aria-label="Evolve">
+      <header className="side-page__head"><span className="side-page__t">Evolve</span></header>
+      <ScrollArea className="side-page__scroll" bar={false}>
         {!history || !saga || !rec ? <EmptyState /> : (
           <>
             <TurnBlk rec={rec} history={history} theme={theme} />

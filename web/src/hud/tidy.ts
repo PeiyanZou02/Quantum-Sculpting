@@ -12,7 +12,7 @@ export type TidyLevel = 'arrange' | 'dedupe' | 'essential'
 export const TIDY_LEVELS: { id: TidyLevel; t: string; d: string }[] = [
   { id: 'arrange', t: 'Arrange', d: 'Keep every piece; put them on a grid around the object for this frame.' },
   { id: 'dedupe', t: 'No repeats', d: 'Where pieces show the same data in different forms, keep the most expressive one, then arrange.' },
-  { id: 'essential', t: 'Quantum only', d: 'Keep only what explains the quantum step (Evolve in Evolve mode), without repeats, then arrange.' },
+  { id: 'essential', t: 'Essentials', d: 'Keep only what explains the quantum step (Evolve in Evolve mode), without repeats, then arrange.' },
 ]
 
 /** What a piece shows (topics) and how expressive it is (higher wins among pieces that show the same). */

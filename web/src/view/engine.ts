@@ -364,6 +364,19 @@ export class Engine {
   }
 
   /** Back to the starting view, centred on the grid. */
+  /** The camera as it is (position and target), to put back later. */
+  cameraState(): { pos: THREE.Vector3; target: THREE.Vector3 } {
+    return { pos: this.camera.position.clone(), target: this.controls.target.clone() }
+  }
+  setCameraState(c: { pos: THREE.Vector3; target: THREE.Vector3 }) {
+    this.controls.target.copy(c.target)
+    this.camera.position.copy(c.pos)
+    this.camera.lookAt(c.target)
+    this.controls.update()
+    this.dirty = true
+    this.onChange?.()
+  }
+
   home() {
     this.controls.target.set(0, 0, 0.42)
     this.orbitTo(35, 22)

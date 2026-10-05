@@ -5,11 +5,12 @@
 // category's families open to their variants), Annotate, Motion, Capture.
 import { useState, type ReactNode } from 'react'
 import { useStore, type Layer, type Shading, type Stage as FocusStage, type Tool, type View } from '../store'
-import { isDirty, usePresent, type PanelTab, type Sweep } from '../present'
+import { isDirty, usePresent, type Sweep } from '../present'
 import { CATEGORIES } from '../hud/registry'
 import { countOn, savePng } from '../hud/compose'
 import { Icon, IconButton } from '../qs/Icon'
 import { Segmented } from '../qs/Segmented'
+import { Panel, Button, Buttons } from '../ui/Panel'
 import { Slider } from '../qs/Slider'
 import { Check } from '../qs/Popover'
 import { ScrollArea } from '../qs/ScrollArea'
@@ -33,25 +34,13 @@ const BACKDROPS = [{ id: 'plain', t: 'Plain' }, { id: 'dots', t: 'Dots' }, { id:
 const GHOSTS: { id: Layer; t: string }[] = [
   { id: 'model', t: 'Original mesh' }, { id: 'voxels', t: 'Input voxels' }, { id: 'processed', t: 'Quantum result' }, { id: 'result', t: 'Surface' },
 ]
-const TABS: { id: PanelTab; icon: string; t: string }[] = [
-  { id: 'view', icon: 'visibility', t: 'View' },
-  { id: 'layers', icon: 'layers', t: 'Layers and saved compositions' },
-  { id: 'library', icon: 'drag', t: 'Library' },
-  { id: 'notes', icon: 'annotate', t: 'Annotate' },
-  { id: 'motion', icon: 'orbit', t: 'Motion' },
-  { id: 'output', icon: 'export', t: 'Output' },
-]
 /** The library's categories as tabs: the scene's own guides and text first, then the Quicksilver sheets. */
-const CATS = [{ id: 'presets', short: 'Presets' }, { id: 'scene', short: 'Scene' }, ...CATEGORIES.map((c) => ({ id: c.id, short: c.id === 'glyphs' ? 'Glyphs' : c.id === 'data' ? 'Data' : c.title }))]
+const CATS = [{ id: 'scene', short: 'Scene' }, ...CATEGORIES.map((c) => ({ id: c.id, short: c.id === 'glyphs' ? 'Glyphs' : c.id === 'data' ? 'Data' : c.title }))]
 
 /** A group within a page: a small heading and its controls. */
 function Group({ label, children }: { label?: string; children: ReactNode }) {
-  return (
-    <section className="pd-sec">
-      {label && <span className="pd-sec__t">{label}</span>}
-      {children}
-    </section>
-  )
+  if (label) return <Panel id={`cmp-${label.toLowerCase().replace(/\W+/g, '-')}`} title={label} sub>{children}</Panel>
+  return <section className="pd-sec">{children}</section>
 }
 
 /** A labelled group of pills, one of which is on. */
@@ -167,13 +156,11 @@ function LayersPage() {
 function TidyRow() {
   const p = usePresent()
   return (
-    <div className="pd-field">
-      <span className="pd-k">Auto-compose for {frameOf(p.frame).t}</span>
-      <div className="pd-grid3">
-        {TIDY_LEVELS.map((l) => (
-          <button key={l.id} className="pd-chip pd-chip--s" onClick={() => p.tidy(l.id)} data-tip={l.t} data-tip-desc={l.d}>{l.t}</button>
-        ))}
-      </div>
+    <div className="pd-tidy">
+      <span className="pd-tidy__k">Auto-compose for {frameOf(p.frame).t}</span>
+      <Buttons>
+        {TIDY_LEVELS.map((l) => <Button key={l.id} onClick={() => p.tidy(l.id)} tip={l.t} desc={l.d}>{l.t}</Button>)}
+      </Buttons>
     </div>
   )
 }
@@ -205,7 +192,7 @@ function LibraryPage({ hover }: { hover: (k: string | null, on: boolean) => void
   const p = usePresent()
   const counts: Record<string, number> = { scene: p.texts.length + +p.guides.box + +p.guides.floor }
   for (const c of CATEGORIES) counts[c.id] = countOn(p.compose, c.fams)
-  const cat = CATS.some((c) => c.id === p.libCat) ? p.libCat : 'presets'
+  const cat = CATS.some((c) => c.id === p.libCat) ? p.libCat : 'marks'
   const guide = (g: 'box' | 'floor', name: string) => (
     <LibRow on={p.guides[g]} name={name}
       onToggle={() => { p.setGuides({ [g]: !p.guides[g] }); hover(`guide:${g}`, !p.guides[g]) }}
@@ -402,35 +389,41 @@ function OutputPage() {
   )
 }
 
-export function PresentPanel() {
+/** Compose · left: what goes on the view. Presets and auto-compose, the layers on it, the library, notes. */
+export function ComposeLeft() {
   const p = usePresent()
   // hovering a library row: it shows on the view and everything else dims
   const hover = (k: string | null, on: boolean) => { p.setPreview(k && !on ? k : null); p.setHl(k) }
   const on = Object.values(p.compose).filter((v) => v && v !== 'off').reduce((n, v) => n + v.split(',').length, 0) + p.texts.length + +p.guides.box + +p.guides.floor
-  const tab = TABS.find((t) => t.id === p.tab) ?? TABS[0]
   return (
-    <aside className={'pd' + (p.composing ? ' pd--composing' : '')} aria-label="Compose the present view" onPointerLeave={() => { p.setHl(null); p.setPreview(null) }}>
-      <header className="pd__head">
-        <span className="pd__title">{tab.id === 'layers' ? 'Layers' : tab.t}</span>
-        <button className={'pd-mode' + (p.composing ? ' pd-mode--on' : '')} onClick={() => p.setComposing(!p.composing)} aria-pressed={p.composing}
-          data-tip={p.composing ? 'Done arranging' : 'Arrange'} data-tip-key="C" data-tip-desc="Drag pieces around the view, select and remove them.">
-          <Icon name="drag" size={14} />{p.composing ? 'Done' : 'Arrange'}
-        </button>
-        <IconButton name="clear" size={26} title="Close the panel" onClick={() => p.setDrawer(false)} side="left" />
+    <div className={'side-page pd' + (p.composing ? ' pd--composing' : '')} aria-label="Compose" onPointerLeave={() => { p.setHl(null); p.setPreview(null) }}>
+      <header className="side-page__head">
+        <span className="side-page__t">Compose</span>
+        <Button active={p.composing} onClick={() => p.setComposing(!p.composing)} tip={p.composing ? 'Done arranging' : 'Arrange'}
+          desc="Drag pieces around the view, resize them by the corner, select and remove them. Key: C">{p.composing ? 'Done' : 'Arrange'}</Button>
       </header>
-      <ScrollArea key={tab.id} className="pd-scroll" bar={false}>
-        {tab.id === 'view' && <ViewPage />}
-        {tab.id === 'layers' && <LayersPage />}
-        {tab.id === 'library' && <LibraryPage hover={hover} />}
-        {tab.id === 'notes' && <NotesPage />}
-        {tab.id === 'motion' && <MotionPage />}
-        {tab.id === 'output' && <OutputPage />}
+      <ScrollArea className="side-page__scroll" bar={false}>
+        <Panel id="cmp-presets" title="Presets"><Presets /></Panel>
+        <Panel id="cmp-layers" title="Layers" aside={on || undefined}><LayersPage /></Panel>
+        <Panel id="cmp-library" title="Library" flush><LibraryPage hover={hover} /></Panel>
+        <Panel id="cmp-annotate" title="Annotate" defaultOpen={false}><NotesPage /></Panel>
+        <div style={{ height: 24 }} />
       </ScrollArea>
-      <nav className="pd-nav" aria-label="Compose pages">
-        {TABS.map((t) => (
-          <IconButton key={t.id} name={t.icon} title={t.t} side="top" on={p.tab === t.id} badge={t.id === 'layers' && on ? on : undefined} onClick={() => p.setTab(t.id)} />
-        ))}
-      </nav>
-    </aside>
+    </div>
+  )
+}
+
+/** Compose · right: how it leaves. The frame and its export, the view, and motion. */
+export function ComposeRight() {
+  return (
+    <div className="side-page pd" aria-label="Output">
+      <header className="side-page__head"><span className="side-page__t">Output</span></header>
+      <ScrollArea className="side-page__scroll" bar={false}>
+        <Panel id="cmp-output" title="Frame and export"><OutputPage /></Panel>
+        <Panel id="cmp-view" title="View"><ViewPage /></Panel>
+        <Panel id="cmp-motion" title="Motion" defaultOpen={false}><MotionPage /></Panel>
+        <div style={{ height: 24 }} />
+      </ScrollArea>
+    </div>
   )
 }

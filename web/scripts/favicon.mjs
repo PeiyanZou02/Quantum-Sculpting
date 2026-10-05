@@ -1,17 +1,16 @@
-// Writes public/favicon.svg from the mark in src/mark.ts (run: node scripts/favicon.mjs).
-import { readFileSync, writeFileSync } from 'node:fs'
-const src = readFileSync(new URL('../src/mark.ts', import.meta.url), 'utf8')
-const rows = [...src.matchAll(/^\s+'([.#]+)',$/gm)].map((m) => m[1])
-const W = rows[0].length, H = rows.length, pad = 1, size = W + pad * 2
-const oy = (size - H) / 2
-const cells = rows.flatMap((r, y) => [...r].flatMap((c, x) => (c === '#' ? [[x, y]] : [])))
-const sq = cells.filter(([x]) => x < W / 2).map(([x, y]) => `<rect x="${x + pad + 0.05}" y="${y + oy + 0.05}" width=".9" height=".9"/>`).join('')
-const dot = cells.filter(([x]) => x >= W / 2).map(([x, y]) => `<circle cx="${x + pad + 0.5}" cy="${y + oy + 0.5}" r=".44"/>`).join('')
+// Writes public/favicon.svg: the mark of src/mark.ts (same numbers) on a small rounded ground.
+import { writeFileSync } from 'node:fs'
+const N = 5, C = (N - 1) / 2, pad = 0.9, size = N + pad * 2
+const dots = Array.from({ length: N * N }, (_, i) => {
+  const x = i % N, y = Math.floor(i / N)
+  const r = 0.14 + 0.34 * Math.exp(-((x - C) ** 2 + (y - C) ** 2) / 4.5)
+  return `<circle cx="${(x + 0.5 + pad).toFixed(2)}" cy="${(y + 0.5 + pad).toFixed(2)}" r="${r.toFixed(3)}"/>`
+}).join('')
 const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}">
-  <style>.g{fill:#E3E4E7}.i{fill:#151618}@media (prefers-color-scheme:dark){.g{fill:#141517}.i{fill:#E8E9EC}}</style>
-  <rect class="g" width="${size}" height="${size}" rx="3"/>
-  <g class="i">${sq}${dot}</g>
+  <style>.g{fill:#151618}.i{fill:#F2F3F5}@media (prefers-color-scheme:dark){.g{fill:#E8E9EC}.i{fill:#141517}}</style>
+  <rect class="g" width="${size}" height="${size}" rx="1.4"/>
+  <g class="i">${dots}</g>
 </svg>
 `
 writeFileSync(new URL('../public/favicon.svg', import.meta.url), svg)
-console.log(`favicon.svg: ${cells.length} cells`)
+console.log('favicon.svg written')

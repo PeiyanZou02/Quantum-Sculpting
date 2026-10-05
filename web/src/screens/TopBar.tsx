@@ -1,26 +1,22 @@
 // Top bar, kept quiet: mark and name, then Atlas status, theme and help.
-import { CAT_CELLS, CAT_H, CAT_W } from '../mark'
+import { MARK_DOTS, MARK_N } from '../mark'
+import { TABS, useShell } from '../shell'
 import { useStore } from '../store'
 import { QPill } from '../qs/QPill'
 import { IconButton } from '../qs/Icon'
-import { Popover, PopSection, Check } from '../qs/Popover'
 import { Spinner } from './parts'
-import { usePresent } from '../present'
 
-/** Schrödinger's cat in dot matrix (src/mark.ts): solid squares on one half, open dots on the other. */
-export function Mark({ size = 20 }: { size?: number }) {
+/** The mark (src/mark.ts): one point, blurred into its neighbours. */
+export function Mark({ size = 16 }: { size?: number }) {
   return (
-    <svg width={size} height={size * CAT_H / CAT_W} viewBox={`0 0 ${CAT_W} ${CAT_H}`} aria-hidden className="top__mark">
-      {CAT_CELLS.map(([x, y, solid]) => solid
-        ? <rect key={`${x}.${y}`} x={x + 0.08} y={y + 0.08} width={0.84} height={0.84} fill="var(--qs-ink)" />
-        : <circle key={`${x}.${y}`} cx={x + 0.5} cy={y + 0.5} r={0.42} fill="var(--qs-ink)" />)}
+    <svg width={size} height={size} viewBox={`0 0 ${MARK_N} ${MARK_N}`} aria-hidden className="top__mark">
+      {MARK_DOTS.map(([x, y, r]) => <circle key={`${x}.${y}`} cx={x + 0.5} cy={y + 0.5} r={r} fill="var(--qs-ink)" />)}
     </svg>
   )
 }
 
 const NEXT = { system: 'light', light: 'dark', dark: 'system' } as const
 
-export interface PanelToggle { id: string; title: string; icon: string; shown: boolean }
 
 /** What is loaded and what the service is doing, in one quiet line. */
 function Now() {
@@ -49,32 +45,20 @@ function Now() {
   )
 }
 
-function ModeSwitch() {
-  const mode = usePresent((p) => p.mode)
-  const setMode = usePresent((p) => p.setMode)
+function Tabs() {
+  const tab = useShell((s) => s.tab)
+  const setTab = useShell((s) => s.setTab)
   return (
-    <div className="modes" role="tablist" aria-label="Mode">
-      <button role="tab" aria-selected={mode === 'lab'} className={'modes__b' + (mode === 'lab' ? ' modes__b--on' : '')} onClick={() => setMode('lab')}
-        data-tip="Lab" data-tip-desc="The research workspace: parameters, algorithms and panels.">Lab</button>
-      <button role="tab" aria-selected={mode === 'present'} className={'modes__b' + (mode === 'present' ? ' modes__b--on' : '')} onClick={() => setMode('present')}
-        data-tip="Present" data-tip-desc="The display: the geometry in a composed HUD, for screenshots and recordings.">Present</button>
-    </div>
+    <nav className="top__tabs" role="tablist" aria-label="Workspace">
+      {TABS.map((t) => (
+        <button key={t.id} role="tab" aria-selected={tab === t.id} className={'top__tab' + (tab === t.id ? ' top__tab--on' : '')} onClick={() => setTab(t.id)}
+          data-tip={t.t} data-tip-desc={t.d}>{t.t}</button>
+      ))}
+    </nav>
   )
 }
 
-function PanelsMenu({ panels, onToggle }: { panels: PanelToggle[]; onToggle: (id: string) => void }) {
-  return (
-    <Popover icon="layers" title="Panels" desc="Show or hide each panel. Drag a panel's tab to move it." width={240} onIcon={undefined}>
-      <PopSection>
-        {panels.map((p) => (
-          <Check key={p.id} label={p.title} note={p.shown ? 'shown' : 'hidden'} checked={p.shown} onChange={() => onToggle(p.id)} />
-        ))}
-      </PopSection>
-    </Popover>
-  )
-}
-
-export function TopBar({ panels, onTogglePanel }: { panels: PanelToggle[]; onTogglePanel: (id: string) => void }) {
+export function TopBar() {
   const key = useStore((s) => s.key)
   const job = useStore((s) => s.job)
   const error = useStore((s) => s.error)
@@ -87,12 +71,11 @@ export function TopBar({ panels, onTogglePanel }: { panels: PanelToggle[]; onTog
     <header className="top">
       <div className="top__brand">
         <Mark />
-        <span className="qs-app">Quantum Sculptor</span>
+        <span className="top__name">Quantum Sculpting</span>
       </div>
-      <ModeSwitch />
+      <Tabs />
       <Now />
       <div className="top__actions">
-        <PanelsMenu panels={panels} onToggle={onTogglePanel} />
         <QPill kind={rejected ? 'line' : 'ghost'} size="s" dot={dot} label={label} title="Atlas API key" onClick={() => useStore.setState({ keyOpen: true })} />
         <IconButton name={themePref === 'system' ? 'auto' : themePref === 'light' ? 'sun' : 'moon'} title={`Theme: ${themePref === 'system' ? 'follows the system' : themePref} · click to change`} onClick={() => setTheme(NEXT[themePref])} />
         <IconButton name="help" title="Help · README" onClick={() => window.open('https://github.com/madebyrayz/quantum-sculptor#readme', '_blank')} />
