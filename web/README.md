@@ -22,6 +22,20 @@ square checkboxes. 11 px mono, sentence case, never all caps; light and dark.
 
 ## Run it
 
+**While the work is going on (macOS, Linux):** from the repo root, once:
+
+```
+./dev.sh            # http://localhost:5190 ; ./dev.sh 5090 for another port
+```
+
+It serves the interface with the Flask service and follows the branch you are on: every 20 s it
+fetches from GitHub and fast-forwards to new commits, so the page reloads by itself. When an update
+changes dependencies or the Python service it installs and restarts them. It never pulls over your
+own uncommitted changes or unpushed commits (it says so and waits). The first run creates `.venv`
+and installs everything. Ctrl+C stops it all.
+
+**By hand:**
+
 Needs Node 20+ and [pnpm](https://pnpm.io) (the lockfile is `pnpm-lock.yaml`; `npm ci` will not work).
 
 One command, one server:
