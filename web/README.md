@@ -6,13 +6,14 @@ the Flask service in `../app/`. The research pipeline (voxelising, Quantum Blur 
 Evolve) lives in `../app/` and is documented in the top-level `README.md`; this folder only talks to
 it through `/api`.
 
-It is laid out as an app with four tabs over one workspace (the 3D view stays loaded between them):
+It is laid out as an app with three tabs over one workspace (the 3D view stays loaded between them):
 
-- **Lab** makes the geometry: inputs left, the view, outputs right, the runtime drawer under it.
-- **Explore** looks into the quantum step: its settings left, the circuit explorer (blur modes) or
-  Evolve's nations turn by turn right, the Evolve log under the view.
+- **Lab** makes the geometry and looks into it: Parameters (inputs) in one column, the view, Properties
+  (outputs, including the circuit explorer and Evolve's nations) in the other, and the drawer
+  (runtime, Evolve log, Atlas jobs) with the workspace's status on its row. Columns fold and swap
+  sides; the drawer folds and docks under the view or along the whole window.
 - **Compose** composes the display and its output (Present mode): presets, layers, library and
-  annotation left; frame, export, view and motion right.
+  annotation in one column; frame, export, view and motion in the other.
 - **Notes** holds the research behind the project (a placeholder, being written by Peiyan).
 
 Every tab uses one control language (`src/ui/`), after Blender's properties editor: panels with a
@@ -25,7 +26,7 @@ square checkboxes. 11 px mono, sentence case, never all caps; light and dark.
 **While the work is going on (macOS, Linux):** from the repo root, once:
 
 ```
-./dev.sh            # http://localhost:5190 ; ./dev.sh 5090 for another port
+./dev.sh            # http://localhost:5109 ; ./dev.sh 5200 for another port
 ```
 
 It serves the interface with the Flask service and follows the branch you are on: every 20 s it
