@@ -1,7 +1,7 @@
-// Quantum Sculpting: an app for sculpting with quantum processes. Four tabs over one workspace:
-// Lab makes the geometry (inputs left, the view, outputs right, the runtime drawer under it), Explore
-// looks into the quantum step (the circuit, or Evolve's nations turn by turn), Compose composes the
-// display and its output (Present mode), Notes holds the research. The view stays mounted throughout.
+// Quantum Sculpting: an app for sculpting with quantum processes. Three tabs over one workspace:
+// Lab makes the geometry and looks into it (parameters, the view, properties, the drawer), Compose
+// composes the display and its output (Present mode), Notes holds the research. The view stays
+// mounted throughout. Columns fold and swap sides; the drawer docks under the view or full width.
 import { useEffect } from 'react'
 import { useStore, type Stage as FocusStage } from './store'
 import { onNet, onRestart } from './api'
@@ -11,15 +11,13 @@ import { TopBar } from './screens/TopBar'
 import { InputPane } from './screens/InputPane'
 import { Stage } from './screens/Stage'
 import { OutputPane } from './screens/OutputPane'
-import { QuantumPanel } from './screens/QuantumPanel'
-import { EvolvePanel } from './screens/EvolvePanel'
 import { KeyDialog } from './screens/KeyDialog'
 import { Toasts } from './screens/Toasts'
 import { TooltipLayer } from './qs/Tooltip'
 import { usePresent } from './present'
 import { PresentBar } from './screens/PresentBar'
 import { ComposeLeft, ComposeRight } from './screens/PresentPanel'
-import { Drawer, NotesPage, Resizer } from './screens/Shell'
+import { Column, Drawer, NotesPage } from './screens/Shell'
 import './styles/system.css'
 import './styles/bento.css'
 import './styles/type.css'
@@ -34,7 +32,6 @@ function drawerFor(stage: FocusStage, mode: string): DrawerTab {
 export default function App() {
   const init = useStore((s) => s.init)
   const keyOpen = useStore((s) => s.keyOpen)
-  const mode = useStore((s) => s.q.mode)
   const bare = usePresent((p) => p.bare)
   const sh = useShell()
   const tab = sh.tab
@@ -45,12 +42,6 @@ export default function App() {
     const d = drawerFor(s.focus.stage, s.q.mode)
     if (d !== useShell.getState().drawer) useShell.setState({ drawer: d })   // switch, but leave a folded drawer folded
   }), [])
-  // Explore looks at the quantum step
-  useEffect(() => {
-    if (tab !== 'explore') return
-    const st = useStore.getState()
-    st.setFocus(st.q.mode === 'nations' ? 'evolve' : 'quantum', 'Exploring the quantum step')
-  }, [tab])
 
   useEffect(() => {
     const st = useStore.getState()
@@ -69,30 +60,32 @@ export default function App() {
   }, [init])
 
   const sides = tab !== 'notes' && !bare
-  const left = tab === 'lab' ? <InputPane /> : tab === 'explore' ? <InputPane only="quantum" /> : tab === 'compose' ? <ComposeLeft /> : null
-  const right = tab === 'lab' ? <OutputPane /> : tab === 'explore' ? (mode === 'nations' ? <EvolvePanel /> : <QuantumPanel />) : tab === 'compose' ? <ComposeRight /> : null
+  const lab = tab === 'lab'
+  // Lab: Parameters | view | Properties (or swapped). Compose: what goes on | view | how it leaves.
+  const cols = lab
+    ? [{ t: 'Parameters', icon: 'sliceTool', body: <InputPane /> }, { t: 'Properties', icon: 'model', body: <OutputPane /> }]
+    : [{ t: 'Compose', icon: 'layers', body: <ComposeLeft /> }, { t: 'Output', icon: 'export', body: <ComposeRight /> }]
+  const [a, b] = sh.swap ? [cols[1], cols[0]] : cols
+  const full = sh.dock === 'full' || !lab
   return (
     <div className={`app ux ux--${tab}` + (tab === 'compose' ? ' app--present' : '') + (bare ? ' app--bare' : '')}>
       {!bare && <TopBar />}
       <div className="ux-body">
         {sides && (
-          <aside className="ux-side ux-side--l" style={{ width: sh.left }}>
-            {left}
-            <Resizer edge="left" value={sh.left} min={240} max={520} set={(v) => sh.setSize({ left: v })} />
-          </aside>
+          <Column side="left" title={a.t} icon={a.icon} open={sh.leftOpen} width={sh.left} onWidth={(v) => sh.setSize({ left: v })}
+            onFold={(v) => sh.setLayout({ leftOpen: v })} onSwap={() => sh.setLayout({ swap: !sh.swap })}>{a.body}</Column>
         )}
         <div className="ux-center">
           <div className="ux-view"><Stage /></div>
-          {(tab === 'lab' || tab === 'explore') && !bare && <Drawer />}
+          {!full && !bare && <Drawer />}
         </div>
         {sides && (
-          <aside className="ux-side ux-side--r" style={{ width: sh.right }}>
-            <Resizer edge="right" value={sh.right} min={260} max={560} set={(v) => sh.setSize({ right: v })} />
-            {right}
-          </aside>
+          <Column side="right" title={b.t} icon={b.icon} open={sh.rightOpen} width={sh.right} onWidth={(v) => sh.setSize({ right: v })}
+            onFold={(v) => sh.setLayout({ rightOpen: v })} onSwap={() => sh.setLayout({ swap: !sh.swap })}>{b.body}</Column>
         )}
         {tab === 'notes' && <NotesPage />}
       </div>
+      {full && !bare && <div className="ux-foot"><Drawer content={lab} /></div>}
       {tab === 'compose' && <PresentBar />}
       {keyOpen && <KeyDialog />}
       <Toasts />

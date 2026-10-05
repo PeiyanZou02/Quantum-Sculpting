@@ -3,13 +3,12 @@
 import { create } from 'zustand'
 import { usePresent } from './present'
 
-export type Tab = 'lab' | 'explore' | 'compose' | 'notes'
+export type Tab = 'lab' | 'compose' | 'notes'
 export type DrawerTab = 'runtime' | 'evlog' | 'atlas'
 export const TABS: { id: Tab; t: string; d: string; key: string }[] = [
-  { id: 'lab', t: 'Lab', d: 'Make the geometry: model, voxels, quantum, mesh.', key: '1' },
-  { id: 'explore', t: 'Explore', d: 'Look into the quantum step: the circuit, or Evolve’s nations turn by turn.', key: '2' },
-  { id: 'compose', t: 'Compose', d: 'Compose the display: HUD, frames, images, video and 3D out.', key: '3' },
-  { id: 'notes', t: 'Notes', d: 'The research behind the project.', key: '4' },
+  { id: 'lab', t: 'Lab', d: 'Make the geometry and look into it: model, voxels, quantum or Evolve, mesh.', key: '1' },
+  { id: 'compose', t: 'Compose', d: 'Compose the display: HUD, frames, images, video and 3D out.', key: '2' },
+  { id: 'notes', t: 'Notes', d: 'The research behind the project.', key: '3' },
 ]
 
 interface Shell {
@@ -23,17 +22,26 @@ interface Shell {
   setDrawer: (d: DrawerTab) => void
   drawerOpen: boolean
   setDrawerOpen: (v: boolean) => void
+  /** Workspace layout: inputs and outputs swap sides; each column folds; the drawer sits under the
+   *  view or runs the full width of the window. */
+  swap: boolean
+  leftOpen: boolean
+  rightOpen: boolean
+  dock: 'view' | 'full'
+  setLayout: (p: Partial<Pick<Shell, 'swap' | 'leftOpen' | 'rightOpen' | 'dock'>>) => void
 }
 
 const KEY = 'qs-shell'
 const saved = (() => { try { return JSON.parse(localStorage.getItem(KEY) ?? '{}') as Partial<Shell> } catch { return {} } })()
 const keep = (s: Shell) => {
-  try { localStorage.setItem(KEY, JSON.stringify({ tab: s.tab, left: s.left, right: s.right, bottom: s.bottom, drawer: s.drawer, drawerOpen: s.drawerOpen })) } catch { /* per-viewer */ }
+  try { localStorage.setItem(KEY, JSON.stringify({ tab: s.tab, left: s.left, right: s.right, bottom: s.bottom, drawer: s.drawer, drawerOpen: s.drawerOpen, swap: s.swap, leftOpen: s.leftOpen, rightOpen: s.rightOpen, dock: s.dock })) } catch { /* per-viewer */ }
 }
 
 export const useShell = create<Shell>()((set, get) => {
   const up = (p: Partial<Shell>) => { set(p); keep(get()) }
-  const first: Tab = saved.tab ?? (usePresent.getState().mode === 'present' ? 'compose' : 'lab')
+  // 'explore' was a tab of its own; it is part of Lab now
+  const was = saved.tab as string | undefined
+  const first: Tab = was === 'explore' ? 'lab' : (saved.tab ?? (usePresent.getState().mode === 'present' ? 'compose' : 'lab'))
   usePresent.getState().setMode(first === 'compose' ? 'present' : 'lab')
   return {
     tab: first,
@@ -49,6 +57,11 @@ export const useShell = create<Shell>()((set, get) => {
     setDrawer: (d) => up({ drawer: d, drawerOpen: true }),
     drawerOpen: saved.drawerOpen ?? true,
     setDrawerOpen: (v) => up({ drawerOpen: v }),
+    swap: saved.swap ?? false,
+    leftOpen: saved.leftOpen ?? true,
+    rightOpen: saved.rightOpen ?? true,
+    dock: saved.dock ?? 'view',
+    setLayout: (p) => up(p),
   }
 })
 

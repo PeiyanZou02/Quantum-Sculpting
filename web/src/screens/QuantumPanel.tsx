@@ -4,7 +4,6 @@
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore, type PointerEvent as RPointerEvent, type ReactNode } from 'react'
 import { useStore } from '../store'
 import type { Mode, ProcMeta } from '../api'
-import { ScrollArea } from '../qs/ScrollArea'
 import { Panel } from '../ui/Panel'
 import { QCircuit, type QGate } from '../qs/QCircuit'
 import { at, histogram } from '../qs/grid'
@@ -128,23 +127,20 @@ function useBits() {
 }
 
 // ── panel ────────────────────────────────────────────────────────────────────────────────────────
-export function QuantumPanel() {
+/** The circuit explorer's sections, for the Properties column (blur modes). */
+export function QuantumSections() {
   const [sel, setSel] = useState<number | null>(null)
   return (
-    <div className="side-page" aria-label="Quantum">
-      <header className="side-page__head"><span className="side-page__t">Quantum</span></header>
-      <ScrollArea className="side-page__scroll" bar={false}>
-        <RegisterBlk sel={sel} setSel={setSel} />
-        <CircuitBlk />
-        <BlurBlk sel={sel} />
-        <PulseBlk sel={sel} />
-        <AtlasBlk />
-        <ShotsBlk />
-        <RunsBlk />
-        <LevelsBlk />
-        <div style={{ height: 40 }} />
-      </ScrollArea>
-    </div>
+    <>
+      <RegisterBlk sel={sel} setSel={setSel} />
+      <CircuitBlk />
+      <BlurBlk sel={sel} />
+      <PulseBlk sel={sel} />
+      <AtlasBlk />
+      <ShotsBlk />
+      <RunsBlk />
+      <LevelsBlk />
+    </>
   )
 }
 

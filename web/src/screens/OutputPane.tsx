@@ -5,8 +5,10 @@ import { Segmented } from '../qs/Segmented'
 import { Slider } from '../qs/Slider'
 import { QReadout } from '../qs/QReadout'
 import { QPill } from '../qs/QPill'
-import { ScrollArea } from '../qs/ScrollArea'
 import { Panel } from '../ui/Panel'
+import { Icon } from '../qs/Icon'
+import { EvolveSections } from './EvolvePanel'
+import { QuantumSections } from './QuantumPanel'
 import { IconButton } from '../qs/Icon'
 import { LevelHistogram } from '../qs/LevelHistogram'
 import { histogram, solidPerLayer, type Axis } from '../qs/grid'
@@ -63,19 +65,80 @@ function Figures({ items }: { items: Fig[] }) {
 
 const Empty = ({ children }: { children: ReactNode }) => <p className="qs-help ux-note">{children}</p>
 
-export function OutputPane() {
+/** The four groups of Properties, one per step, so the rail matches the Parameters rail. */
+const GROUPS: { id: StepId; icon: string; t: string }[] = [
+  { id: 'model', icon: 'model', t: 'Model' },
+  { id: 'voxels', icon: 'grid', t: 'Grid and slice' },
+  { id: 'quantum', icon: 'quantum', t: 'Quantum' },
+  { id: 'mesh', icon: 'print', t: 'Print and export' },
+]
+type StepId = 'model' | 'voxels' | 'quantum' | 'mesh'
+const groupOf = (s: string): StepId => (s === 'evolve' || s === 'scan' ? 'quantum' : s as StepId)
+
+/** Lab · outputs. Everything the steps produced, stacked in one column; the rail jumps between the
+ *  four groups and lights the one in view. When the focus moves to another step, the column follows. */
+export function OutputPane({ rail = true }: { rail?: boolean }) {
+  const evolve = useStore((s) => s.q.mode === 'nations')
+  const focus = useStore((s) => s.focus)
+  const box = useRef<HTMLDivElement>(null)
+  const [active, setActive] = useState<StepId>('model')
+  const go = (id: StepId, smooth = true) => {
+    const el = box.current?.querySelector<HTMLElement>(`[data-group="${id}"]`)
+    if (el && box.current) box.current.scrollTo({ top: el.offsetTop - 4, behavior: smooth ? 'smooth' : 'auto' })
+  }
+  const onScroll = () => {
+    const el = box.current
+    if (!el) return
+    const top = el.scrollTop + 24
+    let cur: StepId = 'model'
+    for (const g of GROUPS) {
+      const sec = el.querySelector<HTMLElement>(`[data-group="${g.id}"]`)
+      if (sec && sec.offsetTop <= top) cur = g.id
+    }
+    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 4) cur = GROUPS[GROUPS.length - 1].id
+    setActive(cur)
+  }
+  // the column follows the step you open (not every small change of focus inside it)
+  const followed = useRef('')
+  const follow = useEffectEvent((g: StepId) => go(g))
+  useEffect(() => {
+    const g = groupOf(focus.stage)
+    if (followed.current === g) return
+    followed.current = g
+    follow(g)
+  }, [focus.stage])
   return (
-    <div className="side-page" aria-label="Properties">
-      <header className="side-page__head"><span className="side-page__t">Properties</span></header>
-      <ScrollArea className="side-page__scroll" bar={false}>
-        <ModelOut />
-        <GridOut />
-        <SliceOut />
-        <QuantumOut />
-        <PrintOut />
-        <ExportOut />
-        <div style={{ height: 40 }} />
-      </ScrollArea>
+    <div className="lab-in lab-in--right">
+      <div className="lab-in__page">
+        <div className="lab-props" ref={box} onScroll={onScroll}>
+          <div data-group="model" className="lab-group">
+            <ModelOut />
+          </div>
+          <div data-group="voxels" className="lab-group">
+            <GridOut />
+            <SliceOut />
+          </div>
+          <div data-group="quantum" className="lab-group">
+            <QuantumOut />
+            {evolve ? <EvolveSections /> : <QuantumSections />}
+          </div>
+          <div data-group="mesh" className="lab-group">
+            <PrintOut />
+            <ExportOut />
+          </div>
+          <div style={{ height: '60vh' }} />
+        </div>
+      </div>
+      {rail && (
+        <nav className="lab-rail lab-rail--right" aria-label="Properties sections">
+          {GROUPS.map((g) => (
+            <button key={g.id} className={'lab-rail__b' + (active === g.id ? ' lab-rail__b--on' : '')} onClick={() => go(g.id)}
+              data-tip={g.id === 'quantum' && evolve ? 'Evolve' : g.t} data-tip-side="left">
+              <Icon name={g.id === 'quantum' && evolve ? 'entangle' : g.icon} size={16} />
+            </button>
+          ))}
+        </nav>
+      )}
     </div>
   )
 }

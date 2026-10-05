@@ -191,6 +191,9 @@ interface S {
   process: (opts?: { submit?: boolean; cachedOnly?: boolean }) => Promise<void>
 
   evolve: Evolve
+  /** The nation picked in the view, the graph or the roster (its properties show under Evolve). */
+  evolveSel: number | null
+  setEvolveSel: (i: number | null) => void
   /** Show turn t (clamped); frames are fetched once and kept in memory. */
   setTurn: (t: number) => Promise<void>
   /** Play the turns at TURNS_PER_SECOND from here (from 0 when at the end). */
@@ -646,6 +649,8 @@ export const useStore = create<S>()((set, get) => {
       }
     }),
     evolve: EVOLVE_EMPTY,
+    evolveSel: null,
+    setEvolveSel: (i) => set({ evolveSel: i }),
     setTurn: async (t) => {
       const ev = get().evolve
       if (!ev.history) return

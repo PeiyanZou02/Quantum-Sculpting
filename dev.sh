@@ -4,8 +4,8 @@
 # new commits arrive it fast-forwards to them, so the page reloads by itself (Vite hot reload).
 # When the update touches dependencies or the Python service, it installs and restarts what needs it.
 #
-#   ./dev.sh            port 5190
-#   ./dev.sh 5090       another port
+#   ./dev.sh            port 5109
+#   ./dev.sh 5200       another port
 #   QS_EVERY=10 ./dev.sh   check every 10 s (default 20)
 #
 # It never overwrites your work: if you have uncommitted changes or commits of your own on the branch,
@@ -13,7 +13,7 @@
 set -u
 cd "$(dirname "$0")"
 ROOT=$(pwd)
-PORT=${1:-${QS_PORT:-5190}}
+PORT=${1:-${QS_PORT:-5109}}
 EVERY=${QS_EVERY:-20}
 BRANCH=$(git rev-parse --abbrev-ref HEAD)
 LAST=""

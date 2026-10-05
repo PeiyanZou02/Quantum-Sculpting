@@ -2,7 +2,6 @@
 import { MARK_DOTS, MARK_N } from '../mark'
 import { TABS, useShell } from '../shell'
 import { useStore } from '../store'
-import { QPill } from '../qs/QPill'
 import { IconButton } from '../qs/Icon'
 import { Spinner } from './parts'
 
@@ -19,7 +18,7 @@ const NEXT = { system: 'light', light: 'dark', dark: 'system' } as const
 
 
 /** What is loaded and what the service is doing, in one quiet line. */
-function Now() {
+export function Now() {
   const model = useStore((s) => s.model)
   const grid = useStore((s) => s.grid)
   const busy = useStore((s) => s.busy)
@@ -58,28 +57,36 @@ function Tabs() {
   )
 }
 
-export function TopBar() {
+/** Atlas: green when a key is set (blinking while a run is going), red when the key was rejected. */
+export function AtlasStatus() {
   const key = useStore((s) => s.key)
   const job = useStore((s) => s.job)
   const error = useStore((s) => s.error)
+  const rejected = !!error && /401|unauthor/i.test(error)
+  const state = rejected ? 'bad' : job?.status === 'running' ? 'busy' : key?.set ? 'ok' : 'off'
+  const label = rejected ? 'Atlas · key rejected' : job?.status === 'running' ? 'Atlas · running' : key?.set ? 'Atlas · live' : 'Atlas · no key'
+  return (
+    <button className="ux-status" onClick={() => useStore.setState({ keyOpen: true })} data-tip="Atlas API key" data-tip-desc="Set, test or clear the key.">
+      <span className={`ux-dot ux-dot--${state}`} />{label}
+    </button>
+  )
+}
+
+export function ThemeButton() {
   const themePref = useStore((s) => s.themePref)
   const setTheme = useStore((s) => s.setTheme)
-  const rejected = !!error && /401|unauthor/i.test(error)
-  const dot = rejected ? 'off' : job?.status === 'running' ? 'busy' : key?.set ? 'on' : 'off'
-  const label = rejected ? 'Atlas · key rejected' : job?.status === 'running' ? 'Atlas · running' : key?.set ? 'Atlas' : 'Atlas · no key'
+  return <IconButton size={22} name={themePref === 'system' ? 'auto' : themePref === 'light' ? 'sun' : 'moon'} title={`Theme: ${themePref === 'system' ? 'follows the system' : themePref} · click to change`} onClick={() => setTheme(NEXT[themePref])} />
+}
+
+/** The top bar: the mark, the name and the tabs. Status lives on the drawer row. */
+export function TopBar() {
   return (
     <header className="top">
       <div className="top__brand">
-        <Mark />
+        <Mark size={18} />
         <span className="top__name">Quantum Sculpting</span>
       </div>
       <Tabs />
-      <Now />
-      <div className="top__actions">
-        <QPill kind={rejected ? 'line' : 'ghost'} size="s" dot={dot} label={label} title="Atlas API key" onClick={() => useStore.setState({ keyOpen: true })} />
-        <IconButton name={themePref === 'system' ? 'auto' : themePref === 'light' ? 'sun' : 'moon'} title={`Theme: ${themePref === 'system' ? 'follows the system' : themePref} · click to change`} onClick={() => setTheme(NEXT[themePref])} />
-        <IconButton name="help" title="Help · README" onClick={() => window.open('https://github.com/madebyrayz/quantum-sculptor#readme', '_blank')} />
-      </div>
     </header>
   )
 }

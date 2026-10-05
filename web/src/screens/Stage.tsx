@@ -22,7 +22,7 @@ import { PresentChrome } from './PresentBar'
 import type { HudCtx, Vec3 } from '../hud/types'
 import { MODEL_EXT } from './modelExt'
 import { live, bump } from '../live'
-import { ownerPalette } from '../view/nations'
+import { ownerPalette, nationName } from '../view/nations'
 import { fit, frameOf } from '../frames'
 
 const MODE_LABEL: Record<string, string> = { gaussian: 'Gaussian', emulator: 'Emulation', atlas: 'Atlas', nations: 'Evolve' }
@@ -242,10 +242,16 @@ export function Stage() {
       return { x, y, z, p, lines: [`${((p[0] - t[0][3]) / s).toFixed(1)} · ${((p[1] - t[1][3]) / s).toFixed(1)} · ${((p[2] - t[2][3]) / s).toFixed(1)} mm`, `mesh surface · cell ${x} ${y} ${z}`] }
     }
     if (L === 'voxels') return { x, y, z, p, lines: [cell, `input coverage ${read(gridData).toFixed(2)}`] }
-    if (L === 'processed') return { x, y, z, p, lines: [cell, `input ${read(gridData).toFixed(2)} → ${read(procData).toFixed(2)}`] }
+    if (L === 'processed') {
+      const ev = useStore.getState().evolve
+      const who = g.proc?.mode === 'nations' && ev.owner && ev.n ? ev.owner[(x * ev.n + y) * ev.n + z] - 1 : -1
+      if (who >= 0) return { x, y, z, p, lines: [`nation ${nationName(who)}`, `${cell} · click to pick`] }
+      return { x, y, z, p, lines: [cell, `input ${read(gridData).toFixed(2)} → ${read(procData).toFixed(2)}`] }
+    }
     const val = read(procData)
     return { x, y, z, p, lines: [cell, `surface · ${val.toFixed(2)} ${val >= g.m.level ? '≥' : '<'} level ${g.m.level.toFixed(2)}`] }
   }
+  const down = useRef<[number, number] | null>(null)
   const reading = tool === 'probe' || tool === 'annotate' || tool === 'measure'
   const probe = useProbe({ pick, enabled: !!model && reading, maxPins: tool === 'measure' ? 6 : 8, pinning: tool === 'annotate' || tool === 'measure' })
   const project = (h: ProbeHit) => {
@@ -461,7 +467,17 @@ export function Stage() {
         className={'stage__view stage__view--' + tool + (model ? ' backdrop--' + shade.backdrop : '') + (markOver ? ' stage__view--drop' : '')}
         {...probe.handlers}
         {...sliceHandlers}
+        onClick={(e) => {
+          // Evolve: a click (not a drag) on a nation picks it; its properties show under Evolve
+          const d = down.current
+          if (!d || Math.hypot(e.clientX - d[0], e.clientY - d[1]) > 4 || tool !== 'probe') return
+          const hit = probe.hover?.hit, ev = st.evolve
+          if (!hit || st.proc?.mode !== 'nations' || !ev.owner || !ev.n) { if (st.evolveSel != null && !hit) st.setEvolveSel(null); return }
+          const who = ev.owner[(hit.x * ev.n + hit.y) * ev.n + hit.z] - 1
+          st.setEvolveSel(who >= 0 && who !== st.evolveSel ? who : null)
+        }}
         onPointerDown={(e) => {
+          down.current = [e.clientX, e.clientY]
           // compose mode: a click on the view outside every piece clears the selection
           if (present && pr.composing && !(e.target instanceof Element && e.target.closest('.hud-piece'))) pr.setSel(null)
           if ('onPointerDown' in sliceHandlers && sliceHandlers.onPointerDown) sliceHandlers.onPointerDown(e)

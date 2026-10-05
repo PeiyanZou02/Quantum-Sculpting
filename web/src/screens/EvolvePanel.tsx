@@ -6,7 +6,6 @@
 import { useCallback, useMemo, useState, type ReactNode } from 'react'
 import { useStore, TURNS_PER_SECOND, type Morph } from '../store'
 import type { NationAction, NationAsk, NationEvent, NationsHistory, NationTurn } from '../api'
-import { ScrollArea } from '../qs/ScrollArea'
 import { Panel } from '../ui/Panel'
 import { Slider } from '../qs/Slider'
 import { Icon } from '../qs/Icon'
@@ -182,28 +181,77 @@ export function Nat({ i, theme, gone }: { i: number; theme: Theme; gone?: boolea
 const Empty = ({ children }: { children: ReactNode }) => <p className="qs-help">{children}</p>
 
 // ── panel ────────────────────────────────────────────────────────────────────────────────────────
-export function EvolvePanel() {
+/** Evolve's sections, for the Properties column: the turn, the picked nation, the roster, the
+ *  relationships and the chronicle. The picked nation is shared with the view and the graph. */
+export function EvolveSections() {
   const history = useStore((s) => s.evolve.history)
   const turn = useStore((s) => s.evolve.turn)
   const theme = useStore((s) => s.theme)
-  const [focus, setFocus] = useState<number | null>(null)
+  const focus = useStore((s) => s.evolveSel)
+  const setFocus = useStore((s) => s.setEvolveSel)
   const saga = useMemo(() => (history ? digest(history) : null), [history])
   const rec = history ? history.turns[Math.min(turn, history.turns.length - 1)] : null
+  if (!history || !saga || !rec) return <EmptyState />
   return (
-    <div className="side-page ev" aria-label="Evolve">
-      <header className="side-page__head"><span className="side-page__t">Evolve</span></header>
-      <ScrollArea className="side-page__scroll" bar={false}>
-        {!history || !saga || !rec ? <EmptyState /> : (
-          <>
-            <TurnBlk rec={rec} history={history} theme={theme} />
-            <NationsBlk rec={rec} history={history} saga={saga} theme={theme} focus={focus} setFocus={setFocus} />
-            <RelationsBlk rec={rec} history={history} saga={saga} theme={theme} focus={focus} setFocus={setFocus} />
-            <ChronicleBlk history={history} saga={saga} theme={theme} />
-          </>
-        )}
-        <div style={{ height: 40 }} />
-      </ScrollArea>
-    </div>
+    <>
+      <TurnBlk rec={rec} history={history} theme={theme} />
+      {focus != null && focus < history.total && <NationBlk i={focus} history={history} saga={saga} turn={rec.turn} theme={theme} onClose={() => setFocus(null)} />}
+      <NationsBlk rec={rec} history={history} saga={saga} theme={theme} focus={focus} setFocus={setFocus} />
+      <RelationsBlk rec={rec} history={history} saga={saga} theme={theme} focus={focus} setFocus={setFocus} />
+      <ChronicleBlk history={history} saga={saga} theme={theme} />
+    </>
+  )
+}
+
+/** Whether an event names nation `i` (as actor, target or conqueror). */
+function involves(e: NationEvent, i: number): boolean {
+  const who = (e as { who: number | number[] }).who
+  if (Array.isArray(who) ? who.includes(i) : who === i) return true
+  if ('whom' in e && e.whom === i) return true
+  return 'by' in e && !!e.by?.includes(i)
+}
+
+/** One nation, picked: who it is, its territory over the whole history, what it is doing now, its
+ *  ties, and what happened to it. */
+function NationBlk({ i, history, saga, turn, theme, onClose }: { i: number; history: NationsHistory; saga: Saga; turn: number; theme: Theme; onClose: () => void }) {
+  const rec = history.turns[turn]
+  const sizes = history.turns.map((t) => t.size[i] ?? 0)
+  const peak = Math.max(1, ...sizes)
+  const W = 240, H = 40
+  const path = sizes.map((v, t) => `${t ? 'L' : 'M'}${((t / Math.max(1, sizes.length - 1)) * W).toFixed(1)},${(H - (v / peak) * H).toFixed(1)}`).join('')
+  const x = (turn / Math.max(1, sizes.length - 1)) * W
+  const parent = history.parent[i]
+  const ties = rec.ties.filter(([a, b]) => a === i || b === i).map(([a, b, t]) => [a === i ? b : a, t] as const).sort((p, q) => q[1] - p[1])
+  const events = history.turns.slice(1, turn + 1).flatMap((t) => t.events.filter((e) => involves(e, i)).map((e) => ({ t: t.turn, e }))).slice(-5).reverse()
+  const alive = (rec.size[i] ?? 0) > 0
+  return (
+    <Blk id="ev-nation" label="Picked nation" tools={<button className="ev-close" onClick={onClose} aria-label="Unpick">×</button>}>
+      <div className="ev-pick">
+        <span className="ev-pick__n"><Nat i={i} theme={theme} gone={!alive} /></span>
+        <span className="ev-pick__s">{alive ? `${fmt.int(rec.size[i])} voxels` : saga.end[i]?.text ?? 'gone'}</span>
+      </div>
+      <div className="ux-fact"><span className="ux-fact__k">Origin</span><span className="ux-fact__v">{parent == null ? 'founded at the start' : <>broke away from <Nat i={parent} theme={theme} /> in turn {saga.born[i]}</>}</span></div>
+      {alive && rec.asked?.[i] && (
+        <div className="ux-fact"><span className="ux-fact__k">This turn</span><span className="ux-fact__v">{QUESTION[rec.asked[i]!]} {rec.said?.[i] ? 'yes' : 'no'} · {rec.action[i] ? DID[rec.action[i]!].toLowerCase() : '—'}</span></div>
+      )}
+      {alive && rec.odds?.[i] != null && (
+        <div className="ux-fact"><span className="ux-fact__k">Odds of yes</span><span className="ux-fact__v">{Math.round(rec.odds[i]! * 100)}% · certainty {rec.certainty?.[i]?.toFixed(2) ?? '—'}</span></div>
+      )}
+      <svg width="100%" viewBox={`0 -4 ${W} ${H + 8}`} className="ev-pick__spark" aria-label="Territory over the history">
+        <path d={path} fill="none" stroke={nationColor(i, theme)} strokeWidth={1.5} />
+        <line x1={x} x2={x} y1={-4} y2={H + 4} stroke="var(--qs-ink)" />
+      </svg>
+      {ties.length > 0 && (
+        <div className="ux-fact"><span className="ux-fact__k">Ties</span><span className="ux-fact__v ev-pick__ties">
+          {ties.slice(0, 4).map(([j, t]) => <span key={j}><Nat i={j} theme={theme} /> {t.toFixed(2)}{t >= ALLIED ? ' ally' : ''}</span>)}
+        </span></div>
+      )}
+      {events.length > 0 && (
+        <ul className="ev-pick__log">
+          {events.map(({ t, e }, k) => <li key={k}><span>T {t}</span><span><Say e={e} theme={theme} /></span></li>)}
+        </ul>
+      )}
+    </Blk>
   )
 }
 
