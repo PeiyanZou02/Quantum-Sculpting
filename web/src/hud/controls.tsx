@@ -148,7 +148,7 @@ function ArcDial({ v, size, min, max, pressed, children }: ArcProps) {
         if (!t) return null
         const a = (-225 + 270 * f) * RAD
         return (
-          <span key={f} className="qc-abs qc-m" style={{ left: n1(c + (r0 + 18) * Math.cos(a)) + 'px', top: n1(c + (r0 + 18) * Math.sin(a)) + 'px', transform: 'translate(-50%,-50%)', fontSize: 9 }}>
+          <span key={f} className="qc-abs qc-m" style={{ left: n1(c + (r0 + 18) * Math.cos(a)) + 'px', top: n1(c + (r0 + 18) * Math.sin(a)) + 'px', transform: 'translate(-50%,-50%)', fontSize: 11 }}>
             {t}
           </span>
         )
@@ -704,10 +704,10 @@ function N6DualScale({ ctx }: { ctx: HudCtx }) {
     <div className="qc">
       <div className="qc-art" style={{ width: 252, height: 92 }}>
         <span className="qc-abs" style={{ left: S_X0 - 6, top: 6 }}>
-          <span className="qc-s" style={{ fontSize: 9.5 }}>Level </span>
-          <span className="qc-m" style={{ fontSize: 9 }}>0.05</span>
+          <span className="qc-s" style={{ fontSize: 11 }}>Level </span>
+          <span className="qc-m" style={{ fontSize: 11 }}>0.05</span>
         </span>
-        <span className="qc-abs qc-m" style={{ left: S_X0 + S_LEN - 12, top: 6, fontSize: 9 }}>
+        <span className="qc-abs qc-m" style={{ left: S_X0 + S_LEN - 12, top: 6, fontSize: 11 }}>
           0.95
         </span>
         <div className="qc-abs" style={{ left: S_X0, top: 22, width: S_LEN + 1, height: 8, background: `repeating-linear-gradient(90deg, ${INK3} 0 1px, transparent 1px ${(S_LEN / 18).toFixed(3)}px)` }} />
@@ -719,7 +719,7 @@ function N6DualScale({ ctx }: { ctx: HudCtx }) {
             <span key={l}>
               <span className="qc-abs qc-ink" style={{ left: n1(x) + 'px', top: 62, width: 1, height: 8 }} />
               {Math.abs(x - rx) > 17 && (
-                <span className="qc-abs qc-m" style={{ left: n1(x) + 'px', top: 76, fontSize: 9, transform: 'translateX(-50%)' }}>
+                <span className="qc-abs qc-m" style={{ left: n1(x) + 'px', top: 76, fontSize: 11, transform: 'translateX(-50%)' }}>
                   {kept ? pct(kept.at(l)) + (i === 0 ? '%' : '') : '—'}
                 </span>
               )}
@@ -734,7 +734,7 @@ function N6DualScale({ ctx }: { ctx: HudCtx }) {
           <div className="qc-abs qc-runbar" style={{ left: 0, right: 0, bottom: 0, height: 8 }} />
           <div className="qc-abs qc-ink" style={{ left: 13.5, top: 0, bottom: 0, width: 1 }} />
         </div>
-        <span className="qc-abs qc-m qc-on" style={{ left: n1(rx) + 'px', top: 80, fontSize: 9.5, transform: 'translateX(-50%)' }}>
+        <span className="qc-abs qc-m qc-on" style={{ left: n1(rx) + 'px', top: 80, fontSize: 11, transform: 'translateX(-50%)' }}>
           {kNow != null ? pct(kNow) + '%' : '—'}
         </span>
       </div>

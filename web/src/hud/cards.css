@@ -2,10 +2,10 @@
    over the view. Drag them off the model where they need to be read. */
 .hud-card { width: 264px; display: flex; flex-direction: column; gap: 10px; padding: 14px 16px 16px; background: none; }
 .hud-card__head { display: flex; justify-content: space-between; align-items: baseline; }
-.hud-card__t { font: 600 11.5px/1 var(--qs-sans); letter-spacing: 0; color: var(--qs-ink); }
+.hud-card__t { font: 500 12px/1 var(--qs-sans); letter-spacing: 0; color: var(--qs-ink); }
 .hud-card__n { font: 400 11px/1 var(--qs-mono); color: var(--qs-ink2); }
 .hud-card__plane { display: grid; grid-template-columns: 1fr auto; row-gap: 6px; align-items: baseline; }
-.hud-card__k { font: 350 12px/1 var(--qs-sans); color: var(--qs-ink2); }
+.hud-card__k { font: 400 12px/1 var(--qs-sans); color: var(--qs-ink2); }
 .hud-card__v { font: 400 12px/1 var(--qs-mono); color: var(--qs-ink); }
 .hud-card__bar { grid-column: 1 / -1; height: 3px; border-radius: 999px; background: var(--qs-line); overflow: hidden; }
 .hud-card__bar > span { display: block; height: 100%; background: var(--qs-ink); border-radius: 999px; transition: width .25s; }
@@ -24,7 +24,7 @@
 .hud-stage__img { border-radius: 14px; border: 1px solid var(--qs-line); background: none; overflow: hidden; display: flex; align-items: center; justify-content: center; }
 .hud-stage__img img { display: block; }
 .hud-stage--on .hud-stage__img { border-color: var(--qs-ink); }
-.hud-stage__empty { font: italic 300 11px/1 var(--qs-sans); color: var(--qs-ink3); }
-.hud-stage__cap { display: flex; gap: 8px; align-items: baseline; font: 600 11.5px/1 var(--qs-sans); letter-spacing: 0; color: var(--qs-ink); padding-left: 4px; }
-.hud-stage__n { font: 400 10.5px/1 var(--qs-mono); color: var(--qs-ink3); letter-spacing: 0; }
+.hud-stage__empty { font: 400 11px/1 var(--qs-sans); color: var(--qs-ink3); }
+.hud-stage__cap { display: flex; gap: 8px; align-items: baseline; font: 500 12px/1 var(--qs-sans); letter-spacing: 0; color: var(--qs-ink); padding-left: 4px; }
+.hud-stage__n { font: 400 11px/1 var(--qs-mono); color: var(--qs-ink3); letter-spacing: 0; }
 .hud-stage__arrow { position: absolute; right: -10px; top: 40%; transform: translate(50%, -50%); font: 400 12px/1 var(--qs-mono); color: var(--qs-ink3); }

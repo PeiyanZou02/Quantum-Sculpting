@@ -96,7 +96,7 @@ function ModelIn({ fold }: F) {
           onChange={(v) => v && st.openRecent(v)} />
       )}
       <Select label="Up axis in the file" value={st.up} options={UP} onChange={(v) => st.setUp(v)} />
-      {model?.lying && <p className="qs-help" style={{ color: 'var(--qs-ink)' }}>! Looks like it is lying along {model.lying}. Try another up axis.</p>}
+      {model?.lying && <p className="qs-help qs-help--warn">! Looks like it is lying along {model.lying}. Try another up axis.</p>}
     </Step>
   )
 }
@@ -119,7 +119,7 @@ function VoxIn({ fold }: F) {
         { value: 'none', label: 'Shell only' },
       ]} />
       <Select<Values> label="Cell values" value={vox.values} onChange={(v) => st.setVox({ values: v })}
-        options={[{ value: 'coverage', label: 'Coverage · 0.5 is the true surface' }, { value: 'binary', label: '0 or 1 · about half a voxel fat' }]} />
+        options={[{ value: 'coverage', label: 'Coverage · 0.5 = surface' }, { value: 'binary', label: '0 or 1 · ½ voxel fat' }]} />
       <Slider label="Padding · cells" value={vox.pad} min={0} max={6} step={1} ticks={6} onChange={(v) => st.setVox({ pad: v })} />
     </Step>
   )
@@ -141,8 +141,8 @@ function QubitBars() {
         {th.map((t, k) => (
           <g key={k}>
             <rect x={k * bw + 6} y={H - t * H} width={bw - 12} height={Math.max(0.5, t * H)} fill="var(--qs-ink)" />
-            <text x={k * bw + bw / 2} y={H + 12} textAnchor="middle" fontFamily="TWK Everett Mono, monospace" fontSize="9" fill="var(--qs-ink2)">q{k}</text>
-            <text x={k * bw + bw / 2} y={H - t * H - 4} textAnchor="middle" fontFamily="TWK Everett Mono, monospace" fontSize="9" fill="var(--qs-ink)">{t.toFixed(2)}</text>
+            <text x={k * bw + bw / 2} y={H + 12} textAnchor="middle" fontFamily="TWK Everett Mono, ui-monospace, monospace" fontSize="11" fill="var(--qs-ink2)">q{k}</text>
+            <text x={k * bw + bw / 2} y={H - t * H - 4} textAnchor="middle" fontFamily="TWK Everett Mono, ui-monospace, monospace" fontSize="11" fill="var(--qs-ink)">{t.toFixed(2)}</text>
           </g>
         ))}
       </svg>
@@ -169,7 +169,7 @@ function QuantumIn({ fold }: F) {
     <Step id="in-03" no="03" title={q.mode === 'nations' ? 'Evolve' : 'Quantum'} fold={fold} stage={q.mode === 'nations' ? 'evolve' : 'quantum'} off={!grid} summary={summary}
       state={running ? <><Spinner /> {job.tiles_done}/{job.tiles_total}</> : st.busy.proc ? <Spinner /> : proc ? <Dot live /> : <Dot />}>
       <div className="seg-block ev-modes">
-        <Segmented options={[{ value: 'gaussian', label: 'Gaussian' }, { value: 'emulator', label: 'Emulation' }, { value: 'atlas', label: 'Atlas' }, { value: 'nations', label: 'Evolve' }]}
+        <Segmented options={[{ value: 'gaussian', label: 'Gauss' }, { value: 'emulator', label: 'Emulate' }, { value: 'atlas', label: 'Atlas' }, { value: 'nations', label: 'Evolve' }]}
           value={q.mode} onChange={(v) => st.setQ({ mode: v as typeof q.mode })} aria-label="Quantum mode" />
         <p className="qs-help">{MODE_HELP[q.mode]}</p>
       </div>
@@ -222,7 +222,7 @@ function EvolveIn() {
   return (
     <>
       {n != null && n > NATIONS_MAX_GRID && (
-        <p className="qs-help" style={{ color: 'var(--qs-ink)' }}>! Evolve works on grids up to {NATIONS_MAX_GRID}³; this one is {n}³. Choose a smaller grid size under Voxelise.</p>
+        <p className="qs-help qs-help--warn">! Evolve works on grids up to {NATIONS_MAX_GRID}³; this one is {n}³. Choose a smaller grid size under Voxelise.</p>
       )}
       <Slider label="Nations" value={q.k} min={3} max={16} step={1} ticks={13} defaultValue={12} onChange={(v) => setQ({ k: v })}
         help="Regions the model is split into at the start, one qubit each. Nations can split later; at most 16 are alive at once." />

@@ -1,18 +1,6 @@
-/* Quicksilver tokens — from design_handoff_quantum_sculptor/README.md. Light theme only. */
-@font-face { font-family: 'TWK Everett'; src: url('/fonts/TWKEverett-Thin.woff2') format('woff2'); font-weight: 100; font-style: normal; font-display: swap; }
-@font-face { font-family: 'TWK Everett'; src: url('/fonts/TWKEverett-Light.woff2') format('woff2'); font-weight: 300; font-style: normal; font-display: swap; }
-@font-face { font-family: 'TWK Everett'; src: url('/fonts/TWKEverett-LightItalic.woff2') format('woff2'); font-weight: 300; font-style: italic; font-display: swap; }
-@font-face { font-family: 'TWK Everett'; src: url('/fonts/TWKEverett-Book.woff2') format('woff2'); font-weight: 350; font-style: normal; font-display: swap; }
-@font-face { font-family: 'TWK Everett'; src: url('/fonts/TWKEverett-BookItalic.woff2') format('woff2'); font-weight: 350; font-style: italic; font-display: swap; }
-@font-face { font-family: 'TWK Everett'; src: url('/fonts/TWKEverett-Regular.woff2') format('woff2'); font-weight: 400; font-style: normal; font-display: swap; }
-@font-face { font-family: 'TWK Everett'; src: url('/fonts/TWKEverett-BookItalic.woff2') format('woff2'); font-weight: 400; font-style: italic; font-display: swap; }
-@font-face { font-family: 'TWK Everett'; src: url('/fonts/TWKEverett-Medium.woff2') format('woff2'); font-weight: 500; font-style: normal; font-display: swap; }
-@font-face { font-family: 'TWK Everett'; src: url('/fonts/TWKEverett-MediumItalic.woff2') format('woff2'); font-weight: 500; font-style: italic; font-display: swap; }
-@font-face { font-family: 'TWK Everett'; src: url('/fonts/TWKEverett-Bold.woff2') format('woff2'); font-weight: 700; font-style: normal; font-display: swap; }
-@font-face { font-family: 'TWK Everett'; src: url('/fonts/TWKEverett-Extrabold.woff2') format('woff2'); font-weight: 800; font-style: normal; font-display: swap; }
-@font-face { font-family: 'TWK Everett Mono'; src: url('/fonts/TWKEverettMono-Light.woff2') format('woff2'); font-weight: 300; font-style: normal; font-display: swap; }
+/* Quicksilver tokens. One typeface throughout: TWK Everett Mono (licensed; the files live in public/fonts/,
+   git-ignored). Upright only, two weights. Without the files the stack falls back to the system mono. */
 @font-face { font-family: 'TWK Everett Mono'; src: url('/fonts/TWKEverettMono-Regular.woff2') format('woff2'); font-weight: 400; font-style: normal; font-display: swap; }
-@font-face { font-family: 'TWK Everett Mono'; src: url('/fonts/TWKEverettMono-Italic.woff2') format('woff2'); font-weight: 400; font-style: italic; font-display: swap; }
 @font-face { font-family: 'TWK Everett Mono'; src: url('/fonts/TWKEverettMono-Medium.woff2') format('woff2'); font-weight: 500; font-style: normal; font-display: swap; }
 @font-face { font-family: 'TWK Everett Mono'; src: url('/fonts/TWKEverettMono-Bold.woff2') format('woff2'); font-weight: 700; font-style: normal; font-display: swap; }
 
@@ -39,8 +27,18 @@
   --qs-recess: #C4C6CB;
   --qs-recess-shadow: inset 0 1px 3px rgba(20, 22, 28, .4), 0 1px 0 rgba(255, 255, 255, .75);
 
-  --qs-sans: 'TWK Everett', ui-sans-serif, system-ui, sans-serif;
-  --qs-mono: 'TWK Everett Mono', ui-monospace, monospace;
+  /* one family: --qs-sans is kept as a name so older rules resolve to the same mono */
+  --qs-mono: 'TWK Everett Mono', 'SF Mono', ui-monospace, Menlo, Consolas, 'Liberation Mono', monospace;
+  --qs-sans: var(--qs-mono);
+
+  /* type roles (Swiss: few sizes, set by role, never by place). Size/line-height pairs on a 4px rhythm. */
+  --qs-t-display: 500 22px/28px var(--qs-mono);   /* hero figures */
+  --qs-t-title: 500 13px/16px var(--qs-mono);     /* app name, section and panel titles */
+  --qs-t-body: 400 12px/16px var(--qs-mono);      /* values, controls, list rows, sentences */
+  --qs-t-prose: 400 12px/18px var(--qs-mono);     /* help and descriptions: looser for reading */
+  --qs-t-label: 500 11px/12px var(--qs-mono);     /* field labels, kickers, column heads: upper case, tracked */
+  --qs-t-meta: 400 11px/16px var(--qs-mono);      /* secondary facts; the smallest size anywhere */
+  --qs-track-label: .06em;
 
   --qs-snap: 480ms;
   --qs-ease: cubic-bezier(.215, .61, .355, 1);
@@ -72,7 +70,7 @@ html, body, #root { margin: 0; height: 100%; }
 body {
   background: var(--qs-bg);
   color: var(--qs-ink);
-  font: 400 12px/1.3 var(--qs-sans);
+  font: var(--qs-t-body);
   font-variant-numeric: tabular-nums;
   -webkit-font-smoothing: antialiased;
   overflow: hidden;
@@ -80,18 +78,18 @@ body {
 button, input, select { font: inherit; color: inherit; }
 * { box-sizing: border-box; }
 
-/* type scale */
-.qs-title  { font: 400 28px/1.1 var(--qs-sans); }
-.qs-app    { font: 400 20px/1 var(--qs-sans); }
-.qs-sub    { font: 400 16px/1.2 var(--qs-sans); }
-.qs-body   { font: 400 14px/1.35 var(--qs-sans); }
-.qs-prose  { font: 400 13px/1.35 var(--qs-sans); color: var(--qs-ink2); text-wrap: pretty; }
-.qs-cap    { font: 400 12px/1.3 var(--qs-sans); color: var(--qs-ink2); }
-.qs-mono   { font: 400 11px/1 var(--qs-mono); font-variant-numeric: tabular-nums; }
-.qs-small  { font: 400 10px/1 var(--qs-mono); font-variant-numeric: tabular-nums; }
-.qs-field  { font: 400 13px/1 var(--qs-mono); font-variant-numeric: tabular-nums; }
-.qs-hero   { font: 400 40px/1 var(--qs-mono); font-variant-numeric: tabular-nums; }
-.qs-label  { font: 600 11.5px/1 var(--qs-sans); letter-spacing: 0; }
+/* type scale: one class per role (see the --qs-t-* tokens) */
+.qs-title  { font: var(--qs-t-display); letter-spacing: -.01em; }
+.qs-app    { font: var(--qs-t-title); text-transform: uppercase; letter-spacing: var(--qs-track-label); }
+.qs-sub    { font: var(--qs-t-title); }
+.qs-body   { font: var(--qs-t-body); }
+.qs-prose  { font: var(--qs-t-prose); color: var(--qs-ink2); text-wrap: pretty; }
+.qs-cap    { font: var(--qs-t-body); color: var(--qs-ink2); }
+.qs-mono   { font: var(--qs-t-meta); font-variant-numeric: tabular-nums; }
+.qs-small  { font: var(--qs-t-meta); font-variant-numeric: tabular-nums; }
+.qs-field  { font: var(--qs-t-body); font-variant-numeric: tabular-nums; }
+.qs-hero   { font: var(--qs-t-display); font-variant-numeric: tabular-nums; }
+.qs-label  { font: var(--qs-t-label); text-transform: uppercase; letter-spacing: var(--qs-track-label); }
 .qs-rule   { height: 1px; background: var(--qs-line); border: 0; margin: 0; }
 
 /* forced inks for PNG exports (see savePng) */

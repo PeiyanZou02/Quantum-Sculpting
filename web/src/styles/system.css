@@ -14,13 +14,13 @@ body { font: 400 12px/1.3 var(--qs-sans); }
 .qs-seg__item { font-family: var(--qs-sans) !important; font-size: 12px !important; }
 .qs-select select { font: 400 12px/1 var(--qs-sans); }
 .qs-field-label, .qs-field-head span, .qs-field__label { font: 400 12px/1.2 var(--qs-sans); color: var(--qs-ink2); }
-.qs-field-head output { font: 400 11.5px/1 var(--qs-mono); }
+.qs-field-head output { font: 400 12px/1 var(--qs-mono); }
 .qs-input input { font: 400 12px/1 var(--qs-mono); }
 .qs-label, .qs-readout__title, .qd-menu__label, .qs-pop__label {
-  font: 600 11.5px/1 var(--qs-sans); letter-spacing: 0;
+  font: 500 12px/1 var(--qs-sans); letter-spacing: 0;
 }
 .qs-readout__grid, .qs-readout__lead { font: 400 12px/1.4 var(--qs-sans); }
-.qs-readout__v, .qs-readout__val { font: 400 11.5px/1.4 var(--qs-mono); }
+.qs-readout__v, .qs-readout__val { font: 400 12px/1.4 var(--qs-mono); }
 .qd-tab, .qd-drop, .qd-ghost, .qd-menu__title, .qd-menu__item { font-family: var(--qs-sans) !important; font-size: 12px !important; }
 .qd-menu__hint { font-family: var(--qs-sans); }
 .hud__info, .vis-row__t, .ol-row__t, .qs-check__t, .stage__busy, .statusbar, .landing__cd, .landing__steps li span:nth-child(2) { font-family: var(--qs-sans); }
@@ -34,7 +34,7 @@ body { font: 400 12px/1.3 var(--qs-sans); }
 .sec { gap: 14px; padding: 18px 20px 20px; }
 .sec__title { font: 400 14px/1.2 var(--qs-sans); color: var(--qs-ink); letter-spacing: .005em; }
 .sec__summary { font: 400 12px/1.35 var(--qs-sans); padding-left: 0; }
-.sub { font: 500 10.5px/1 var(--qs-sans); letter-spacing: .07em; color: var(--qs-ink2); padding-top: 6px; }
+.sub { font: 500 11px/1 var(--qs-sans); letter-spacing: .07em; color: var(--qs-ink2); padding-top: 6px; }
 .qs-help { font-size: 12px; }
 
 /* ---------- shape: interactive = pill ---------- */
@@ -72,7 +72,7 @@ body { font: 400 12px/1.3 var(--qs-sans); }
 }
 .qs-check input:checked + .qs-check__box { background: var(--qs-ink); border-color: var(--qs-ink); }
 .qs-check input:checked + .qs-check__box::after { transform: translateX(10px); background: var(--qs-bg); }
-.qs-check__n { font-size: 11.5px; }
+.qs-check__n { font-size: 12px; }
 
 /* ---------- lighter on-states ---------- */
 .qs-ib--on, .qs-ib--on:hover:not(:disabled) { background: var(--qs-sel); color: var(--qs-ink); box-shadow: inset 0 0 0 1px var(--qs-ink); }
@@ -132,25 +132,25 @@ body { font: 400 12px/1.3 var(--qs-sans); }
    5 help / note        Everett Light Italic 300 12, ink3
    6 folded summary     Everett Book Italic 350 12, ink2 */
 .qs-app { font: 500 17px/1 var(--qs-sans) !important; letter-spacing: -.01em; }
-.sec__title, .blk__title { font: 700 15px/1.2 var(--qs-sans); letter-spacing: -.005em; color: var(--qs-ink); }
-.sec__summary { font: italic 350 12px/1.4 var(--qs-sans); color: var(--qs-ink2); }
-.sub, .qs-label, .qs-readout__title, .qs-pop__label, .qd-menu__label { font: 600 11.5px/1 var(--qs-sans); letter-spacing: 0; color: var(--qs-ink2); }
-.qs-field-label, .qs-field-head span, .qs-field__label { font: 350 12px/1.25 var(--qs-sans); color: var(--qs-ink2); }
-.qs-readout__grid > span:first-child, .qs-readout__grid > span:nth-child(3n+1), .qs-readout__lead .qs-readout__row > span:first-child { font-family: var(--qs-sans); font-weight: 350; color: var(--qs-ink2); }
-.qs-help, .landing__cd, .qs-check__n, .hudmenu__d, .ol-row__d { font-style: italic; font-weight: 300; }
+.sec__title, .blk__title { font: 500 15px/1.2 var(--qs-sans); letter-spacing: -.005em; color: var(--qs-ink); }
+.sec__summary { font: 400 12px/1.4 var(--qs-sans); color: var(--qs-ink2); }
+.sub, .qs-label, .qs-readout__title, .qs-pop__label, .qd-menu__label { font: 500 12px/1 var(--qs-sans); letter-spacing: 0; color: var(--qs-ink2); }
+.qs-field-label, .qs-field-head span, .qs-field__label { font: 400 12px/1.25 var(--qs-sans); color: var(--qs-ink2); }
+.qs-readout__grid > span:first-child, .qs-readout__grid > span:nth-child(3n+1), .qs-readout__lead .qs-readout__row > span:first-child { font-family: var(--qs-sans); font-weight: 400; color: var(--qs-ink2); }
+.qs-help, .landing__cd, .qs-check__n, .hudmenu__d, .ol-row__d { font-style: normal; font-weight: 400; }
 .qs-help { font-size: 12px; line-height: 1.45; color: var(--qs-ink3); }
 .qs-pill--commit, .qs-pill--active { font-weight: 500; }
-.qs-pop__title { font: 700 14px/1.2 var(--qs-sans); }
+.qs-pop__title { font: 500 14px/1.2 var(--qs-sans); }
 .hud__info span:first-child { font-weight: 500; }
-.hud__info span:nth-child(2) { font-weight: 300; font-style: italic; }
+.hud__info span:nth-child(2) { font-weight: 400; font-style: normal; }
 .qs-tip__name { font-weight: 500; }
-.qs-tip__desc { font-weight: 350; }
+.qs-tip__desc { font-weight: 400; }
 .qd-tab { font-weight: 400; }
 .qd-tab--on { font-weight: 500 !important; }
-.landing__title { font: 300 30px/1.1 var(--qs-sans); letter-spacing: -.015em; }
+.landing__title { font: 400 30px/1.1 var(--qs-sans); letter-spacing: -.015em; }
 .landing__ct { font: 500 16px/1.2 var(--qs-sans); }
-.statusbar { font: 350 11px/1 var(--qs-sans); }
-.swatch__t, .ent-row__t { font-weight: 350; }
+.statusbar { font: 400 11px/1 var(--qs-sans); }
+.swatch__t, .ent-row__t { font-weight: 400; }
 
 /* ---------- room to breathe ---------- */
 .sec { padding: 22px 22px 26px; gap: 18px; }

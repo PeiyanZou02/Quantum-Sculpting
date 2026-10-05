@@ -249,7 +249,7 @@ export function PrintOut() {
         { k: 'Faces', v: fmt.int(r.faces) },
         { k: 'Cell', v: r.refine > 1 ? `${r.fine_voxel_mm} mm fine` : `${r.voxel_mm} mm` },
       ]} />
-      {!r.watertight && <p className="qs-help" style={{ color: 'var(--qs-ink)' }}>! Not watertight. Try closing gaps or a lower level.</p>}
+      {!r.watertight && <p className="qs-help qs-help--warn">! Not watertight. Try closing gaps or a lower level.</p>}
     </Blk>
   )
 }

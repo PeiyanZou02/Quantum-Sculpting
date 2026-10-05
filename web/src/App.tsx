@@ -24,6 +24,7 @@ import { Dock, type PanelDef } from './dock/Dock'
 import { closePanel, findPanel, loadLayout, movePanel, saveLayout, setActive, type DockLayout } from './dock/layout'
 import './styles/system.css'
 import './styles/bento.css'
+import './styles/type.css'
 
 const PANELS: PanelDef[] = [
   { id: 'params', title: 'Parameters', icon: 'sliceTool', render: () => <InputPane /> },
@@ -39,16 +40,14 @@ const IDS = PANELS.map((p) => p.id)
 const DEFAULT_LAYOUT: DockLayout = {
   zones: {
     left: [{ id: 'a-params', tabs: ['params'], active: 'params', size: 1 }],
-    right: [
-      { id: 'a-scene', tabs: ['scene'], active: 'scene', size: 0.62 },
-      { id: 'a-props', tabs: ['props', 'quantum', 'evolve'], active: 'props', size: 1.38 },
-    ],
+    right: [{ id: 'a-props', tabs: ['props', 'quantum', 'evolve'], active: 'props', size: 1 }],
     bottom: [{ id: 'a-runtime', tabs: ['runtime', 'evlog', 'atlas'], active: 'runtime', size: 1 }],
   },
   width: { left: 320, right: 330 },
   height: { bottom: 190 },
+  hidden: ['scene'],
 }
-const KEY = 'qs-dock-v3'
+const KEY = 'qs-dock-v4'
 /** The tabs brought forward for each stage of the focus, wherever they are docked (later ones win within one area). */
 function tabsFor(stage: FocusStage, mode: string): string[] {
   const log = stage === 'evolve' ? 'evlog' : (stage === 'quantum' || stage === 'scan') && mode === 'atlas' ? 'atlas' : 'runtime'

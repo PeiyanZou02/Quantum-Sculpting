@@ -493,7 +493,7 @@ export function QProbe({ w, h, n, pick, enabled, maxPins, mmPerCell = 3.2, onPoi
                 borderRadius: '50%',
                 background: INK,
                 color: BG,
-                fontSize: 9,
+                fontSize: 11,
                 textShadow: 'none',
               }}
             >

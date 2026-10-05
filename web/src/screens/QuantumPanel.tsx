@@ -292,10 +292,10 @@ function BlurBlk({ sel }: { sel: number | null }) {
       <div ref={ref} className="qp-measure">
         {W > 0 && (
           <svg className="qp-svg" width={W} height={base + 6} viewBox={`0 0 ${W} ${base + 6}`}>
-            <text x={0} y={19} fontSize={9} fill="var(--qs-ink3)">in</text>
-            <text x={0} y={42} fontSize={9} fill="var(--qs-ink3)">gray</text>
-            <text x={0} y={72} fontSize={9} fill="var(--qs-ink3)">turn</text>
-            <text x={0} y={base - 2} fontSize={9} fill="var(--qs-ink3)">out</text>
+            <text x={0} y={19} fontSize={11} fill="var(--qs-ink3)">in</text>
+            <text x={0} y={42} fontSize={11} fill="var(--qs-ink3)">gray</text>
+            <text x={0} y={72} fontSize={11} fill="var(--qs-ink3)">turn</text>
+            <text x={0} y={base - 2} fontSize={11} fill="var(--qs-ink3)">out</text>
             {DEMO_IN.map((v, i) => (
               <rect key={'i' + i} x={cx(i) - sq / 2} y={8} width={sq} height={sq} rx={2} fill={v ? 'var(--qs-ink)' : 'none'} stroke={v ? 'var(--qs-ink)' : 'var(--qs-ink4)'} strokeWidth={1} />
             ))}
@@ -520,11 +520,11 @@ function ShotsBlk() {
             <line x1={0} x2={W} y1={base + 0.5} y2={base + 0.5} stroke="var(--qs-ink4)" strokeWidth={1} />
             <polyline points={pts} fill="none" stroke="var(--qs-ink)" strokeWidth={1} />
             <line x1={xs(hi)} x2={exactX} y1={base - 0.5} y2={base - 0.5} stroke="var(--qs-ink3)" strokeWidth={1} strokeDasharray="2 3" />
-            {[6, 8, 10, 12, 14, 16].map((l) => <text key={l} x={xs(l)} y={H - 3} fontSize={9} fill="var(--qs-ink3)" textAnchor={l === lo ? 'start' : 'middle'}>{shortN(2 ** l)}</text>)}
-            <text x={exactX} y={H - 3} fontSize={9} fill="var(--qs-ink3)" textAnchor="end">exact</text>
+            {[6, 8, 10, 12, 14, 16].map((l) => <text key={l} x={xs(l)} y={H - 3} fontSize={11} fill="var(--qs-ink3)" textAnchor={l === lo ? 'start' : 'middle'}>{shortN(2 ** l)}</text>)}
+            <text x={exactX} y={H - 3} fontSize={11} fill="var(--qs-ink3)" textAnchor="end">exact</text>
             <line x1={mx} x2={mx} y1={my} y2={base} stroke="var(--qs-ink)" strokeWidth={1} strokeDasharray="1 2" />
             <circle cx={mx} cy={my} r={3.5} fill="var(--qs-ink)" />
-            <text x={Math.min(mx + 7, W - 4)} y={my - 7} fontSize={10} fill="var(--qs-ink)" textAnchor={mx + 90 > W ? 'end' : 'start'}>{label}</text>
+            <text x={Math.min(mx + 7, W - 4)} y={my - 7} fontSize={11} fill="var(--qs-ink)" textAnchor={mx + 90 > W ? 'end' : 'start'}>{label}</text>
           </svg>
         )}
       </div>
@@ -558,8 +558,8 @@ function RunsBlk() {
         {W > 0 && (
           <svg className="qp-svg" width={W} height={H} viewBox={`0 0 ${W} ${H}`}>
             <rect x={P} y={P} width={W - 2 * P} height={H - 2 * P} rx={10} fill="none" stroke="var(--qs-line)" strokeWidth={1} />
-            <text x={P} y={H - 3} fontSize={9} fill="var(--qs-ink3)">strength →</text>
-            <text x={P - 4} y={P - 5} fontSize={9} fill="var(--qs-ink3)">↑ reach</text>
+            <text x={P} y={H - 3} fontSize={11} fill="var(--qs-ink3)">strength →</text>
+            <text x={P - 4} y={P - 5} fontSize={11} fill="var(--qs-ink3)">↑ reach</text>
             <line x1={sx(q.strength)} x2={sx(q.strength)} y1={P} y2={H - P} stroke="var(--qs-ink4)" strokeWidth={1} strokeDasharray="2 3" />
             <line x1={P} x2={W - P} y1={sy(q.reach)} y2={sy(q.reach)} stroke="var(--qs-ink4)" strokeWidth={1} strokeDasharray="2 3" />
             {list.map((r, i) => (

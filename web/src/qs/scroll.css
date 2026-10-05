@@ -21,7 +21,7 @@
 }
 .qs-scroll__mark::after { content: ''; width: 9px; height: 1px; background: var(--qs-ink3); margin-right: 2px; transition: width .15s, background .15s; }
 .qs-scroll__mark span {
-  font: 400 9px/1 var(--qs-mono); color: var(--qs-ink3); margin-right: 3px; font-variant-numeric: tabular-nums;
+  font: 400 11px/1 var(--qs-mono); color: var(--qs-ink3); margin-right: 3px; font-variant-numeric: tabular-nums;
   transition: color .15s;
 }
 .qs-scroll__mark:hover span, .qs-scroll__mark--on span { color: var(--qs-ink); }

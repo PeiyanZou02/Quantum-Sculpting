@@ -75,7 +75,7 @@ html.qd-dragging, html.qd-dragging * { cursor: grabbing !important; user-select:
 .qd-tab:focus-visible { box-shadow: inset 0 0 0 1px var(--qs-ctl); }
 .qd-tab__badge {
   min-width: 13px; height: 13px; padding: 0 3px; border-radius: 999px; box-sizing: border-box;
-  background: var(--qs-ink); color: var(--qs-bg); font: 500 9px/13px var(--qs-mono); text-align: center;
+  background: var(--qs-ink); color: var(--qs-bg); font: 500 11px/13px var(--qs-mono); text-align: center;
 }
 
 /* insertion line for a new area before/after this one */
@@ -101,7 +101,7 @@ html.qd-dragging, html.qd-dragging * { cursor: grabbing !important; user-select:
   background: var(--qs-bg); border: 1px solid var(--qs-line); color: var(--qs-ink);
   font: 400 11px/1 var(--qs-mono);
 }
-.qd-menu__label { font: 600 11.5px/1 var(--qs-sans); letter-spacing: 0; color: var(--qs-ink3); padding: 8px 12px 6px; }
+.qd-menu__label { font: 500 12px/1 var(--qs-sans); letter-spacing: 0; color: var(--qs-ink3); padding: 8px 12px 6px; }
 .qd-menu__item {
   all: unset; box-sizing: border-box; display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 12px 0 8px;
   color: var(--qs-ink2); cursor: pointer; white-space: nowrap;
@@ -110,7 +110,7 @@ html.qd-dragging, html.qd-dragging * { cursor: grabbing !important; user-select:
 .qd-menu__item--on { color: var(--qs-ink); }
 .qd-menu__check { width: 12px; flex: none; display: flex; }
 .qd-menu__title { flex: 1; }
-.qd-menu__hint { color: var(--qs-ink4); padding-left: 16px; }
+.qd-menu__hint { color: var(--qs-ink3); padding-left: 16px; }
 .qd-menu__rule { height: 1px; background: var(--qs-line); margin: 4px 0; }
 .qd-menu__row { display: flex; align-items: center; gap: 2px; border-radius: 999px; }
 .qd-menu__row .qd-menu__item { flex: 1; margin: 0; }

@@ -70,7 +70,8 @@ export function Stage() {
   const st = useStore()
   const pr = usePresent()
   const present = pr.mode === 'present'
-  const labCompose = Object.keys(st.compose).length ? st.compose : (PRESETS.find((p) => p.id === 'clean')!.set() as Record<string, string>)
+  // Lab starts from Clean without the step pipeline: the focus strip over the view already says where you are
+  const labCompose = Object.keys(st.compose).length ? st.compose : { ...(PRESETS.find((p) => p.id === 'clean')!.set() as Record<string, string>), steps: 'off' }
   // a component previewed from the library is drawn on top of the composition as it is now
   const pv = present && pr.preview && !pr.preview.startsWith('guide:') ? pr.preview.split(':') : null
   const shown: Record<string, string> = !present ? labCompose
@@ -749,7 +750,7 @@ function Gizmo({ engine }: { engine: Engine }) {
         <g key={`${e.i}${e.pos}`} className="gizmo__end" onClick={() => look(e.i, e.pos)} data-tip={`View along ${e.pos ? '+' : '−'}${'XYZ'[e.i]}`} data-tip-side="left">
           <circle cx={e.x} cy={e.y} r={9} fill="transparent" />
           <circle cx={e.x} cy={e.y} r={e.pos ? 7 : 4} fill={e.pos ? 'var(--qs-ink)' : 'var(--qs-bg)'} stroke="var(--qs-ink)" strokeWidth="1" />
-          {e.pos && <text x={e.x} y={e.y + 3} textAnchor="middle" fontFamily="TWK Everett Mono, monospace" fontSize="8.5" fill="var(--qs-bg)">{'XYZ'[e.i]}</text>}
+          {e.pos && <text x={e.x} y={e.y + 3} textAnchor="middle" fontFamily="TWK Everett Mono, ui-monospace, monospace" fontSize="8.5" fill="var(--qs-bg)">{'XYZ'[e.i]}</text>}
         </g>
       ))}
     </svg>

@@ -175,7 +175,7 @@ function PlaneIndex({ ctx }: { ctx: HudCtx }) {
         const q = Rr(t + 0.5)
         const pos = ax === 'x' ? { left: q[0], top: q[1] + 9, transform: 'translate(-50%,0)' } : { left: q[0] + TD[0] * 10, top: q[1] + TD[1] * 10, transform: 'translate(0,-50%)' }
         return (
-          <span key={t} className="qs-lab-small" style={{ position: 'absolute', ...pos, fontSize: 9, color: 'var(--qs-ink3)', pointerEvents: 'none' }}>
+          <span key={t} className="qs-lab-small" style={{ position: 'absolute', ...pos, fontSize: 11, color: 'var(--qs-ink3)', pointerEvents: 'none' }}>
             {t}
           </span>
         )

@@ -22,16 +22,16 @@
 .cmp-preset:hover { background: var(--qs-faint); }
 .cmp-preset--on { border-color: var(--qs-ink); background: var(--qs-sel); }
 .cmp-preset__t { font: 500 12px/1 var(--qs-sans); color: var(--qs-ink); }
-.cmp-preset__d { font: italic 300 11px/1.25 var(--qs-sans); color: var(--qs-ink3); }
+.cmp-preset__d { font: 400 11px/1.25 var(--qs-sans); color: var(--qs-ink3); }
 .cmp-fam { display: grid; grid-template-columns: 1fr; gap: 6px; padding: 8px 0; }
 .cmp-fam__head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
 .cmp-fam__t { font: 500 12px/1 var(--qs-sans); color: var(--qs-ink); }
-.cmp-fam__d { font: italic 300 11px/1.2 var(--qs-sans); color: var(--qs-ink3); text-align: right; }
+.cmp-fam__d { font: 400 11px/1.2 var(--qs-sans); color: var(--qs-ink3); text-align: right; }
 .cmp-vars { display: flex; flex-wrap: wrap; gap: 4px; }
-.cmp-var { all: unset; height: 24px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--qs-line); display: inline-flex; align-items: center; gap: 6px; font: 400 11.5px/1 var(--qs-sans); color: var(--qs-ink2); cursor: pointer; transition: background .15s, border-color .15s, color .15s; }
+.cmp-var { all: unset; height: 24px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--qs-line); display: inline-flex; align-items: center; gap: 6px; font: 400 12px/1 var(--qs-sans); color: var(--qs-ink2); cursor: pointer; transition: background .15s, border-color .15s, color .15s; }
 .cmp-var:hover { background: var(--qs-faint); color: var(--qs-ink); }
 .cmp-var--on { border-color: var(--qs-ink); background: var(--qs-sel); color: var(--qs-ink); }
-.cmp-var__n { font: 400 10.5px/1 var(--qs-mono); color: var(--qs-ink3); }
+.cmp-var__n { font: 400 11px/1 var(--qs-mono); color: var(--qs-ink3); }
 
 /* pieces: in a slot, or placed where they were dragged */
 .hud-piece { position: relative; pointer-events: none; }
@@ -53,7 +53,7 @@
 .hud-piece__bar .hud-piece__handle { position: static; }
 .hud-piece__btn {
   all: unset; height: 22px; padding: 0 9px; border-radius: 999px; background: var(--qs-bg); color: var(--qs-ink); border: 1px solid var(--qs-line);
-  font: 500 10.5px/22px var(--qs-sans); cursor: pointer; box-sizing: border-box; display: inline-flex; align-items: center;
+  font: 500 11px/22px var(--qs-sans); cursor: pointer; box-sizing: border-box; display: inline-flex; align-items: center;
 }
 .hud-piece__btn:hover { border-color: var(--qs-ink); }
 /* Present compose mode: pieces are picked up, selected and removed; the bar shows on hover or selection */

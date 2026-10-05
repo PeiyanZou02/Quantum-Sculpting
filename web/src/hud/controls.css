@@ -67,14 +67,14 @@
 
 /* the value line under (or over) a piece: sans name, mono value, light italic note */
 .qc-line { display: flex; align-items: baseline; gap: 6px; white-space: nowrap; }
-.qc-k { font: 500 11.5px/1 var(--qs-sans); color: var(--qs-ink); }
+.qc-k { font: 500 12px/1 var(--qs-sans); color: var(--qs-ink); }
 .qc-v { font: 400 11px/1 var(--qs-mono); font-variant-numeric: tabular-nums; color: var(--qs-ink2); }
-.qc-w { font: 400 11.5px/1 var(--qs-sans); color: var(--qs-ink2); }
-.qc-n { font: italic 300 11px/1 var(--qs-sans); color: var(--qs-ink3); }
+.qc-w { font: 400 12px/1 var(--qs-sans); color: var(--qs-ink2); }
+.qc-n { font: 400 11px/1 var(--qs-sans); color: var(--qs-ink3); }
 
 /* small marks on the drawings */
-.qc-s { font: 400 10px/1 var(--qs-sans); color: var(--qs-ink3); white-space: nowrap; }
-.qc-m { font: 400 10px/1 var(--qs-mono); font-variant-numeric: tabular-nums; color: var(--qs-ink3); white-space: nowrap; }
+.qc-s { font: 400 11px/1 var(--qs-sans); color: var(--qs-ink3); white-space: nowrap; }
+.qc-m { font: 400 11px/1 var(--qs-mono); font-variant-numeric: tabular-nums; color: var(--qs-ink3); white-space: nowrap; }
 .qc-on { color: var(--qs-ink); }
 .qc-engr { text-shadow: 0 1px 0 var(--qc-glint); }
 
@@ -89,9 +89,9 @@
 .qc-dash { stroke-dasharray: 2 3; }
 .qc-dot { stroke-dasharray: 1 2; }
 .qc-tm, .qc-ts { stroke: none; fill: var(--qs-ink3); }
-.qc-tm { font: 400 10px/1 var(--qs-mono); font-variant-numeric: tabular-nums; }
-.qc-tm9 { font-size: 9px; }
-.qc-ts { font: 400 10px/1 var(--qs-sans); }
+.qc-tm { font: 400 11px/1 var(--qs-mono); font-variant-numeric: tabular-nums; }
+.qc-tm9 { font-size: 11px; }
+.qc-ts { font: 400 11px/1 var(--qs-sans); }
 .qc-t1 { fill: var(--qs-ink); }
 
 /* satin bodies */
@@ -153,7 +153,7 @@
 .qc-flag {
   position: absolute; left: 50%; top: -10px; transform: translateX(-50%);
   padding: 4px 8px; border-radius: 999px; border: 1px solid var(--qs-ink); background: var(--qs-bg);
-  font: 400 10px/1 var(--qs-mono); font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--qs-ink);
+  font: 400 11px/1 var(--qs-mono); font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--qs-ink);
 }
 .qc-press { transition: transform 120ms var(--qs-ease); }
 .qc-pressed { transform: scale(.97); }
@@ -163,7 +163,7 @@
 .qc-state i { width: 5px; height: 5px; border-radius: 50%; box-sizing: border-box; border: 1px solid var(--qs-ink4); }
 .qc-state--on { color: var(--qs-ink); font-weight: 500; }
 .qc-state--on i { background: var(--qs-ink); border-color: var(--qs-ink); }
-.qc-state .qc-v { color: inherit; font-size: 10.5px; }
+.qc-state .qc-v { color: inherit; font-size: 11px; }
 
 /* N1: drum */
 .qc-drum {

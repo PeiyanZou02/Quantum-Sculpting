@@ -1,4 +1,5 @@
 // Top bar, kept quiet: mark and name, then Atlas status, theme and help.
+import { CAT_CELLS, CAT_H, CAT_W } from '../mark'
 import { useStore } from '../store'
 import { QPill } from '../qs/QPill'
 import { IconButton } from '../qs/Icon'
@@ -6,12 +7,13 @@ import { Popover, PopSection, Check } from '../qs/Popover'
 import { Spinner } from './parts'
 import { usePresent } from '../present'
 
-export function Mark({ size = 18 }: { size?: number }) {
-  const o = [0.22, 0.5, 0.22, 0.5, 1, 0.5, 0.22, 0.5, 0.22]
+/** Schrödinger's cat in dot matrix (src/mark.ts): solid squares on one half, open dots on the other. */
+export function Mark({ size = 20 }: { size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden>
-      <rect x="2.5" y="2.5" width="27" height="27" fill="none" stroke="var(--qs-ink)" />
-      {o.map((a, i) => <rect key={i} x={6 + (i % 3) * 7} y={6 + Math.floor(i / 3) * 7} width="6" height="6" fill="var(--qs-ink)" opacity={a} />)}
+    <svg width={size} height={size * CAT_H / CAT_W} viewBox={`0 0 ${CAT_W} ${CAT_H}`} aria-hidden className="top__mark">
+      {CAT_CELLS.map(([x, y, solid]) => solid
+        ? <rect key={`${x}.${y}`} x={x + 0.08} y={y + 0.08} width={0.84} height={0.84} fill="var(--qs-ink)" />
+        : <circle key={`${x}.${y}`} cx={x + 0.5} cy={y + 0.5} r={0.42} fill="var(--qs-ink)" />)}
     </svg>
   )
 }
@@ -29,14 +31,20 @@ function Now() {
   const log = useStore((s) => s.log)
   const last = [...log].reverse().find((l) => l.level !== 'net')
   const doing = busy.model ? 'Opening' : busy.vox ? 'Voxelising' : busy.proc ? 'Processing' : busy.mesh ? 'Meshing' : busy.export ? 'Exporting' : null
-  if (!model) return <div className="top__now"><span className="top__dim">No model loaded</span></div>
+  if (!model) return <div className="top__now"><span className="top__event">No model loaded</span></div>
+  const facts: [string, string][] = [
+    ['Model', model.builtin ? 'test_cup.stl' : model.file],
+    ['Faces', model.faces.toLocaleString()],
+    ...(grid ? [['Grid', `${grid.n}³`], ['Solid', grid.solid.toLocaleString()]] as [string, string][] : []),
+  ]
   return (
     <div className="top__now">
-      <span className="top__file">{model.builtin ? 'test_cup.stl' : model.file}</span>
-      <span className="top__dim">{model.faces.toLocaleString()} faces{grid ? ` · ${grid.n}³ · ${grid.solid.toLocaleString()} solid` : ''}</span>
-      {job?.status === 'running' && <span className="top__state"><Spinner /> Atlas · {job.tiles_done}/{job.tiles_total} tiles</span>}
-      {doing ? <span className="top__state"><Spinner /> {doing}…</span>
-        : last && <span className={'top__last' + (last.level !== 'info' ? ' top__last--warn' : '')} data-tip="Latest event" data-tip-desc="The full history is in the Runtime panel.">{last.level !== 'info' ? '! ' : ''}{last.text}</span>}
+      <dl className="top__facts">
+        {facts.map(([k, v]) => <div key={k} className="top__fact"><dt>{k}</dt><dd>{v}</dd></div>)}
+      </dl>
+      {job?.status === 'running' && <span className="top__state"><Spinner /> Atlas {job.tiles_done}/{job.tiles_total} tiles</span>}
+      {doing ? <span className="top__state"><Spinner /> {doing}</span>
+        : last && <span className={'top__event' + (last.level !== 'info' ? ' top__event--warn' : '')} data-tip="Latest event" data-tip-desc="The full history is in the Runtime panel.">{last.level !== 'info' ? '! ' : ''}{last.text}</span>}
     </div>
   )
 }
@@ -79,7 +87,7 @@ export function TopBar({ panels, onTogglePanel }: { panels: PanelToggle[]; onTog
     <header className="top">
       <div className="top__brand">
         <Mark />
-        <span className="qs-app" style={{ fontSize: 17 }}>Quantum Sculptor</span>
+        <span className="qs-app">Quantum Sculptor</span>
       </div>
       <ModeSwitch />
       <Now />

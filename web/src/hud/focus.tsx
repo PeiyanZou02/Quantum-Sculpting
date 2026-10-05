@@ -62,7 +62,7 @@ function FrameTag({ ctx }: { ctx: HudCtx }) {
     <Hud ctx={ctx}>
       <rect x={f(l) + 0.5} y={f(t) + 0.5} width={Math.max(0, f(r - l) - 1)} height={Math.max(0, f(b - t) - 1)} strokeWidth={1} strokeDasharray="3 3" style={stroke(INK3)} />
       <rect x={f(l - 2) + 0.5} y={f(ty) + 0.5} width={tw} height={18} rx={9} strokeWidth={1} style={{ stroke: INK3, fill: BG }} />
-      <text x={f(l - 2 + tw / 2)} y={f(ty + 9.5)} fontSize={10} textAnchor="middle" dominantBaseline="central" style={{ fill: INK2, fontFamily: MONO }}>
+      <text x={f(l - 2 + tw / 2)} y={f(ty + 9.5)} fontSize={11} textAnchor="middle" dominantBaseline="central" style={{ fill: INK2, fontFamily: MONO }}>
         {label}
       </text>
     </Hud>
@@ -81,8 +81,8 @@ function DepthBand({ ctx }: { ctx: HudCtx }) {
   return (
     <Hud ctx={ctx}>
       <path d={d} strokeWidth={1} strokeDasharray="3 3" style={stroke(INK3)} />
-      <text x={f(r + 6)} y={f(t + 3.5)} fontSize={9} className="qs-hud-halo" style={{ ...tx, fill: INK3 }}>far</text>
-      <text x={f(r + 6)} y={f(b + 3)} fontSize={9} className="qs-hud-halo" style={{ ...tx, fill: INK3 }}>near</text>
+      <text x={f(r + 6)} y={f(t + 3.5)} fontSize={11} className="qs-hud-halo" style={{ ...tx, fill: INK3 }}>far</text>
+      <text x={f(r + 6)} y={f(b + 3)} fontSize={11} className="qs-hud-halo" style={{ ...tx, fill: INK3 }}>near</text>
       <text x={f((l + r) / 2)} y={f((t + b) / 2)} fontSize={11} textAnchor="middle" dominantBaseline="central" className="qs-hud-halo" style={{ ...tx, fill: INK }}>
         {`dist ${ctx.cam.dist.toFixed(2)}`}
       </text>

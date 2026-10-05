@@ -51,6 +51,7 @@ function normalise(l: DockLayout): DockLayout {
     zones: { left: normaliseZone(l.zones.left), right: normaliseZone(l.zones.right), bottom: normaliseZone(l.zones.bottom) },
     width: { left: clamp(l.width.left, SIDE_MIN, SIDE_MAX), right: clamp(l.width.right, SIDE_MIN, SIDE_MAX) },
     height: { bottom: clamp(l.height.bottom, BOTTOM_MIN, bottomMax()) },
+    hidden: l.hidden ?? [],
   }
 }
 

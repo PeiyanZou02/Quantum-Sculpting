@@ -75,7 +75,7 @@ function SquareTab({ ctx }: { ctx: HudCtx }) {
     <Hud ctx={ctx}>
       <rect x={x0 + 0.75} y={y0 + 0.75} width={s - 1.5} height={s - 1.5} strokeWidth={1.5} style={stroke(INK)} />
       <rect x={x0} y={y0 - 16} width={tw} height={16} style={{ fill: INK }} />
-      <text x={x0 + 5} y={y0 - 7.5} fontSize={10} dominantBaseline="central" style={{ fill: BG, fontFamily: MONO }}>
+      <text x={x0 + 5} y={y0 - 7.5} fontSize={11} dominantBaseline="central" style={{ fill: BG, fontFamily: MONO }}>
         {label}
       </text>
     </Hud>
