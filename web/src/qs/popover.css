@@ -1,0 +1,34 @@
+.qs-pop { position: relative; flex: none; }
+.qs-pop__btn { display: inline-flex; align-items: center; height: 28px; border-radius: 999px; border: 1px solid var(--qs-ctl); overflow: hidden; transition: border-color .15s; }
+.qs-pop__btn:hover, .qs-pop__btn--open { border-color: var(--qs-ink); }
+.qs-pop__icon, .qs-pop__chev {
+  all: unset; height: 100%; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; color: var(--qs-ink2);
+  transition: background .15s, color .15s;
+}
+.qs-pop__icon { padding: 0 6px 0 9px; }
+.qs-pop__chev { padding: 0 8px 0 4px; border-left: 1px solid var(--qs-line); }
+.qs-pop__icon:hover, .qs-pop__chev:hover { color: var(--qs-ink); background: var(--qs-faint); }
+.qs-pop__icon--on { color: var(--qs-bg); background: var(--qs-ink); }
+.qs-pop__icon--on:hover { color: var(--qs-bg); background: var(--qs-ink); }
+.qs-pop__icon:focus-visible, .qs-pop__chev:focus-visible { box-shadow: inset 0 0 0 2px var(--qs-line); }
+
+.qs-pop__panel {
+  position: absolute; top: calc(100% + 8px); z-index: 45; padding: 14px 16px 16px; box-sizing: border-box;
+  background: var(--qs-bg); border: 1px solid var(--qs-ink); display: flex; flex-direction: column; gap: 14px;
+  max-height: calc(100vh - 140px); overflow-y: auto; scrollbar-width: thin;
+}
+.qs-pop__panel--right { right: 0; }
+.qs-pop__panel--left { left: 0; }
+.qs-pop__title { font: 400 15px/1.1 var(--qs-sans); }
+.qs-pop__sec { display: flex; flex-direction: column; gap: 2px; padding-top: 10px; border-top: 1px solid var(--qs-line); }
+.qs-pop__label { font: 600 10px/1 var(--qs-mono); letter-spacing: .04em; text-transform: uppercase; color: var(--qs-ink2); margin-bottom: 6px; }
+
+.qs-check { position: relative; display: grid; grid-template-columns: 18px auto 1fr; align-items: center; column-gap: 0; padding: 5px 0; cursor: pointer; }
+.qs-check input { position: absolute; opacity: 0; pointer-events: none; }
+.qs-check__box { width: 10px; height: 10px; border: 1px solid var(--qs-ink); box-sizing: border-box; }
+.qs-check input:checked + .qs-check__box { background: var(--qs-ink); }
+.qs-check input:focus-visible + .qs-check__box { box-shadow: 0 0 0 3px var(--qs-line); }
+.qs-check__t { font: 400 11px/1.2 var(--qs-mono); color: var(--qs-ink); padding-right: 10px; }
+.qs-check__n { font: 400 11px/1.25 var(--qs-sans); color: var(--qs-ink3); text-align: right; }
+.qs-check:hover .qs-check__t { text-decoration: underline; text-underline-offset: 3px; }
+.qs-check--off { opacity: .45; pointer-events: none; }

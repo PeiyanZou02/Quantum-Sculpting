@@ -1,0 +1,114 @@
+/* Docking workspace. Hairlines only: no cards, no fills, square except pills. Tokens from styles/tokens.css. */
+
+.qd {
+  height: 100%; min-height: 0; min-width: 0;
+  display: flex; flex-direction: row;
+  font: 400 11px/1 var(--qs-mono); color: var(--qs-ink);
+  background: var(--qs-bg);
+  position: relative;
+}
+
+/* centre column: viewport above, bottom zone below */
+.qd-center { flex: 1 1 0px; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.qd-view { flex: 1 1 0px; min-height: 0; min-width: 0; position: relative; }
+
+/* zones */
+.qd-zone { flex: none; display: flex; min-width: 0; min-height: 0; overflow: hidden; }
+.qd-zone--left, .qd-zone--right { flex-direction: column; height: 100%; }
+.qd-zone--bottom { flex-direction: row; width: 100%; }
+
+/* empty zone: no space, but a drop strip floats over the centre edge while a tab is dragged */
+.qd-void { flex: none; position: relative; width: 0; height: 0; z-index: 30; }
+.qd-void--left, .qd-void--right { height: 100%; }
+.qd-void--bottom { width: 100%; }
+.qd-drop {
+  position: absolute; display: flex; align-items: center; justify-content: center;
+  border: 1px dashed var(--qs-ink3); color: var(--qs-ink3); background: var(--qs-bg);
+  font: 400 11px/1 var(--qs-mono); white-space: nowrap; box-sizing: border-box;
+  transition: border-color .12s, color .12s, background .12s;
+}
+.qd-void--left .qd-drop { left: 4px; top: 4px; bottom: 4px; width: 40px; }
+.qd-void--right .qd-drop { right: 4px; top: 4px; bottom: 4px; width: 40px; }
+.qd-void--bottom .qd-drop { left: 4px; right: 4px; bottom: 4px; height: 40px; }
+.qd-void--left .qd-drop span, .qd-void--right .qd-drop span { writing-mode: vertical-rl; }
+.qd-void--left .qd-drop span { transform: rotate(180deg); }
+.qd-drop--on { border-style: solid; border-color: var(--qs-ink); color: var(--qs-ink); background: var(--qs-faint); }
+
+/* splitters: a 1px rule in the flow, with a wider invisible hit area */
+.qd-split { flex: none; position: relative; background: var(--qs-line); z-index: 5; transition: background .12s; }
+.qd-split--col { width: 1px; align-self: stretch; cursor: col-resize; }
+.qd-split--row { height: 1px; align-self: stretch; cursor: row-resize; }
+.qd-split::before { content: ''; position: absolute; }
+.qd-split--col::before { top: 0; bottom: 0; left: -3px; width: 7px; }
+.qd-split--row::before { left: 0; right: 0; top: -3px; height: 7px; }
+.qd-split:hover, .qd-split:active, .qd-split:focus-visible { background: var(--qs-ink); outline: none; }
+.qd--drag .qd-split { pointer-events: none; }
+html.qd-resizing-col, html.qd-resizing-col * { cursor: col-resize !important; user-select: none !important; }
+html.qd-resizing-row, html.qd-resizing-row * { cursor: row-resize !important; user-select: none !important; }
+html.qd-dragging, html.qd-dragging * { cursor: grabbing !important; user-select: none !important; }
+
+/* areas */
+.qd-area { position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
+.qd-zone--left .qd-area, .qd-zone--right .qd-area { min-height: 64px; }
+.qd-zone--bottom .qd-area { min-width: 64px; }
+.qd-head {
+  flex: none; height: 30px; display: flex; align-items: stretch; gap: 4px;
+  border-bottom: 1px solid var(--qs-line); padding: 0 4px 0 2px; box-sizing: border-box;
+  transition: background .12s;
+}
+.qd-head--on { background: var(--qs-faint); box-shadow: inset 0 0 0 1px var(--qs-ink); }
+.qd-head__menu { flex: none; display: flex; align-items: center; }
+.qd-body { flex: 1 1 0px; min-height: 0; min-width: 0; overflow: hidden; position: relative; display: flex; flex-direction: column; }
+
+/* tab strip */
+.qd-tabs { flex: 1; min-width: 0; display: flex; align-items: stretch; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
+.qd-tabs::-webkit-scrollbar { display: none; }
+.qd-tab {
+  all: unset; box-sizing: border-box; position: relative; flex: none;
+  display: inline-flex; align-items: center; gap: 6px; padding: 0 8px;
+  font: 400 11px/1 var(--qs-mono); color: var(--qs-ink3); white-space: nowrap;
+  cursor: pointer; touch-action: none; transition: color .12s;
+}
+.qd-tab:hover { color: var(--qs-ink2); }
+.qd-tab--on, .qd-tab--on:hover { color: var(--qs-ink); }
+.qd-tab--on::after { content: ''; position: absolute; left: 8px; right: 8px; bottom: 0; height: 1px; background: var(--qs-ink); }
+.qd-tab:focus-visible { box-shadow: inset 0 0 0 1px var(--qs-ctl); }
+.qd-tab__badge {
+  min-width: 13px; height: 13px; padding: 0 3px; border-radius: 999px; box-sizing: border-box;
+  background: var(--qs-ink); color: var(--qs-bg); font: 500 9px/13px var(--qs-mono); text-align: center;
+}
+
+/* insertion line for a new area before/after this one */
+.qd-ins { position: absolute; background: var(--qs-ink); z-index: 6; pointer-events: none; }
+.qd-ins--t { left: 0; right: 0; top: 0; height: 2px; }
+.qd-ins--b { left: 0; right: 0; bottom: 0; height: 2px; }
+.qd-ins--l { top: 0; bottom: 0; left: 0; width: 2px; }
+.qd-ins--r { top: 0; bottom: 0; right: 0; width: 2px; }
+
+/* drag ghost: the only shadow in the dock */
+.qd-ghost {
+  position: fixed; left: 0; top: 0; z-index: 60; pointer-events: none;
+  display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 12px 0 9px;
+  border: 1px solid var(--qs-line); border-radius: 999px; background: var(--qs-bg); color: var(--qs-ink);
+  font: 400 11px/1 var(--qs-mono); white-space: nowrap;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, .10);
+}
+
+/* editor-type menu */
+.qd-menu {
+  position: fixed; z-index: 40; min-width: 200px; max-width: calc(100vw - 12px); max-height: calc(100vh - 12px); overflow-y: auto;
+  display: flex; flex-direction: column; padding: 4px 0;
+  background: var(--qs-bg); border: 1px solid var(--qs-line); color: var(--qs-ink);
+  font: 400 11px/1 var(--qs-mono);
+}
+.qd-menu__label { font: 600 10px/1 var(--qs-mono); letter-spacing: .04em; text-transform: uppercase; color: var(--qs-ink3); padding: 8px 12px 6px; }
+.qd-menu__item {
+  all: unset; box-sizing: border-box; display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 12px 0 8px;
+  color: var(--qs-ink2); cursor: pointer; white-space: nowrap;
+}
+.qd-menu__item:hover, .qd-menu__item:focus-visible { background: var(--qs-faint); color: var(--qs-ink); }
+.qd-menu__item--on { color: var(--qs-ink); }
+.qd-menu__check { width: 12px; flex: none; display: flex; }
+.qd-menu__title { flex: 1; }
+.qd-menu__hint { color: var(--qs-ink4); padding-left: 16px; }
+.qd-menu__rule { height: 1px; background: var(--qs-line); margin: 4px 0; }

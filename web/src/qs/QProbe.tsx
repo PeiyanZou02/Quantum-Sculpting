@@ -76,6 +76,8 @@ export interface UseProbeOptions {
   enabled?: boolean
   /** Default 3; the oldest pin drops when exceeded. */
   maxPins?: number
+  /** Clicking adds or removes pins (default true). Off: hover readout only. */
+  pinning?: boolean
 }
 
 type PH = (e: RPointerEvent<HTMLElement>) => void
@@ -111,16 +113,16 @@ export interface ProbeController {
 const isProbeUi = (t: EventTarget | null) => t instanceof Element && !!t.closest('[data-qs-probe-ui]')
 
 /** State and pointer logic of the live layer. */
-export function useProbe({ pick, enabled = true, maxPins = 3 }: UseProbeOptions): ProbeController {
+export function useProbe({ pick, enabled = true, maxPins = 3, pinning = true }: UseProbeOptions): ProbeController {
   const rootRef = useRef<HTMLDivElement | null>(null)
   const [hover, setHover] = useState<ProbeHover | null>(null)
   const [pins, setPins] = useState<ProbePin[]>([])
   const [dragging, setDragging] = useState(false)
 
-  const cfg = useRef({ pick, enabled, maxPins })
+  const cfg = useRef({ pick, enabled, maxPins, pinning })
   useEffect(() => {
-    cfg.current = { pick, enabled, maxPins }
-  }, [pick, enabled, maxPins])
+    cfg.current = { pick, enabled, maxPins, pinning }
+  }, [pick, enabled, maxPins, pinning])
 
   const down = useRef<{ x: number; y: number; moved: boolean } | null>(null)
   const pending = useRef<{ x: number; y: number } | null>(null)
@@ -195,7 +197,7 @@ export function useProbe({ pick, enabled = true, maxPins = 3 }: UseProbeOptions)
           return
         }
         const c = cfg.current
-        if (!q || !c.enabled || isProbeUi(e.target)) return
+        if (!q || !c.enabled || !c.pinning || isProbeUi(e.target)) return
         setPins((cur) => {
           const i = cur.findIndex((p) => Math.hypot(p.px - q.x, p.py - q.y) < PIN_HIT)
           if (i >= 0) return cur.filter((_, j) => j !== i)
@@ -249,12 +251,14 @@ export interface QProbeProps {
   project?: (hit: ProbeHit) => { x: number; y: number } | null
   /** Hide the built-in `Clear N pins` pill (the host draws its own control). */
   hideClear?: boolean
+  /** Join consecutive pins with a dashed line and a Δ distance chip (default true). */
+  measure?: boolean
 }
 
 const noPick = () => null
 const n1 = (v: number) => +v.toFixed(1)
 
-export function QProbe({ w, h, n, pick, enabled, maxPins, mmPerCell = 3.2, onPointer, probe, project, hideClear }: QProbeProps) {
+export function QProbe({ w, h, n, pick, enabled, maxPins, mmPerCell = 3.2, onPointer, probe, project, hideClear, measure = true }: QProbeProps) {
   const own = useProbe({ pick: pick ?? noPick, enabled, maxPins })
   const p = probe ?? own
   const auto = !probe
@@ -352,10 +356,11 @@ export function QProbe({ w, h, n, pick, enabled, maxPins, mmPerCell = 3.2, onPoi
 
   let meas = ''
   const chips: { x: number; y: number; t: string }[] = []
-  for (let i = 1; i < pins.length; i++) {
+  for (let i = 1; measure && i < pins.length; i++) {
     const a = pins[i - 1], b = pins[i]
     meas += `M${n1(a.x)} ${n1(a.y)}L${n1(b.x)} ${n1(b.y)}`
-    const d = Math.hypot(a.hit.x - b.hit.x, a.hit.y - b.hit.y, a.hit.z - b.hit.z) * mmPerCell
+    const [ax, ay, az] = a.hit.p ?? [a.hit.x, a.hit.y, a.hit.z], [bx, by, bz] = b.hit.p ?? [b.hit.x, b.hit.y, b.hit.z]
+    const d = Math.hypot(ax - bx, ay - by, az - bz) * mmPerCell
     chips.push({ x: n1((a.x + b.x) / 2), y: n1((a.y + b.y) / 2), t: `Δ ${d.toFixed(1)} mm` })
   }
 

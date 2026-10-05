@@ -32,8 +32,15 @@ export interface Hud {
   frame: boolean       // view corners and centre cross
   legend: boolean      // value scale for shaded views
   caption: boolean     // what the view shows
+  nav: boolean         // navigation buttons under the gizmo
+  tools: boolean       // tool shelf
 }
-export const HUD_DEFAULT: Hud = { bounds: true, floor: true, slice: false, probe: true, axes: true, dims: false, camera: true, frame: true, legend: true, caption: true }
+export const HUD_DEFAULT: Hud = { bounds: true, floor: true, slice: false, probe: true, axes: true, dims: false, camera: true, frame: true, legend: true, caption: true, nav: true, tools: true }
+
+export type Tool = 'navigate' | 'probe' | 'annotate' | 'measure' | 'slice'
+export type Shading = 'wire' | 'solid' | 'value' | 'entangle'
+export type Layer = 'model' | 'voxels' | 'processed' | 'result'
+export interface LayerState { visible: boolean; pickable: boolean }
 
 interface S {
   step: Step
@@ -43,6 +50,14 @@ interface S {
   slice: { axis: Axis; index: number }
   showSlice: boolean
   hud: Hud
+  tool: Tool
+  setTool: (t: Tool) => void
+  shading: Shading
+  shade: { tables: string; thickness: number; mix: number }
+  setShading: (s: Shading, opts?: Partial<S['shade']>) => void
+  /** Ghost layers drawn with the main view, and which layers the probe reads. */
+  layers: Record<Layer, LayerState>
+  setLayer: (l: Layer, p: Partial<LayerState>) => void
   /** Chosen theme ('system' follows the OS) and the resolved one. */
   themePref: 'system' | 'light' | 'dark'
   theme: 'light' | 'dark'
@@ -239,6 +254,16 @@ export const useStore = create<S>()((set, get) => {
       const dark = t === 'dark' || (t === 'system' && matchMedia('(prefers-color-scheme: dark)').matches)
       set({ themePref: t, theme: dark ? 'dark' : 'light' })
     },
+    tool: 'probe',
+    setTool: (t) => set({ tool: t }),
+    shading: 'value',
+    shade: { tables: 'cubic', thickness: 0.9, mix: 1 },
+    setShading: (sh, opts) => set((s) => ({ shading: sh, shade: { ...s.shade, ...opts } })),
+    layers: {
+      model: { visible: false, pickable: true }, voxels: { visible: false, pickable: true },
+      processed: { visible: false, pickable: true }, result: { visible: false, pickable: true },
+    },
+    setLayer: (l, p) => set((s) => ({ layers: { ...s.layers, [l]: { ...s.layers[l], ...p } } })),
     scan: { z: 0, playing: false },
     setScan: (p) => set((s) => ({ scan: { ...s.scan, ...p } })),
     busy: {},
@@ -288,7 +313,7 @@ export const useStore = create<S>()((set, get) => {
           if (st.grid) {
             set({ grid: st.grid, vox: { n: st.grid.n, fill: st.grid.fill, values: st.grid.values, pad: st.grid.pad } })
             const { grid } = await api.grid('input')
-            set({ gridData: grid, step: 1, view: 'voxels', slice: { axis: 'z', index: Math.floor(grid.n / 2) } })
+            set({ gridData: grid, step: 1, slice: { axis: 'z', index: Math.floor(grid.n / 2) } })
           }
           if (st.processed) {
             const pp = st.processed.params as Partial<S['q']> & { axes?: number[] | null }
@@ -297,7 +322,7 @@ export const useStore = create<S>()((set, get) => {
               q: { ...s.q, ...pp, axes: pp.axes ?? [0, 1, 2], mode: st.processed!.mode, run: st.processed!.run, tiling: st.processed!.tiles?.mode ?? s.q.tiling },
             }))
             await adoptProcessed()
-            set({ step: 2, view: 'processed' })
+            set({ step: 2 })
           }
           // run only the steps the service doesn't already have
           if (!st.grid) get().voxelize()
@@ -352,7 +377,6 @@ export const useStore = create<S>()((set, get) => {
         grid: info, gridData: grid, proc: null, procData: null, report: null, resultMesh: null,
         slice: { axis: st.slice.axis, index: Math.min(st.slice.index, grid.n - 1) || Math.floor(grid.n / 2) },
       })
-      if (st.view === 'model' && st.step < 1) set({ view: 'voxels' })
       set({ step: Math.max(st.step, 1) as Step })
       get().pushLog(`Voxelised ${info.n}³ · ${info.solid.toLocaleString()} solid cells`)
       // Atlas waits for an explicit submit; it may still find a cached result for these settings

@@ -48,8 +48,7 @@ const Empty = ({ children }: { children: ReactNode }) => <p className="qs-help">
 
 export function OutputPane() {
   return (
-    <aside className="insp" aria-label="Output">
-      <div className="pane-head"><span className="qs-label">Output</span><span className="pane-head__note">results</span></div>
+    <div className="panel" aria-label="Properties">
       <ScrollArea markers={MARKERS} className="pane-scroll pane-scroll--tabs" bar={false} renderIndex={(ix) => <Tabs {...ix} />}>
         <ModelOut />
         <GridOut />
@@ -59,7 +58,7 @@ export function OutputPane() {
         <ExportOut />
         <div style={{ height: 40 }} />
       </ScrollArea>
-    </aside>
+    </div>
   )
 }
 

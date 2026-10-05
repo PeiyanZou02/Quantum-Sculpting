@@ -1,26 +1,40 @@
-// DISPLAY: the volumetric workspace, laid out like a 3D viewport (after Blender):
-// header with the view switch and overlays; info top-left; axis gizmo and navigation icons top-right;
-// contextual readouts bottom. The geometry is the only 3D element; everything over it is 2D.
-import { useEffect, useRef, useState } from 'react'
+// DISPLAY: the volumetric workspace, composed like a 3D editor viewport but for sculpting with
+// quantum processes. Header: what is shown (left), then visibility, gizmos, overlays and shading
+// popovers (right). In the view: tool shelf (top-left), info, axis gizmo and navigation (top-right).
+import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
-import { useStore, type Hud, type View } from '../store'
-import { Engine, type ViewName } from '../view/engine'
+import { useStore, type Layer, type Shading, type Tool, type View } from '../store'
+import { Engine, type LayerName, type ViewName } from '../view/engine'
+import { loadBundled, makeEntangleMaterial, type ShaderTables } from '../view/entangle'
 import { QProbe, useProbe, type ProbeHit } from '../qs/QProbe'
 import { Segmented } from '../qs/Segmented'
 import { QPill } from '../qs/QPill'
 import { Icon, IconButton } from '../qs/Icon'
+import { Popover, PopSection, Check } from '../qs/Popover'
+import { Slider } from '../qs/Slider'
 import { Spinner } from './parts'
 import { MODEL_EXT } from './InputPane'
 
 const SWEEP_SECONDS = 10
 
-const OVERLAYS: { k: keyof Hud; t: string; d: string }[] = [
-  { k: 'bounds', t: 'Grid box', d: 'dashed n³ outline' },
-  { k: 'floor', t: 'Floor grid', d: 'lines under the model' },
-  { k: 'axes', t: 'Axis gizmo', d: 'click an axis to look along it' },
-  { k: 'camera', t: 'Camera', d: 'azimuth and elevation' },
-  { k: 'caption', t: 'Info', d: 'what the view shows' },
-  { k: 'frame', t: 'Frame', d: 'corners and centre cross' },
+const TOOLS: { id: Tool; icon: string; t: string; d: string; key: string }[] = [
+  { id: 'navigate', icon: 'navigate', t: 'Navigate', d: 'Drag to orbit, right-drag to pan, scroll to zoom. Nothing is read or pinned.', key: 'V' },
+  { id: 'probe', icon: 'probe', t: 'Probe', d: 'Hover a cell to read its value. Dragging still orbits.', key: 'R' },
+  { id: 'annotate', icon: 'annotate', t: 'Annotate', d: 'Click to pin a note on a cell; it stays on the geometry as it turns. Click a pin to remove it.', key: 'N' },
+  { id: 'measure', icon: 'measure', t: 'Measure', d: 'Click points; consecutive pins are joined with their distance in mm.', key: 'M' },
+  { id: 'slice', icon: 'sliceTool', t: 'Slice', d: 'Drag up or down in the view to move the cutting plane through the grid.', key: 'S' },
+]
+const LAYERS: { id: Layer; icon: string; t: string }[] = [
+  { id: 'model', icon: 'model', t: 'Original mesh' },
+  { id: 'voxels', icon: 'grid', t: 'Input voxels' },
+  { id: 'processed', icon: 'quantum', t: 'Quantum result' },
+  { id: 'result', icon: 'print', t: 'Surface' },
+]
+const SHADINGS: { id: Shading; icon: string; t: string; d: string }[] = [
+  { id: 'wire', icon: 'wire', t: 'Wireframe', d: 'Edges only: voxels as a lattice, meshes as triangles.' },
+  { id: 'solid', icon: 'solid', t: 'Solid', d: 'Plain studio shading in one grey.' },
+  { id: 'value', icon: 'value', t: 'Value', d: 'Cells shaded by their value: darker is denser.' },
+  { id: 'entangle', icon: 'entangle', t: 'Entanglement', d: "Shaded with lookup tables computed by Moth's Entanglement Shader: thin-film interference driven by the cell values." },
 ]
 
 export function Stage() {
@@ -28,9 +42,9 @@ export function Stage() {
   const [engine, setEngine] = useState<Engine | null>(null)
   const [, setTick] = useState(0)
   const [over, setOver] = useState(false)
-  const [menu, setMenu] = useState(false)
+  const [tables, setTables] = useState<ShaderTables[]>([])
   const st = useStore()
-  const { model, modelMesh, grid, gridData, procData, resultMesh, view, slice, m, hud, scan, theme } = st
+  const { model, modelMesh, grid, gridData, procData, resultMesh, view, slice, m, hud, scan, theme, tool, shading, shade, layers } = st
 
   useEffect(() => {
     const e = new Engine(host.current!)
@@ -38,21 +52,56 @@ export function Stage() {
     setEngine(e)
     return () => e.dispose()
   }, [])
+  useEffect(() => { loadBundled().then(setTables).catch(() => setTables([])) }, [])
   useEffect(() => { engine?.setTheme((k) => getComputedStyle(document.documentElement).getPropertyValue(k)) }, [engine, theme])
   useEffect(() => { if (engine && grid) engine.setGrid(grid.n) }, [engine, grid])
   useEffect(() => {
     if (!engine || !modelMesh) return
     engine.setMesh('model', modelMesh, grid?.transform ?? Engine.placement(modelMesh, engine.n))
   }, [engine, modelMesh, grid])
-  useEffect(() => { engine?.setVoxels('voxels', gridData, 0.5, false) }, [engine, gridData])
-  useEffect(() => { engine?.setVoxels('processed', procData, m.level, true) }, [engine, procData, m.level])
+  const valued = shading === 'value' || shading === 'entangle'
+  useEffect(() => { engine?.setVoxels('voxels', gridData, 0.5, valued) }, [engine, gridData, valued])
+  useEffect(() => { engine?.setVoxels('processed', procData, m.level, valued) }, [engine, procData, m.level, valued])
   useEffect(() => { engine?.setMesh('result', resultMesh) }, [engine, resultMesh])
   useEffect(() => { engine?.show(view as ViewName) }, [engine, view, gridData, procData, resultMesh, modelMesh])
+  useEffect(() => { engine?.setGhosts((Object.keys(layers) as Layer[]).filter((k) => layers[k].visible)) }, [engine, layers, gridData, procData, resultMesh, modelMesh])
   useEffect(() => { engine?.setFrame({ bounds: hud.bounds, floor: hud.floor }) }, [engine, hud.bounds, hud.floor, grid])
-  useEffect(() => { engine?.setSlice(hud.slice ? slice : null) }, [engine, slice, view, hud.slice])
-  // the scan plane is the slice: result below it, original above
+  useEffect(() => { engine?.setSlice(hud.slice || tool === 'slice' ? slice : null) }, [engine, slice, view, hud.slice, tool])
   useEffect(() => { if (engine && view === 'scan') engine.setScan(slice.axis === 'z' ? slice.index + 1 : 0) }, [engine, view, slice, grid])
   useEffect(() => { if (view === 'scan' && slice.axis !== 'z') st.setSlice({ axis: 'z' }) }, [view]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Entanglement shading: one material per layer kind, rebuilt when the tables or settings change
+  const table = tables.find((t) => t.id === shade.tables) ?? tables[0]
+  const entMats = useMemo(() => {
+    if (!table) return null
+    const opts = { thickness: shade.thickness }
+    const mats = {
+      mesh: makeEntangleMaterial(table, { ...opts, instanced: false }),
+      voxels: makeEntangleMaterial(table, { ...opts, instanced: true }),
+      processed: makeEntangleMaterial(table, { ...opts, instanced: true }),
+    }
+    for (const mat of Object.values(mats)) if (mat.uniforms.u_mix) mat.uniforms.u_mix.value = shade.mix
+    return mats
+  }, [table, shade.thickness, shade.mix])
+  useEffect(() => {
+    if (!engine) return
+    const bg = getComputedStyle(document.documentElement).getPropertyValue('--qs-bg').trim()
+    if (entMats) for (const mat of Object.values(entMats)) if (mat.uniforms.u_bg) mat.uniforms.u_bg.value = new THREE.Color(bg)
+    engine.setShading(shading === 'entangle' && !entMats ? 'value' : shading, entMats)
+  }, [engine, shading, entMats, theme])
+
+  // tools: the slice tool takes the left drag; navigate turns the probe off
+  useEffect(() => { if (engine) engine.controls.enableRotate = tool !== 'slice' }, [engine, tool])
+  useEffect(() => {
+    const key = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey || (e.target as HTMLElement)?.closest('input,textarea,select')) return
+      const t = TOOLS.find((x) => x.key.toLowerCase() === e.key.toLowerCase())
+      if (t) st.setTool(t.id)
+      if (e.key === 'Home') engine?.home()
+    }
+    window.addEventListener('keydown', key)
+    return () => window.removeEventListener('keydown', key)
+  }, [engine]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // sweep: step the slice from where it is to the top over ~10 s
   useEffect(() => {
@@ -67,27 +116,27 @@ export function Stage() {
   }, [scan.playing, grid])
 
   const pick = (px: number, py: number): ProbeHit | null => {
-    const hit = engine?.pick(px, py)
+    const g = useStore.getState()
+    const hit = engine?.pick(px, py, (k) => k === engine.active || (g.view === 'scan' && (k === 'voxels' || k === 'processed')) || g.layers[k as Layer]?.pickable)
     if (!hit) return null
     const [x, y, z] = hit.cell
-    const g = useStore.getState()
-    const v = g.view
     const p: [number, number, number] = [hit.point.x, hit.point.y, hit.point.z]
     const read = (gr: typeof gridData) => (gr ? gr.data[(x * gr.n + y) * gr.n + z] : 0)
     const cell = `x ${x} · y ${y} · z ${z}`
-    if (v === 'model') {
+    const L = hit.layer as LayerName
+    if (L === 'model') {
       const t = g.grid?.transform ?? (modelMesh ? Engine.placement(modelMesh, engine!.n) : null)
-      if (!t) return { x, y, z, p, lines: [cell, 'surface'] }
+      if (!t) return { x, y, z, p, lines: [cell, 'mesh surface'] }
       const s = t[0][0]
-      return { x, y, z, p, lines: [`${((p[0] - t[0][3]) / s).toFixed(1)} · ${((p[1] - t[1][3]) / s).toFixed(1)} · ${((p[2] - t[2][3]) / s).toFixed(1)} mm`, `surface · cell ${x} ${y} ${z}`] }
+      return { x, y, z, p, lines: [`${((p[0] - t[0][3]) / s).toFixed(1)} · ${((p[1] - t[1][3]) / s).toFixed(1)} · ${((p[2] - t[2][3]) / s).toFixed(1)} mm`, `mesh surface · cell ${x} ${y} ${z}`] }
     }
-    if (v === 'voxels') return { x, y, z, p, lines: [cell, `coverage ${read(gridData).toFixed(2)}`] }
-    if (v === 'processed' || v === 'scan') return { x, y, z, p, lines: [cell, `input ${read(gridData).toFixed(2)} → ${read(procData).toFixed(2)}`] }
+    if (L === 'voxels') return { x, y, z, p, lines: [cell, `input coverage ${read(gridData).toFixed(2)}`] }
+    if (L === 'processed') return { x, y, z, p, lines: [cell, `input ${read(gridData).toFixed(2)} → ${read(procData).toFixed(2)}`] }
     const val = read(procData)
-    return { x, y, z, p, lines: [cell, `${val.toFixed(2)} · ${val >= g.m.level ? 'kept' : 'removed'} at ${g.m.level.toFixed(2)}`] }
+    return { x, y, z, p, lines: [cell, `surface · ${val.toFixed(2)} ${val >= g.m.level ? '≥' : '<'} level ${g.m.level.toFixed(2)}`] }
   }
-  const probe = useProbe({ pick, enabled: !!model && hud.probe, maxPins: 3 })
-  // pins are anchored to the point that was clicked, so they move with the geometry
+  const reading = tool === 'probe' || tool === 'annotate' || tool === 'measure'
+  const probe = useProbe({ pick, enabled: !!model && reading, maxPins: tool === 'measure' ? 6 : 4, pinning: tool === 'annotate' || tool === 'measure' })
   const project = (h: ProbeHit) => {
     if (!engine) return null
     const [x, y] = engine.project(h.p ? new THREE.Vector3(...h.p) : new THREE.Vector3(h.x, h.y, h.z))
@@ -95,23 +144,38 @@ export function Stage() {
   }
   useEffect(() => { probe.clear() }, [model?.model_id]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // slice tool: vertical drag moves the cutting plane one layer per 6 px
+  const sliceDrag = useRef<{ y: number; i: number } | null>(null)
+  const sliceHandlers = tool === 'slice' && grid ? {
+    onPointerDown: (e: React.PointerEvent) => { if (e.button === 0) { sliceDrag.current = { y: e.clientY, i: useStore.getState().slice.index }; st.setScan({ playing: false }) } },
+    onPointerMove: (e: React.PointerEvent) => {
+      const d = sliceDrag.current
+      if (!d) return
+      st.setSlice({ index: Math.max(0, Math.min(grid.n - 1, d.i + Math.round((d.y - e.clientY) / 6))) })
+    },
+    onPointerUp: () => { sliceDrag.current = null },
+    onPointerLeave: () => { sliceDrag.current = null },
+  } : {}
+
   const avail: Record<View, boolean> = { model: !!model, voxels: !!gridData, processed: !!procData, result: !!resultMesh, scan: !!procData && !!gridData }
   const info = (() => {
     if (!model) return null
     const name = model.builtin ? 'test cup' : model.file
-    if (view === 'model') return [`Original mesh`, `${name} · ${model.faces.toLocaleString()} faces`]
-    if (view === 'voxels' && grid) return ['Input grid', `${grid.n}³ · ${grid.solid.toLocaleString()} solid cells`]
-    if (view === 'processed' && st.proc) return ['Quantum result', `${st.proc.mode === 'atlas' ? 'Atlas' : st.proc.mode === 'emulator' ? 'emulation' : 'Gaussian'} · cells ≥ ${m.level.toFixed(2)}`]
-    if (view === 'result' && st.report) return ['Surface', `${st.report.faces.toLocaleString()} faces · ${st.report.watertight ? 'watertight' : 'open'}`]
+    const mode = SHADINGS.find((x) => x.id === shading)!.t.toLowerCase()
+    if (view === 'model') return [`Original mesh · ${mode}`, `${name} · ${model.faces.toLocaleString()} faces`]
+    if (view === 'voxels' && grid) return [`Input grid · ${mode}`, `${grid.n}³ · ${grid.solid.toLocaleString()} solid cells`]
+    if (view === 'processed' && st.proc) return [`Quantum result · ${mode}`, `${st.proc.mode === 'atlas' ? 'Atlas' : st.proc.mode === 'emulator' ? 'emulation' : 'Gaussian'} · cells ≥ ${m.level.toFixed(2)}`]
+    if (view === 'result' && st.report) return [`Surface · ${mode}`, `${st.report.faces.toLocaleString()} faces · ${st.report.watertight ? 'watertight' : 'open'}`]
     if (view === 'scan') {
       const layered = st.job?.status === 'running' ? st.job.frontier != null : st.proc?.tiles?.mode === 'layers' && (st.proc.tiles.jobs ?? 1) > 1
-      return ['Scan', `z ${slice.index} · ${layered ? 'computed layer by layer' : 'result below, original above'}`]
+      return [`Scan · ${mode}`, `z ${slice.index} · ${layered ? 'computed layer by layer' : 'result below, original above'}`]
     }
-    return null
+    return [name, 'not computed yet']
   })()
   const busy = st.busy.model ? 'Opening' : st.busy.vox ? 'Voxelising' : st.busy.proc && st.q.mode !== 'atlas' ? 'Processing' : st.busy.mesh ? 'Meshing' : null
   const shaded = view === 'processed' || view === 'scan'
-  const onCount = OVERLAYS.filter((o) => hud[o.k]).length
+  const ghostCount = LAYERS.filter((l) => layers[l.id].visible).length
+  const overlayCount = (['bounds', 'floor', 'caption', 'frame', 'dims', 'slice', 'legend'] as const).filter((k) => hud[k]).length
 
   return (
     <main className="stage">
@@ -124,16 +188,65 @@ export function Stage() {
           ]}
           value={view} onChange={st.setView}
         />
-        <div className="row" style={{ gap: 4 }}>
-          {busy && <span className="qs-mono" style={{ display: 'flex', gap: 8, alignItems: 'center', color: 'var(--qs-ink2)', marginRight: 8 }}><Spinner /> {busy}</span>}
-          <IconButton name="layers" title={`Viewport overlays (${onCount} on)`} on={menu} onClick={() => setMenu(!menu)} badge={onCount} />
+        <div className="stage__tools">
+          {busy && <span className="stage__busy"><Spinner /> {busy}</span>}
+          <Popover icon="visibility" title="Visibility" desc="Draw other layers faintly with this view, and choose which ones the probe reads." on={ghostCount > 0} width={300}>
+            <PopSection label="Layers">
+              {LAYERS.map((l) => {
+                const main = l.id === (view === 'scan' ? 'processed' : view)
+                const has = { model: !!modelMesh, voxels: !!gridData, processed: !!procData, result: !!resultMesh }[l.id]
+                return (
+                  <div key={l.id} className={'vis-row' + (has ? '' : ' vis-row--off')}>
+                    <Icon name={l.icon} />
+                    <span className="vis-row__t">{l.t}{main ? <em> · shown</em> : ''}</span>
+                    <IconButton size={24} name="navigate" title={layers[l.id].pickable ? 'Probe reads it' : 'Probe ignores it'} dim={!layers[l.id].pickable} disabled={!has}
+                      onClick={() => st.setLayer(l.id, { pickable: !layers[l.id].pickable })} />
+                    <IconButton size={24} name={main || layers[l.id].visible ? 'eye' : 'eyeOff'} title={main ? 'This is the shown view' : layers[l.id].visible ? 'Hide the ghost' : 'Show as a ghost'}
+                      dim={!main && !layers[l.id].visible} disabled={!has || main} onClick={() => st.setLayer(l.id, { visible: !layers[l.id].visible })} />
+                  </div>
+                )
+              })}
+            </PopSection>
+          </Popover>
+          <Popover icon="gizmo" title="Gizmos" desc="Axis gizmo, navigation buttons, camera readout and tool shelf." on={hud.axes || hud.nav}
+            onIcon={() => st.setHud({ axes: !(hud.axes || hud.nav), nav: !(hud.axes || hud.nav) })} width={260}>
+            <PopSection label="Viewport">
+              <Check label="Axis gizmo" note="click an axis to look along it" checked={hud.axes} onChange={(v) => st.setHud({ axes: v })} />
+              <Check label="Navigation" note="orbit, pan, zoom, reset" checked={hud.nav} onChange={(v) => st.setHud({ nav: v })} />
+              <Check label="Camera" note="azimuth, elevation" checked={hud.camera} onChange={(v) => st.setHud({ camera: v })} />
+              <Check label="Tool shelf" note="probe, annotate, measure, slice" checked={hud.tools} onChange={(v) => st.setHud({ tools: v })} />
+            </PopSection>
+          </Popover>
+          <Popover icon="layers" title="Overlays" desc="Guides and readouts drawn over the geometry." on={overlayCount > 0} width={300}>
+            <PopSection label="Guides">
+              <Check label="Grid box" note="dashed n³ outline" checked={hud.bounds} onChange={(v) => st.setHud({ bounds: v })} />
+              <Check label="Floor" note="lines under the model" checked={hud.floor} onChange={(v) => st.setHud({ floor: v })} />
+              <Check label="Cutting plane" note="the slice in the view" checked={hud.slice} onChange={(v) => st.setHud({ slice: v })} />
+            </PopSection>
+            <PopSection label="Readouts">
+              <Check label="Info" note="what the view shows" checked={hud.caption} onChange={(v) => st.setHud({ caption: v })} />
+              <Check label="Size marks" note="width and height in mm" checked={hud.dims} onChange={(v) => st.setHud({ dims: v })} />
+              <Check label="Value scale" note="in shaded views" checked={hud.legend} onChange={(v) => st.setHud({ legend: v })} />
+              <Check label="Frame" note="corners and centre cross" checked={hud.frame} onChange={(v) => st.setHud({ frame: v })} />
+            </PopSection>
+          </Popover>
+          <div className="shading" role="radiogroup" aria-label="Shading">
+            {SHADINGS.map((sh) => (
+              <button key={sh.id} role="radio" aria-checked={shading === sh.id} className={'shading__b' + (shading === sh.id ? ' shading__b--on' : '')}
+                data-tip={`${sh.t} shading`} data-tip-desc={sh.d} disabled={sh.id === 'entangle' && !tables.length} onClick={() => st.setShading(sh.id)}>
+                <Icon name={sh.icon} />
+              </button>
+            ))}
+          </div>
+          <ShadingOptions tables={tables} />
         </div>
       </div>
 
       <div
         ref={host}
-        className="stage__view"
+        className={'stage__view stage__view--' + tool}
         {...probe.handlers}
+        {...sliceHandlers}
         onDragOver={(e) => { e.preventDefault(); setOver(true) }}
         onDragLeave={() => setOver(false)}
         onDrop={(e) => {
@@ -147,51 +260,56 @@ export function Stage() {
         {hud.frame && <ViewMarks />}
         {!model && <Landing over={over} />}
         {model && over && <div className="stage__drop">Release to open</div>}
-        {model && engine && <QProbeAnchored probe={probe} project={project} n={grid?.n ?? 32} mm={grid?.voxel_size ?? 1} />}
+        {model && engine && <QProbeAnchored probe={probe} project={project} n={grid?.n ?? 32} mm={grid?.voxel_size ?? 1} measure={tool === 'measure'} />}
 
         {model && engine && (
           <div className="hud">
+            {hud.dims && <SizeMarks engine={engine} />}
+            {hud.legend && shaded && <Legend level={m.level} mode={shading} />}
+          </div>
+        )}
+
+        {model && (
+          <div className="vp-tl" onPointerDown={(e) => e.stopPropagation()} onPointerUp={(e) => e.stopPropagation()}>
+            {hud.tools && (
+              <div className="toolshelf" role="toolbar" aria-label="Tools">
+                {TOOLS.map((t, i) => (
+                  <span key={t.id} style={{ display: 'contents' }}>
+                    {i === 1 && <span className="toolshelf__sep" />}
+                    {i === 4 && <span className="toolshelf__sep" />}
+                    <IconButton name={t.icon} title={t.t} desc={t.d} hotkey={t.key} side="right" on={tool === t.id} onClick={() => st.setTool(t.id)} />
+                  </span>
+                ))}
+                {probe.pins.length > 0 && (
+                  <>
+                    <span className="toolshelf__sep" />
+                    <IconButton name="clear" title={`Clear ${probe.pins.length} pin${probe.pins.length === 1 ? '' : 's'}`} side="right" badge={probe.pins.length} onClick={() => probe.clear()} />
+                  </>
+                )}
+              </div>
+            )}
             {hud.caption && info && (
               <div className="hud__info">
                 <span>{info[0]}</span>
                 <span>{info[1]}</span>
+                {tool === 'slice' && grid && <span>slice · drag up or down · z {slice.index}</span>}
               </div>
             )}
-            {hud.dims && <SizeMarks engine={engine} />}
-            {hud.legend && shaded && <Legend level={m.level} />}
           </div>
         )}
 
-        {model && engine && (
+        {model && engine && (hud.axes || hud.nav || hud.camera) && (
           <div className="nav" onPointerDown={(e) => e.stopPropagation()} onPointerUp={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
             {hud.axes && <Gizmo engine={engine} />}
             {hud.camera && <CameraReadout engine={engine} />}
-            <div className="nav__col">
-              <DragButton name="orbit" title="Orbit · drag here, or drag in the view" onDrag={(dx, dy) => engine.nudge({ orbit: [dx, dy] })} />
-              <DragButton name="pan" title="Pan · drag here, or right-drag in the view" onDrag={(dx, dy) => engine.nudge({ pan: [dx, dy] })} />
-              <DragButton name="zoom" title="Zoom · drag up and down here, or scroll in the view" onDrag={(_, dy) => engine.nudge({ zoom: dy })} />
-              <IconButton name="frame" title="Reset the view" onClick={() => engine.home()} />
-              <span className="nav__sep" />
-              <IconButton name="probe" title={hud.probe ? 'Probe on: hover reads a cell, click pins it' : 'Probe off'} on={hud.probe} onClick={() => st.setHud({ probe: !hud.probe })} />
-              <IconButton name="clear" title={`Clear ${probe.pins.length} pin${probe.pins.length === 1 ? '' : 's'}`} disabled={!probe.pins.length} badge={probe.pins.length || undefined} onClick={() => probe.clear()} />
-            </div>
-          </div>
-        )}
-
-        {menu && (
-          <div className="hudmenu" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
-            <span className="qs-label">Viewport overlays</span>
-            <div className="hudmenu__group">
-              {OVERLAYS.map((it) => (
-                <label key={it.k} className="hudmenu__item">
-                  <input type="checkbox" checked={hud[it.k]} onChange={(e) => st.setHud({ [it.k]: e.target.checked })} />
-                  <span className="hudmenu__box" />
-                  <span className="hudmenu__t">{it.t}</span>
-                  <span className="hudmenu__d">{it.d}</span>
-                </label>
-              ))}
-            </div>
-            <p className="qs-help">Overlays that belong to a result live with it: size marks under Model, the cutting plane and scan under Slice, the value scale under Quantum result.</p>
+            {hud.nav && (
+              <div className="nav__col">
+                <DragButton name="zoom" title="Zoom" desc="Drag up or down here, or scroll in the view." onDrag={(_, dy) => engine.nudge({ zoom: dy })} />
+                <DragButton name="pan" title="Pan" desc="Drag here, or right-drag in the view." onDrag={(dx, dy) => engine.nudge({ pan: [dx, dy] })} />
+                <DragButton name="orbit" title="Orbit" desc="Drag here, or drag in the view." onDrag={(dx, dy) => engine.nudge({ orbit: [dx, dy] })} />
+                <IconButton name="frame" title="Reset view" desc="Back to the starting angle, centred on the grid." hotkey="Home" side="left" onClick={() => engine.home()} />
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -199,7 +317,60 @@ export function Stage() {
   )
 }
 
-function QProbeAnchored({ probe, project, n, mm }: { probe: ReturnType<typeof useProbe>; project: (h: ProbeHit) => { x: number; y: number } | null; n: number; mm: number }) {
+function ShadingOptions({ tables }: { tables: ShaderTables[] }) {
+  const st = useStore()
+  const { shading, shade } = st
+  const table = tables.find((t) => t.id === shade.tables) ?? tables[0]
+  return (
+    <Popover icon={SHADINGS.find((s) => s.id === shading)!.icon} title="Shading" desc="Options for the current shading mode." width={320} onIcon={undefined}>
+      <PopSection label="Mode">
+        <Segmented<Shading> size="s" value={shading} onChange={(v) => st.setShading(v)}
+          options={SHADINGS.map((s) => ({ value: s.id, label: s.t, disabled: s.id === 'entangle' && !tables.length }))} />
+        <p className="qs-help" style={{ marginTop: 8 }}>{SHADINGS.find((s) => s.id === shading)!.d}</p>
+      </PopSection>
+      <PopSection label="Entanglement shader">
+        {tables.length === 0 ? <p className="qs-help">No shader tables found.</p> : (
+          <>
+            <div className="ent-list">
+              {tables.map((t) => (
+                <button key={t.id} className={'ent-row' + (t.id === table?.id ? ' ent-row--on' : '')} onClick={() => st.setShading('entangle', { tables: t.id })}>
+                  <LutThumb t={t} />
+                  <span className="ent-row__t">{t.label}</span>
+                  <span className="ent-row__n">{t.source === 'live' ? 'your run' : 'Moth run'} · {t.job_id.slice(0, 8)}</span>
+                </button>
+              ))}
+            </div>
+            <Slider label="Film thickness" value={shade.thickness} min={0.2} max={2} step={0.05} defaultValue={0.9} onChange={(v) => st.setShading('entangle', { thickness: v })} />
+            <Slider label="Quantum colour" value={shade.mix} min={0} max={1} step={0.05} defaultValue={1} onChange={(v) => st.setShading('entangle', { mix: v })} />
+            <p className="qs-help">Each table is the real output of a Moth entanglement-shader-v1 job: reflectance and transmission by viewing angle and film phase. Cell values thicken the film, so the quantum result shows as interference colour.</p>
+          </>
+        )}
+      </PopSection>
+    </Popover>
+  )
+}
+
+/** The reflectance table as a tiny image, so the choices read as what they are. */
+function LutThumb({ t }: { t: ShaderTables }) {
+  const ref = useRef<HTMLCanvasElement>(null)
+  useEffect(() => {
+    const c = ref.current
+    if (!c) return
+    const { width, height, data, max } = t.R
+    c.width = width
+    c.height = height
+    const ctx = c.getContext('2d')!
+    const img = ctx.createImageData(width, height)
+    for (let i = 0; i < width * height; i++) {
+      const v = Math.round(Math.min(1, data[i] / (max || 1)) * 255)
+      img.data.set([v, v, v, 255], i * 4)
+    }
+    ctx.putImageData(img, 0, 0)
+  }, [t])
+  return <canvas ref={ref} className="ent-row__lut" />
+}
+
+function QProbeAnchored({ probe, project, n, mm, measure }: { probe: ReturnType<typeof useProbe>; project: (h: ProbeHit) => { x: number; y: number } | null; n: number; mm: number; measure: boolean }) {
   const ref = useRef<HTMLDivElement>(null)
   const [size, setSize] = useState({ w: 800, h: 600 })
   useEffect(() => {
@@ -212,7 +383,7 @@ function QProbeAnchored({ probe, project, n, mm }: { probe: ReturnType<typeof us
   return (
     <>
       <div ref={ref} style={{ display: 'none' }} />
-      <QProbe w={size.w} h={size.h} n={n} probe={probe} project={project} mmPerCell={mm} hideClear />
+      <QProbe w={size.w} h={size.h} n={n} probe={probe} project={project} mmPerCell={mm} hideClear measure={measure} />
     </>
   )
 }
@@ -260,10 +431,10 @@ function Landing({ over }: { over: boolean }) {
 }
 
 /** An icon button you drag: orbit, pan or zoom like Blender's navigation buttons. */
-function DragButton({ name, title, onDrag }: { name: string; title: string; onDrag: (dx: number, dy: number) => void }) {
+function DragButton({ name, title, desc, onDrag }: { name: string; title: string; desc: string; onDrag: (dx: number, dy: number) => void }) {
   const [on, setOn] = useState(false)
   return (
-    <IconButton name={name} title={title} on={on} onPointerDown={(e) => {
+    <IconButton name={name} title={title} desc={desc} side="left" on={on} onPointerDown={(e) => {
       e.preventDefault()
       e.stopPropagation()
       setOn(true)
@@ -293,29 +464,26 @@ function ViewMarks() {
   )
 }
 
-/** 2D axis gizmo; click an axis end to look along it (Blender's navigation gizmo, drawn flat). */
+/** Flat axis gizmo; click an axis end to look along it. */
 function Gizmo({ engine }: { engine: Engine }) {
   const ax = engine.axes2D()
   const R = 26, c = 36
   const ends = ax.flatMap(([x, y], i) => [
-    { i, pos: true, x: c + x * R, y: c + y * R, depth: 0 },
-    { i, pos: false, x: c - x * R, y: c - y * R, depth: 1 },
+    { i, pos: true, x: c + x * R, y: c + y * R },
+    { i, pos: false, x: c - x * R, y: c - y * R },
   ])
   const look = (i: number, pos: boolean) => {
-    // camera on the +axis side, looking back at the model
     if (i === 2) return engine.orbitTo(0, pos ? 89 : -89)
-    const az = i === 0 ? (pos ? 90 : 270) : (pos ? 180 : 0)
-    engine.orbitTo(az, 0)
+    engine.orbitTo(i === 0 ? (pos ? 90 : 270) : (pos ? 180 : 0), 0)
   }
   return (
     <svg className="gizmo" width="72" height="72" viewBox="0 0 72 72">
       <circle cx={c} cy={c} r={R + 9} fill="var(--qs-faint)" />
       {ax.map(([x, y], i) => <line key={i} x1={c} y1={c} x2={c + x * R} y2={c + y * R} stroke="var(--qs-ink)" strokeWidth="1" />)}
       {ends.map((e) => (
-        <g key={`${e.i}${e.pos}`} className="gizmo__end" onClick={() => look(e.i, e.pos)}>
+        <g key={`${e.i}${e.pos}`} className="gizmo__end" onClick={() => look(e.i, e.pos)} data-tip={`View along ${e.pos ? '+' : '−'}${'XYZ'[e.i]}`} data-tip-side="left">
           <circle cx={e.x} cy={e.y} r={e.pos ? 7 : 4} fill={e.pos ? 'var(--qs-ink)' : 'var(--qs-bg)'} stroke="var(--qs-ink)" strokeWidth="1" />
           {e.pos && <text x={e.x} y={e.y + 3} textAnchor="middle" fontFamily="Geist Mono" fontSize="8.5" fill="var(--qs-bg)">{'XYZ'[e.i]}</text>}
-          <title>{`View along ${e.pos ? '+' : '−'}${'XYZ'[e.i]}`}</title>
         </g>
       ))}
     </svg>
@@ -355,15 +523,16 @@ function SizeMarks({ engine }: { engine: Engine }) {
   )
 }
 
-function Legend({ level }: { level: number }) {
+function Legend({ level, mode }: { level: number; mode: Shading }) {
+  if (mode !== 'value' && mode !== 'entangle') return null
   return (
     <div className="hud__legend">
       <span className="qs-small" style={{ color: 'var(--qs-ink2)' }}>0</span>
-      <div style={{ position: 'relative', width: 140, height: 6, background: 'linear-gradient(90deg, var(--qs-ink4), var(--qs-ink))' }}>
+      <div style={{ position: 'relative', width: 140, height: 6, background: mode === 'entangle' ? 'linear-gradient(90deg,#8a7f9e,#c9b07a,#7fa6a0,#b58aa0)' : 'linear-gradient(90deg, var(--qs-ink4), var(--qs-ink))' }}>
         <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${level * 100}%`, background: 'var(--qs-bg)', opacity: 0.85 }} />
         <div style={{ position: 'absolute', left: `${level * 100}%`, top: -3, bottom: -3, width: 1, background: 'var(--qs-ink)' }} />
       </div>
-      <span className="qs-small" style={{ color: 'var(--qs-ink2)' }}>1 · value, shown ≥ {level.toFixed(2)}</span>
+      <span className="qs-small" style={{ color: 'var(--qs-ink2)' }}>1 · value · shown ≥ {level.toFixed(2)}</span>
     </div>
   )
 }

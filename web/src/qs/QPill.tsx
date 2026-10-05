@@ -34,7 +34,7 @@ export function QPill({ label, kind = 'line', size = 'm', dot, arrow, loading = 
       disabled={disabled}
       aria-busy={loading || undefined}
       aria-pressed={pressed}
-      title={title}
+      data-tip={title}
       style={style}
       onClick={() => { if (!loading && !disabled) onClick?.() }}
     >

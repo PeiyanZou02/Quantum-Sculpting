@@ -33,6 +33,22 @@ const P: Record<string, string> = {
   scan: 'M2 8h12M3.5 3.5h9M3.5 12.5h9',
   upload: 'M8 13V4.5M4.8 7.7 8 4.5l3.2 3.2M2.5 2.5h11',
   cup: 'M3.5 3.5h7.5v6.5a2.5 2.5 0 0 1-2.5 2.5h-2.5A2.5 2.5 0 0 1 3.5 10zM11 5.5h1.2a1.5 1.5 0 0 1 0 3H11',
+  // tools
+  navigate: 'M3 2.5 12.5 7l-4 1.5L7 12.5z',
+  annotate: 'M2.5 13.5h4M10.5 2.5l3 3-7.5 7.5H3v-3zM9 4l3 3',
+  measure: 'M2 11.5 11.5 2l2.5 2.5L4.5 14zM5 9.5l1.2 1.2M7 7.5l1.2 1.2M9 5.5l1.2 1.2',
+  sliceTool: 'M1.5 9.5 5 6.5h9.5L11 9.5zM8 1.5v3.5M6.5 3.5 8 5l1.5-1.5M8 14.5V11M6.5 12.5 8 11l1.5 1.5',
+  // header popovers
+  visibility: 'M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8M8 6a2 2 0 1 1 0 4 2 2 0 0 1 0-4',
+  gizmo: 'M8 8V2.5M8 8l5 3M8 8l-5 3M8 2.5 6.8 3.7M8 2.5l1.2 1.2',
+  // shading
+  wire: 'M2.5 5 8 2l5.5 3v6L8 14l-5.5-3zM2.5 5 8 8l5.5-3M8 8v6M2.5 11 8 8M13.5 11 8 8',
+  solid: 'M8 2a6 6 0 1 1 0 12A6 6 0 0 1 8 2M5 5.5a3.5 3.5 0 0 1 3-1.5',
+  value: 'M8 2a6 6 0 1 1 0 12A6 6 0 0 1 8 2M8 2v12M4 3.6v8.8M12 3.6v8.8',
+  entangle: 'M8 2a6 6 0 1 1 0 12A6 6 0 0 1 8 2M3.2 6.5c1.6 1.4 3.2-1.4 4.8 0s3.2 1.4 4.8 0M3.2 9.5c1.6 1.4 3.2-1.4 4.8 0s3.2 1.4 4.8 0',
+  dots: 'M3.5 8h.1M8 8h.1M12.5 8h.1',
+  drag: 'M6 3.5h.1M10 3.5h.1M6 8h.1M10 8h.1M6 12.5h.1M10 12.5h.1',
+  reset: 'M3 8a5 5 0 1 0 1.6-3.7M3 2.5v2.6h2.6',
 }
 
 export type IconName = keyof typeof P
@@ -48,12 +64,16 @@ export function Icon({ name, size = 16, style, title }: { name: IconName | strin
 }
 
 /** Square icon button. `on` inverts it (ink fill), as the design system shows state. */
-export function IconButton({ name, title, onClick, on, size = 28, badge, disabled, onPointerDown }: {
-  name: IconName | string; title: string; onClick?: () => void; on?: boolean; size?: number; badge?: number | string; disabled?: boolean
+export function IconButton({ name, title, desc, hotkey, side, onClick, on, dim, size = 28, badge, disabled, onPointerDown }: {
+  name: IconName | string; title: string; desc?: string; hotkey?: string; side?: 'top' | 'bottom' | 'left' | 'right'
+  /** Quiet off-state for toggles that are usually on (drawn ink4 instead of inverted when on). */
+  dim?: boolean
+  onClick?: () => void; on?: boolean; size?: number; badge?: number | string; disabled?: boolean
   onPointerDown?: (e: React.PointerEvent) => void
 }) {
   return (
-    <button className={'qs-ib' + (on ? ' qs-ib--on' : '')} style={{ width: size, height: size }} title={title} aria-label={title} aria-pressed={on}
+    <button className={'qs-ib' + (on ? ' qs-ib--on' : '') + (dim ? ' qs-ib--dim' : '')} style={{ width: size, height: size }} aria-label={title} aria-pressed={on}
+      data-tip={title} data-tip-desc={desc} data-tip-key={hotkey} data-tip-side={side}
       onClick={onClick} disabled={disabled} onPointerDown={onPointerDown}>
       <Icon name={name} />
       {badge != null && badge !== 0 && <span className="qs-ib__badge">{badge}</span>}

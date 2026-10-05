@@ -10,70 +10,57 @@ import { ScrollArea } from '../qs/ScrollArea'
 import { IconButton } from '../qs/Icon'
 import { Dot, Spinner } from './parts'
 
-type Tab = 'runtime' | 'atlas'
 type Filter = 'all' | 'events' | 'net' | 'errors'
 const DONE = new Set(['completed', 'succeeded', 'success', 'done'])
 const FAILED = new Set(['failed', 'error', 'cancelled', 'canceled'])
 
-function usePref<T>(key: string, init: T): [T, (v: T) => void] {
-  const [v, setV] = useState<T>(() => {
-    try { const s = localStorage.getItem(key); return s ? JSON.parse(s) : init } catch { return init }
-  })
-  return [v, (n: T) => { setV(n); try { localStorage.setItem(key, JSON.stringify(n)) } catch { /* per-viewer */ } }]
-}
-
-export function Terminal() {
-  const st = useStore()
-  const { job, log, q, busy } = st
-  const [open, setOpen] = usePref('qs-term-open', true)
-  const [height, setHeight] = usePref('qs-term-h', 220)
-  const [tab, setTab] = useState<Tab>('runtime')
+/** Bottom status bar (after Blender's): busy state, the current Atlas run, the last event. */
+export function StatusBar() {
+  const job = useStore((s) => s.job)
+  const log = useStore((s) => s.log)
+  const busy = useStore((s) => s.busy)
   const running = job?.status === 'running'
-  const atlasOn = q.mode === 'atlas' || running
-  useEffect(() => { if (!atlasOn && tab === 'atlas') setTab('runtime') }, [atlasOn, tab])
-
-  const startDrag = (e: React.PointerEvent) => {
-    const y0 = e.clientY, h0 = open ? height : 0
-    if (!open) setOpen(true)
-    const move = (ev: PointerEvent) => setHeight(Math.max(120, Math.min(window.innerHeight * 0.6, h0 + (y0 - ev.clientY))))
-    const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up) }
-    window.addEventListener('pointermove', move)
-    window.addEventListener('pointerup', up)
-  }
-
   const last = [...log].reverse().find((l) => l.level !== 'net')
   const anyBusy = Object.values(busy).some(Boolean)
   return (
-    <section className="term">
-      <div className="term__grip" onPointerDown={startDrag} title="Drag to resize" />
-      <div className="term__bar">
-        <IconButton name={open ? 'chevDown' : 'chevRight'} title={open ? 'Collapse the terminal' : 'Expand the terminal'} onClick={() => setOpen(!open)} />
-        <Segmented<Tab> size="s" value={tab} onChange={(t) => { setTab(t); setOpen(true) }} options={[
-          { value: 'runtime', label: 'Runtime' },
-          { value: 'atlas', label: running ? 'Atlas · live' : 'Atlas', disabled: !atlasOn },
-        ]} />
-        {running && (
-          <span className="term__run">
-            <Dot live blink />
-            <span>{job.run} · {job.tiles_done}/{job.tiles_total} tiles · {job.atlas_status}</span>
-            <span className="bar" style={{ width: 120 }}><span style={{ width: `${(job.tiles_done / Math.max(1, job.tiles_total)) * 100}%` }} /></span>
-          </span>
-        )}
-        <span className="term__last">
-          {anyBusy && <Spinner />}
-          {last && <span style={{ color: last.level === 'info' ? 'var(--qs-ink2)' : 'var(--qs-ink)' }}>{last.level !== 'info' ? '! ' : ''}{last.text}</span>}
+    <footer className="statusbar">
+      {running && (
+        <span className="term__run">
+          <Dot live blink />
+          <span>{job.run} · {job.tiles_done}/{job.tiles_total} tiles · {job.atlas_status}</span>
+          <span className="bar" style={{ width: 120 }}><span style={{ width: `${(job.tiles_done / Math.max(1, job.tiles_total)) * 100}%` }} /></span>
         </span>
-      </div>
-      {open && (
-        <div className="term__body" style={{ height }}>
-          {tab === 'runtime' ? <Runtime log={log} /> : <AtlasJobs running={running} />}
-        </div>
       )}
-    </section>
+      <span className="term__last" style={{ marginLeft: running ? undefined : 0 }}>
+        {anyBusy && <Spinner />}
+        {last && <span style={{ color: last.level === 'info' ? 'var(--qs-ink2)' : 'var(--qs-ink)' }}>{last.level !== 'info' ? '! ' : ''}{last.text}</span>}
+      </span>
+      <span className="statusbar__right">{log.filter((l) => l.level === 'error').length ? `${log.filter((l) => l.level === 'error').length} errors in the log` : ''}</span>
+    </footer>
   )
 }
 
-function Runtime({ log }: { log: LogLine[] }) {
+export function RuntimePanel() {
+  const log = useStore((s) => s.log)
+  return <div className="panel">{<Runtime log={log} />}</div>
+}
+
+/** Atlas jobs. As in Peiyan's interface, nothing is asked of Atlas unless Atlas mode is on or a run is going. */
+export function AtlasPanel() {
+  const job = useStore((s) => s.job)
+  const mode = useStore((s) => s.q.mode)
+  const running = job?.status === 'running'
+  if (mode !== 'atlas' && !running) {
+    return (
+      <div className="panel panel--empty">
+        <p className="qs-help">The Atlas jobs list appears in Atlas mode (Quantum step) or while a run is going. In local modes the app makes no requests to Atlas.</p>
+      </div>
+    )
+  }
+  return <div className="panel"><AtlasJobs running={running} /></div>
+}
+
+export function Runtime({ log }: { log: LogLine[] }) {
   const [filter, setFilter] = useState<Filter>('all')
   const clear = () => useStore.setState({ log: [] })
   const lines = log.filter((l) =>
@@ -108,7 +95,7 @@ function Runtime({ log }: { log: LogLine[] }) {
   )
 }
 
-function AtlasJobs({ running }: { running: boolean }) {
+export function AtlasJobs({ running }: { running: boolean }) {
   const key = useStore((s) => s.key)
   const [jobs, setJobs] = useState<AtlasJobRow[]>([])
   const [cursor, setCursor] = useState<string | null>(null)

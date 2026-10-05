@@ -59,8 +59,7 @@ function Step({ id, title, summary, state, off, fold, children }: {
 export function InputPane() {
   const fold = useFold()
   return (
-    <aside className="side" aria-label="Input">
-      <div className="pane-head"><span className="qs-label">Input</span><span className="pane-head__note">parameters</span></div>
+    <div className="panel" aria-label="Parameters">
       <ScrollArea markers={MARKERS} className="pane-scroll pane-scroll--knots" bar={false} renderIndex={(ix) => <Knots {...ix} />}>
         <ModelIn fold={fold} />
         <VoxIn fold={fold} />
@@ -68,7 +67,7 @@ export function InputPane() {
         <MeshIn fold={fold} />
         <div style={{ height: 40 }} />
       </ScrollArea>
-    </aside>
+    </div>
   )
 }
 

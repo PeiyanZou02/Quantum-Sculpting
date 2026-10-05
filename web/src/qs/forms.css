@@ -67,3 +67,5 @@
   position: absolute; right: -3px; top: -3px; min-width: 13px; height: 13px; padding: 0 3px; border-radius: 999px; box-sizing: border-box;
   background: var(--qs-ink); color: var(--qs-bg); font: 500 9px/13px var(--qs-mono); text-align: center;
 }
+
+.qs-ib--dim { color: var(--qs-ink4); }

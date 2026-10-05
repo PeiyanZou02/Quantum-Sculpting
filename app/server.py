@@ -28,6 +28,7 @@ import atlas
 import emulator
 import levelset
 import pipeline
+import shaders
 import tiling
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -211,6 +212,10 @@ def load_key():
         return saved.strip(), "saved"
     env = os.environ.get("MOTH_API_KEY", "").strip()
     return (env, "env") if env else ("", None)
+
+
+shaders.configure(load_key, lambda: ATLAS_BASE, lambda: GRIDS)
+app.register_blueprint(shaders.bp)
 
 
 def key_status():

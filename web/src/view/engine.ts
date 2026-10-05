@@ -1,14 +1,41 @@
 // three.js view of the pipeline. Everything is drawn in grid coordinates (voxel (i,j,k) centred on
 // (i,j,k), z up) and the root is scaled to a unit cube, as in Peiyan's original viewer, so the four
-// views line up exactly. The camera is driven from outside by the gimbal's {az, el, dist}.
+// views line up exactly. Shading modes (wire, solid, value, entanglement) swap materials only.
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import type { MeshData } from '../api'
 import type { Axis, Grid } from '../qs/grid'
-import type { Camera } from '../qs/QCam'
 
 export type LayerName = 'model' | 'voxels' | 'processed' | 'result'
 export type ViewName = LayerName | 'scan'
+export type ShadingMode = 'wire' | 'solid' | 'value' | 'entangle'
+
+/** Box edges drawn from the face UVs, so instanced voxels read as a clean lattice (no triangle diagonals). */
+function voxelWire(): THREE.ShaderMaterial {
+  return new THREE.ShaderMaterial({
+    uniforms: { color: { value: new THREE.Color('#151618') } },
+    vertexShader: `#include <common>
+#include <clipping_planes_pars_vertex>
+varying vec2 vUv;
+void main() {
+  vUv = uv;
+  vec4 mvPosition = modelViewMatrix * instanceMatrix * vec4(position, 1.0);
+  gl_Position = projectionMatrix * mvPosition;
+  #include <clipping_planes_vertex>
+}`,
+    fragmentShader: `#include <clipping_planes_pars_fragment>
+uniform vec3 color;
+varying vec2 vUv;
+void main() {
+  #include <clipping_planes_fragment>
+  float e = min(min(vUv.x, 1.0 - vUv.x), min(vUv.y, 1.0 - vUv.y));
+  float a = 1.0 - smoothstep(0.0, fwidth(e) * 1.4, e);
+  if (a < 0.03) discard;
+  gl_FragColor = vec4(color, a * 0.85);
+}`,
+    transparent: true, side: THREE.DoubleSide, depthWrite: false, clipping: true,
+  })
+}
 
 const INK = new THREE.Color('#151618')
 const INK3 = new THREE.Color('#8B8D93')
@@ -40,6 +67,13 @@ export class Engine {
     voxels: new THREE.MeshLambertMaterial({ color: 0xffffff }),
     processed: new THREE.MeshLambertMaterial({ color: 0xffffff }),
   }
+  private wireVox: Record<string, THREE.ShaderMaterial> = { voxels: voxelWire(), processed: voxelWire() }
+  private meshWire = new THREE.MeshBasicMaterial({ color: INK, wireframe: true, transparent: true, opacity: 0.55 })
+  private ghostMesh = new THREE.MeshBasicMaterial({ color: INK3, wireframe: true, transparent: true, opacity: 0.16, depthWrite: false })
+  private ghostVox = new THREE.MeshBasicMaterial({ color: INK3, transparent: true, opacity: 0.08, depthWrite: false })
+  private shading: ShadingMode = 'solid'
+  private ent: { mesh: THREE.Material; voxels: THREE.Material; processed: THREE.Material } | null = null
+  private ghosts = new Set<LayerName>()
   // scan view: processed kept below the plane, input voxels above it
   private cut = { processed: new THREE.Plane(new THREE.Vector3(0, 0, -1), 0), voxels: new THREE.Plane(new THREE.Vector3(0, 0, 1), 0) }
   private scanner = new THREE.Group()
@@ -201,20 +235,6 @@ export class Engine {
 
   private framed = false
 
-  setCamera(c: Camera) {
-    const az = THREE.MathUtils.degToRad(c.az), el = THREE.MathUtils.degToRad(c.el)
-    const target = new THREE.Vector3(0, 0, 0.42)
-    const d = c.dist * 1.45
-    // az 0 looks at the front (camera on −y), az 90 from the side (+x)
-    this.camera.position.set(
-      target.x + d * Math.cos(el) * Math.sin(az),
-      target.y - d * Math.cos(el) * Math.cos(az),
-      target.z + d * Math.sin(el),
-    )
-    this.camera.lookAt(target)
-    this.dirty = true
-  }
-
   /** Grid edge changed: rescale and redraw the n³ outline and floor lines. */
   setGrid(n: number) {
     this.n = n
@@ -260,10 +280,54 @@ export class Engine {
 
   private put(name: LayerName, obj: THREE.Object3D) {
     this.clear(name)
-    obj.visible = name === this.active
     this.layers[name] = obj
     this.root.add(obj)
+    this.apply()
+  }
+
+  private shows(k: LayerName) {
+    return this.view === 'scan' ? k === 'voxels' || k === 'processed' : k === this.view
+  }
+
+  /** Material for a layer under the current shading mode (ghost layers get a faint wire). */
+  private materialFor(k: LayerName): THREE.Material {
+    const inst = k === 'voxels' || k === 'processed'
+    if (!this.shows(k) && this.ghosts.has(k)) return inst ? this.ghostVox : this.ghostMesh
+    if (this.shading === 'wire') return inst ? this.wireVox[k] : this.meshWire
+    if (this.shading === 'entangle' && this.ent) return inst ? this.ent[k as 'voxels' | 'processed'] : this.ent.mesh
+    return inst ? this.voxMats[k] : this.meshMat
+  }
+
+  /** Visibility, materials and scan clipping, after any change. */
+  private apply() {
+    const scan = this.view === 'scan'
+    for (const [k, layer] of Object.entries(this.layers) as [LayerName, THREE.Mesh][]) {
+      layer.visible = this.shows(k) || this.ghosts.has(k)
+      const mat = this.materialFor(k)
+      if (k === 'voxels' || k === 'processed') {
+        const want = scan && this.shows(k) ? [this.cut[k]] : null
+        if ((mat.clippingPlanes?.length ?? 0) !== (want?.length ?? 0)) {
+          mat.clippingPlanes = want
+          mat.needsUpdate = true
+        }
+      }
+      layer.material = mat
+    }
+    this.frame.visible = Object.keys(this.layers).length > 0
+    this.scanner.visible = scan
     this.dirty = true
+  }
+
+  setShading(mode: ShadingMode, ent?: { mesh: THREE.Material; voxels: THREE.Material; processed: THREE.Material } | null) {
+    this.shading = mode
+    if (ent !== undefined) this.ent = ent
+    this.apply()
+  }
+
+  /** Extra layers drawn faintly with the main view, like Blender's visibility toggles. */
+  setGhosts(names: LayerName[]) {
+    this.ghosts = new Set(names)
+    this.apply()
   }
 
   setMesh(name: LayerName, data: MeshData | null, transform?: number[][]) {
@@ -334,19 +398,7 @@ export class Engine {
   show(name: ViewName) {
     this.view = name
     this.active = name === 'scan' ? 'processed' : name
-    const shows = (k: string) => (name === 'scan' ? k === 'voxels' || k === 'processed' : k === name)
-    for (const [k, layer] of Object.entries(this.layers)) layer!.visible = shows(k)
-    this.frame.visible = Object.keys(this.layers).length > 0
-    this.scanner.visible = name === 'scan'
-    const on = name === 'scan'
-    for (const [k, mat] of Object.entries(this.voxMats)) {
-      const want = on ? [this.cut[k as 'voxels' | 'processed']] : null
-      if ((mat.clippingPlanes?.length ?? 0) !== (want?.length ?? 0)) {
-        mat.clippingPlanes = want
-        mat.needsUpdate = true
-      }
-    }
-    this.dirty = true
+    this.apply()
   }
 
   /** Scan plane at the bottom face of layer z (may be fractional). Only the clipping planes move. */
@@ -373,6 +425,10 @@ export class Engine {
     SURFACE.copy(dark ? new THREE.Color('#9A9CA2') : new THREE.Color('#C9CBD0'))
     DEEP.copy(dark ? new THREE.Color('#E6E7EA') : new THREE.Color('#5E6066'))
     this.meshMat.color.copy(SURFACE)
+    this.meshWire.color.copy(c('--qs-ink'))
+    for (const m of Object.values(this.wireVox)) (m.uniforms.color.value as THREE.Color).copy(c('--qs-ink'))
+    this.ghostMesh.color.copy(c('--qs-ink3'))
+    this.ghostVox.color.copy(c('--qs-ink3'))
     this.lineMat.color.copy(c('--qs-ink4'))
     this.dashMat.color.copy(c('--qs-ink3'))
     this.scanMat.color.copy(c('--qs-ink'))
@@ -396,15 +452,21 @@ export class Engine {
     this.dirty = true
   }
 
-  /** Raycast the active layer; px/py are CSS pixels relative to the host. */
-  pick(px: number, py: number): Pick | null {
-    const layer = this.layers[this.active]
-    if (!layer) return null
+  /** Raycast the visible, pickable layers; px/py are CSS pixels relative to the host. Nearest hit wins. */
+  pick(px: number, py: number, pickable: (k: LayerName) => boolean = () => true): Pick | null {
     const w = this.host.clientWidth, h = this.host.clientHeight
     this.ray.setFromCamera(new THREE.Vector2(px / w * 2 - 1, -(py / h) * 2 + 1), this.camera)
     this.root.updateMatrixWorld(true)
-    const hit = this.ray.intersectObject(layer, false)[0]
+    let hit: THREE.Intersection | undefined, which: LayerName = this.active
+    for (const [k, l] of Object.entries(this.layers) as [LayerName, THREE.Object3D][]) {
+      if (!l.visible || !pickable(k)) continue
+      const hs = this.ray.intersectObject(l, false)
+      // in the scan view, ignore hits in the clipped-away part of each layer
+      const ok = hs.find((x) => this.view !== 'scan' || (k === 'processed' ? x.point.z <= this.cut.processed.constant + 1e-6 : k === 'voxels' ? x.point.z >= -this.cut.voxels.constant - 1e-6 : true))
+      if (ok && (!hit || ok.distance < hit.distance)) { hit = ok; which = k }
+    }
     if (!hit) return null
+    const layer = this.layers[which]!
     const inv = new THREE.Matrix4().copy(this.root.matrixWorld).invert()
     const point = hit.point.clone().applyMatrix4(inv)
     let cell: [number, number, number]
@@ -417,9 +479,9 @@ export class Engine {
       const q = point.clone().addScaledVector(nrm, -0.5)
       cell = [Math.round(q.x), Math.round(q.y), Math.round(q.z)].map((v) => Math.max(0, Math.min(this.n - 1, v))) as [number, number, number]
     }
-    const g = this.grids[this.active] ?? this.grids.voxels ?? null
+    const g = this.grids[which] ?? this.grids.voxels ?? null
     const value = g ? g.data[(cell[0] * g.n + cell[1]) * g.n + cell[2]] : null
-    return { cell, value, layer: this.active, point }
+    return { cell, value, layer: which, point }
   }
 
   /** Screen directions of the world X, Y, Z axes (for the 2D gnomon). */
