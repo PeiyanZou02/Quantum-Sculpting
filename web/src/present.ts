@@ -22,6 +22,13 @@ export interface Guides { box: boolean; floor: boolean; div: number }
  *  pass through the range, and whether it goes up and down, only up or only down. */
 export interface Sweep { from: number; to: number; step: number; sec: number; mode: 'bounce' | 'up' | 'down' }
 export type PanelTab = 'view' | 'layers' | 'library' | 'notes' | 'motion' | 'output'
+/** A value animated over time: keyframes spread evenly over `sec` seconds, played round and round
+ *  (loop), there and back (bounce) or once. `param` is an id from hud/paramDefs.ts. */
+export interface Track { id: string; param: string; keys: number[]; sec: number; mode: 'loop' | 'bounce' | 'once' }
+/** The look cycling on its own: shading modes, lights, backdrops, `sec` seconds each. */
+export interface Cycles { shading: boolean; light: boolean; backdrop: boolean; sec: number }
+/** The stage reel: model, voxels, quantum (or Evolve, playing its turns), mesh, `sec` seconds each. */
+export interface Reel { on: boolean; sec: number }
 export interface Saved { id: string; name: string; compose: Record<string, string>; pos: Record<string, Pos>; looks: Record<string, Look>; texts: TextNote[]; guides?: Guides }
 
 interface P {
@@ -126,6 +133,19 @@ interface P {
   /** Ink of exported PNGs (see savePng). */
   pngInk: 'auto' | 'dark' | 'light'
   setPngInk: (i: 'auto' | 'dark' | 'light') => void
+  /** Animation: tracks of values, the look cycling, the stage reel, and whether they are playing. */
+  tracks: Track[]
+  addTrack: (t: Omit<Track, 'id'>) => void
+  setTrack: (id: string, p: Partial<Track>) => void
+  removeTrack: (id: string) => void
+  cycles: Cycles
+  setCycles: (c: Partial<Cycles>) => void
+  stageReel: Reel
+  setStageReel: (r: Partial<Reel>) => void
+  /** Playing everything above from its start (`playFrom` is when, ms). */
+  playing: boolean
+  playFrom: number
+  setPlaying: (v: boolean) => void
   /** Saved compositions, and the one on screen (null: not saved yet). */
   saved: Saved[]
   current: string | null
@@ -150,7 +170,7 @@ const keep = (s: P) => {
   try {
     localStorage.setItem(KEY, JSON.stringify({
       v: VERSION, compose: s.compose, pos: s.pos, shots: s.shots, spin: s.spin, reelSec: s.reelSec, spinSpeed: s.spinSpeed,
-      cycleSec: s.cycleSec, drawer: s.drawer, looks: s.looks, frame: s.frame, outSize: s.outSize, spinDir: s.spinDir, texts: s.texts, pngInk: s.pngInk, saved: s.saved, current: s.current, guides: s.guides, sweepCfg: s.sweepCfg, tab: s.tab, libCat: s.libCat, opened: s.opened,
+      cycleSec: s.cycleSec, drawer: s.drawer, looks: s.looks, tracks: s.tracks, cycles: s.cycles, stageReel: s.stageReel, frame: s.frame, outSize: s.outSize, spinDir: s.spinDir, texts: s.texts, pngInk: s.pngInk, saved: s.saved, current: s.current, guides: s.guides, sweepCfg: s.sweepCfg, tab: s.tab, libCat: s.libCat, opened: s.opened,
     }))
   } catch { /* per-viewer only */ }
 }
@@ -306,6 +326,17 @@ export const usePresent = create<P>()((set, get) => {
     setGuides: (g) => up({ guides: { ...get().guides, ...g } }),
     pngInk: saved.pngInk ?? 'auto',
     setPngInk: (i) => up({ pngInk: i }),
+    tracks: saved.tracks ?? [],
+    addTrack: (t) => up({ tracks: [...get().tracks, { ...t, id: uid() }] }),
+    setTrack: (id, p) => up({ tracks: get().tracks.map((t) => (t.id === id ? { ...t, ...p } : t)) }),
+    removeTrack: (id) => up({ tracks: get().tracks.filter((t) => t.id !== id) }),
+    cycles: { shading: false, light: false, backdrop: false, sec: 3, ...saved.cycles },
+    setCycles: (c) => up({ cycles: { ...get().cycles, ...c } }),
+    stageReel: { on: false, sec: 3, ...saved.stageReel },
+    setStageReel: (r) => up({ stageReel: { ...get().stageReel, ...r } }),
+    playing: false,
+    playFrom: 0,
+    setPlaying: (v) => set({ playing: v, playFrom: Date.now() }),
     saved: saved.saved ?? [],
     current: saved.current ?? null,
     save: (name) => {

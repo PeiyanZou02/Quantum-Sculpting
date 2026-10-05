@@ -215,3 +215,66 @@ export function Record() {
     </div>
   )
 }
+
+// ── log: the turns up to this one, as the drawer's Evolve log tells them ────────────────────────
+const ACTS: [string, string][] = [['attack', 'attack'], ['fortify', 'wall'], ['grow', 'grow'], ['flee', 'flee'], ['split', 'split'], ['wither', 'wither']]
+export function Log() {
+  const { history: h, turn, theme } = useEvolve()
+  if (!h) return <Empty />
+  const rows = h.turns.slice(Math.max(0, turn - 7), turn + 1).reverse()
+  return (
+    <div className="hev hev--log">
+      <Head t="Evolve log" n={`turn ${turn} / ${h.turns.length - 1}`} />
+      <ol className="hev-log">
+        {rows.map((r) => {
+          const n: Record<string, number> = {}
+          for (const a of r.action) if (a) n[a] = (n[a] ?? 0) + 1
+          const tally = ACTS.filter(([a]) => n[a]).map(([a, t]) => `${n[a]} ${t}`).join(' · ')
+          const e = r.events.find((x) => x.type !== 'ally' && x.type !== 'rift') ?? r.events[0]
+          return (
+            <li key={r.turn}>
+              <span className="hev-lt">T {String(r.turn).padStart(3, '0')}</span>
+              <span className="hev-lw">
+                {r.turn === 0 ? <span>founded {h.k} nations</span>
+                  : e ? text(e).map((w, j) => (typeof w === 'number' ? <Chip key={j} i={w} theme={theme} /> : <span key={j}>{w}</span>))
+                  : <span>{tally || 'nothing moved'}</span>}
+              </span>
+            </li>
+          )
+        })}
+      </ol>
+    </div>
+  )
+}
+
+// ── one nation: the picked one (click it in the view), else the largest ─────────────────────────
+export function Picked() {
+  const { history: h, turn, theme } = useEvolve()
+  const sel = useStore((s) => s.evolveSel)
+  if (!h) return <Empty />
+  const rec = h.turns[turn]
+  const big = rec.size.reduce((b, v, i) => (v > rec.size[b] ? i : b), 0)
+  const i = sel != null && sel < h.total ? sel : big
+  const total = Math.max(1, rec.size.reduce((a, v) => a + v, 0))
+  const sizes = h.turns.map((r) => r.size[i] ?? 0)
+  const top = Math.max(1, ...sizes)
+  const w = 200, ht = 36
+  const d = sizes.map((v, t) => `${t ? 'L' : 'M'}${((t / Math.max(1, sizes.length - 1)) * w).toFixed(1)},${(ht - (v / top) * ht).toFixed(1)}`).join(' ')
+  const px = (turn / Math.max(1, sizes.length - 1)) * w
+  const mine = h.turns.slice(1, turn + 1).flatMap((r) => r.events.filter((e) => text(e).includes(i))).length
+  return (
+    <div className="hev hev--picked">
+      <Head t="Nation" n={sel == null ? 'largest · click one in the view' : 'picked'} />
+      <div className="hev-pick">
+        <Chip i={i} theme={theme} />
+        <span className="hev-v">{(rec.size[i] ?? 0).toLocaleString()} cells · {Math.round((100 * (rec.size[i] ?? 0)) / total)} %</span>
+        <span className="hev-act">{rec.action[i] ?? (rec.size[i] ? '' : 'gone')}</span>
+      </div>
+      <svg width={w} height={ht + 2} viewBox={`0 -1 ${w} ${ht + 2}`} className="hev-svg">
+        <path d={d} fill="none" stroke={nationColor(i, theme)} strokeWidth={1.5} />
+        <line x1={px} x2={px} y1={0} y2={ht} stroke="var(--qs-ink)" />
+      </svg>
+      <div className="hev-foot">{mine} events so far · territory over {h.turns.length - 1} turns</div>
+    </div>
+  )
+}

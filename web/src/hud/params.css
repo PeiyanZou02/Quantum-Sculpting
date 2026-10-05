@@ -1,0 +1,19 @@
+/* Parameter readouts and the Atlas jobs feed, in the HUD's own type: mono, small, ink on the view. */
+.hpar { width: 208px; display: flex; flex-direction: column; gap: 6px; color: var(--qs-ink); font: 400 11px/1.3 var(--qs-mono); letter-spacing: var(--qs-track); }
+.hpar--off { opacity: .45; }
+.hpar__head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.hpar__t { font-weight: 500; }
+.hpar__v { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.hpar__rule { position: relative; height: 3px; background: var(--qs-line); }
+.hpar__fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--qs-ink); }
+.hpar__mark { position: absolute; top: -4px; width: 1px; height: 11px; background: var(--qs-ink); }
+.hpar__ends { display: flex; justify-content: space-between; color: var(--qs-ink3); font-variant-numeric: tabular-nums; }
+.hpar--jobs { width: 240px; }
+.hpar__empty { margin: 0; color: var(--qs-ink3); }
+.hpar__jobs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; border-top: 1px solid var(--qs-line); }
+.hpar__jobs li { display: grid; grid-template-columns: 72px 1fr auto; gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--qs-line); }
+.hpar__id { color: var(--qs-ink2); }
+.hpar__st--ok::before, .hpar__st--bad::before, .hpar__st--run::before { content: ''; display: inline-block; width: 6px; height: 6px; margin-right: 6px; vertical-align: 1px; border-radius: 50%; background: var(--qs-ink3); }
+.hpar__st--ok::before { background: #23934F; }
+.hpar__st--bad::before { background: #D23F35; }
+.hpar__when { color: var(--qs-ink3); }

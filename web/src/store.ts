@@ -1,5 +1,6 @@
 // App state: one zustand store mirroring the README "State" section of the design handoff.
 // The service holds the real data in memory; this keeps what the page needs to draw it.
+import type { SliceColor } from './qs/sectionColor'
 import { create } from 'zustand'
 import {
   api, ApiError,
@@ -176,6 +177,9 @@ interface S {
   setView: (v: View) => void
   setCamera: (c: Camera) => void
   setSlice: (p: Partial<S['slice']>) => void
+  /** How sections are coloured, on the section map and on the cutting plane in the view. */
+  sliceColor: SliceColor
+  setSliceColor: (c: SliceColor) => void
   pushLog: (text: string, level?: LogLine['level']) => void
 
   refreshRecent: () => Promise<void>
@@ -556,6 +560,13 @@ export const useStore = create<S>()((set, get) => {
     setView: (v) => set({ view: v }),     // internal: the view follows the focus (see the subscription below)
     setCamera: (c) => set({ camera: c }),
     setSlice: (p) => set((s) => ({ slice: { ...s.slice, ...p } })),
+    sliceColor: (() => {
+      try { const v = localStorage.getItem('qs-slice-color'); return v === 'grey' || v === 'heat' || v === 'nations' ? v : 'auto' } catch { return 'auto' }
+    })(),
+    setSliceColor: (c) => {
+      try { localStorage.setItem('qs-slice-color', c) } catch { /* per-viewer */ }
+      set({ sliceColor: c })
+    },
 
     refreshRecent: async () => {
       try {

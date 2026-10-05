@@ -22,6 +22,8 @@ import * as datamarks from './datamarks'
 import * as navmore from './navmore'
 import * as controls from './controls'
 import * as evolve from './evolve'
+import { AtlasJobs, Param } from './params'
+import { PARAMS } from './paramDefs'
 import { GridOut, ModelOut, PrintOut, QuantumOut } from '../screens/OutputPane'
 
 // ── orbit ────────────────────────────────────────────────────────────────────────────────────────
@@ -494,6 +496,7 @@ export const DATA_FAMILIES: FamilyDef[] = [
       mod('runtime', 'v2', 'steps', 'Each pipeline step as a time range, from the requests in the log.', 'bl', datamarks.Steps),
       mod('runtime', 'v3', 'log', 'The newest lines of the runtime log.', 'br', datamarks.LogList),
       mod('runtime', 'v4', 'runs', 'Runs this session: mode, grid, level, time and cache.', 'br', datamarks.RunsTable),
+      { family: 'runtime', id: 'v5', label: 'Atlas jobs', desc: 'The latest jobs in your Atlas account: state and when.', slot: 'br', render: (ctx) => <AtlasJobs ctx={ctx} /> },
     ],
   },
   {
@@ -648,6 +651,8 @@ export const EVOLVE_MODULES: HudModule[] = [
   { family: 'evolve', id: 'v2', label: 'territory', desc: 'Every nation’s share of the territory over the whole history; wars, annexations and splits marked under it.', slot: 'bottom', render: () => <evolve.Territory /> },
   { family: 'evolve', id: 'v3', label: 'chronicle', desc: 'The latest wars, annexations, splits, exiles and deaths up to this turn.', slot: 'bl', render: () => <evolve.Chronicle /> },
   { family: 'evolve', id: 'v4', label: 'relations', desc: 'Nations on a ring: alliances as heavy lines, this turn’s attacks as dashed arrows.', slot: 'br', render: () => <evolve.Relations /> },
+  { family: 'evolve', id: 'v6', label: 'log', desc: 'The turns up to this one, one line each, as the Evolve log tells them.', slot: 'bl', render: () => <evolve.Log /> },
+  { family: 'evolve', id: 'v7', label: 'one nation', desc: 'The nation picked in the view (else the largest): its cells, share and territory over the history.', slot: 'tr', render: () => <evolve.Picked /> },
   { family: 'evolve', id: 'v5', label: 'record', desc: 'Alive, wars, annexations and splits so far, as figures.', slot: 'tl', render: () => <evolve.Record /> },
 ]
 
@@ -668,12 +673,17 @@ export const FAMILIES: FamilyDef[] = [
   { id: 'cards', title: 'Data cards', desc: 'Quantum result, print check, model, grid', modules: CARDS_MODULES },
   { id: 'stages', title: 'Stages', desc: 'Model, voxels, quantum and mesh side by side', modules: STAGES_MODULES },
   ...NAV_FAMILIES, ...GLYPH_FAMILIES, ...DATA_FAMILIES, ...CONTROL_FAMILIES,
-  { id: 'evolve', title: 'Evolve', desc: 'Nations: roster, territory over the history, chronicle, relations, record', modules: EVOLVE_MODULES },
+  { id: 'evolve', title: 'Evolve', desc: 'Nations: roster, territory over the history, chronicle, relations, record, log, one nation', modules: EVOLVE_MODULES },
+  {
+    id: 'param', title: 'Parameters', desc: 'Any setting as a readout: its name, its value and where it sits in its range',
+    modules: PARAMS.map((p) => ({ family: 'param' as const, id: p.id, label: p.t.toLowerCase(), desc: p.desc, slot: 'bl' as const, render: () => <Param id={p.id} /> })),
+  },
 ]
 
 /** The library's categories, in the Quicksilver Library's order: each holds families, each family variants. */
 export const CATEGORIES: { id: string; title: string; icon: string; fams: Family[] }[] = [
   { id: 'marks', title: 'Marks', icon: 'frame', fams: ['frame', 'orbit', 'camera', 'dial', 'bounds', 'focus', 'selection', 'callout', 'scan'] },
+  { id: 'params', title: 'Parameters', icon: 'sliceTool', fams: ['param'] },
   { id: 'nav', title: 'Navigation', icon: 'navigate', fams: ['steps', 'timeline', 'bars', 'indexes', 'captures'] },
   { id: 'evolve', title: 'Evolve', icon: 'entangle', fams: ['evolve'] },
   { id: 'glyphs', title: 'Quantum glyphs', icon: 'quantum', fams: ['backend', 'register', 'rotation', 'shots', 'processing', 'blur', 'pulse', 'usage'] },

@@ -37,3 +37,6 @@
 .hev-k { font: var(--qs-t-label); text-transform: uppercase; letter-spacing: var(--qs-track-label); color: var(--qs-ink2); }
 .hev-big { font: var(--qs-t-display); letter-spacing: var(--qs-track); }
 .hev-note { font: var(--qs-t-meta); color: var(--qs-ink2); }
+.hev--log { width: 300px; }
+.hev--picked { width: 220px; }
+.hev-pick { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }

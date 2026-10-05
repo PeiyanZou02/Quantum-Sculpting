@@ -881,12 +881,53 @@ export class Engine {
     this.dashMat.color.copy(c('--qs-ink3'))
     this.scanMat.color.copy(c('--qs-ink'))
     this.scanEdge.color.copy(c('--qs-ink'))
-    ;(this.plane.material as THREE.MeshBasicMaterial).color.copy(c('--qs-ink'))
+    if (!this.planeTex) (this.plane.material as THREE.MeshBasicMaterial).color.copy(c('--qs-ink'))
+    this.planeInk = c('--qs-ink').clone()
     ;(this.planeEdge.material as THREE.LineBasicMaterial).color.copy(c('--qs-ink'))
     this.dirty = true
   }
 
   /** The slice plane in the voxel views; null hides it. */
+  private planeTex: THREE.DataTexture | null = null
+  private planeInk = INK.clone()
+  /** The section on the cutting plane: RGBA per cell as qs/sectionColor lays it out (row v, column u),
+   *  or null for the plain faint sheet. Empty cells keep a faint tint so the plane still reads. */
+  setSliceImage(rgba: Uint8ClampedArray | null, n: number, axis: Axis) {
+    const mat = this.plane.material as THREE.MeshBasicMaterial
+    this.planeTex?.dispose()
+    this.planeTex = null
+    if (!rgba) {
+      mat.map = null
+      mat.color.copy(this.planeInk)
+      mat.opacity = 0.06
+      mat.needsUpdate = true
+      this.dirty = true
+      return
+    }
+    const data = new Uint8Array(n * n * 4)
+    const ink = [this.planeInk.r, this.planeInk.g, this.planeInk.b].map((v) => Math.round(THREE.MathUtils.clamp(v, 0, 1) ** (1 / 2.2) * 255))
+    for (let t = 0; t < n; t++)
+      for (let s = 0; s < n; s++) {
+        // texel (s, t) runs along the plane's own x and y; which cell of the section that is depends on
+        // how setSlice turned the plane for the axis
+        const [u, v] = axis === 'x' ? [t, n - 1 - s] : [s, t]
+        const i = (v * n + u) * 4, o = (t * n + s) * 4
+        if (rgba[i + 3]) { data[o] = rgba[i]; data[o + 1] = rgba[i + 1]; data[o + 2] = rgba[i + 2]; data[o + 3] = rgba[i + 3] }
+        else { data[o] = ink[0]; data[o + 1] = ink[1]; data[o + 2] = ink[2]; data[o + 3] = 16 }
+      }
+    const tex = new THREE.DataTexture(data, n, n, THREE.RGBAFormat)
+    tex.magFilter = THREE.NearestFilter
+    tex.minFilter = THREE.NearestFilter
+    tex.colorSpace = THREE.SRGBColorSpace
+    tex.needsUpdate = true
+    this.planeTex = tex
+    mat.map = tex
+    mat.color.set(0xffffff)
+    mat.opacity = 0.94
+    mat.needsUpdate = true
+    this.dirty = true
+  }
+
   setSlice(s: { axis: Axis; index: number } | null) {
     const p = this.plane
     p.visible = !!s && this.view !== 'scan'

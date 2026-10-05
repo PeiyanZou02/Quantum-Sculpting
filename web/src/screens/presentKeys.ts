@@ -1,6 +1,6 @@
 // The composition's keys. Everything the old present bar held lives in Properties · Compose and Output.
 // Keys: C arrange, H hide every control for clean frames, 1–9 or [ ] saved compositions, ← → shots,
-// T turntable, ⌫ removes the selected piece, Esc steps back out.
+// T turntable, P play the animation, ⌫ removes the selected piece, Esc steps back out.
 import { useEffect } from 'react'
 import { usePresent } from '../present'
 import { isRecording, toggleRecording } from './capture'
@@ -28,6 +28,7 @@ export function usePresentKeys() {
       else if (e.key === ']') step(1)
       else if (e.key === '[') step(-1)
       else if (e.key === 't' || e.key === 'T') s.setSpin(!s.spin)
+      else if (e.key === 'p' || e.key === 'P') s.setPlaying(!s.playing)
       else if (/^[1-9]$/.test(e.key) && s.saved[+e.key - 1]) s.load(s.saved[+e.key - 1].id)
       else if (e.key === 'ArrowRight' && s.shots.length) s.setShot((s.shot + 1) % s.shots.length)
       else if (e.key === 'ArrowLeft' && s.shots.length) s.setShot((s.shot - 1 + s.shots.length) % s.shots.length)

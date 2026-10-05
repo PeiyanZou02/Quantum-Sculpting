@@ -51,6 +51,8 @@ export type Family =
   | 'viewcam'    // trackball, view camera from the top and from the side
   // Evolve (app/nations.py)
   | 'evolve'     // nations roster, territory over the history, chronicle, relations, record
+  // Settings (hud/paramDefs.ts)
+  | 'param'      // any parameter as a readout
 
 export interface HudPin { n: number; cell: Vec3; p?: Vec3; lines: [string, string]; x: number | null; y: number | null }
 

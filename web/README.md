@@ -137,13 +137,29 @@ always stays in the centre. **Properties · Compose** holds it:
    scale, corners) and the scene guides (grid box, print grid with its cell size, cutting plane).
 3. **Library** — the full Quicksilver library, by category, family and variant. Hover a row to
    preview it on the view; click to turn it on or off; drag it onto the view to place it there.
-4. **Annotate** — notes and measurements pinned to the geometry.
-5. **Saved compositions** — saved by name and cycled with `[` `]` or 1–9.
+   Besides marks, glyphs and data, the library holds **Parameters** (any setting as a readout: grid,
+   strength, reach, sigma, turn, nations, turns, growth, level, smoothing, thicken, cutting plane,
+   film, colour) and live feeds: the runtime log, the Atlas jobs, the Evolve log and one nation.
+4. **Animate** — *Values*: pick a setting, give it keyframes (two to six, spread evenly), the seconds
+   and bounce, loop or once. *Stages*: step through model, voxels, quantum or Evolve (its turns play)
+   and mesh. *Look*: cycle the shading, the light, the backdrop. Then shots and their reel, the
+   turntable, the slice sweep and cycling saved compositions. **Play** (P) runs it all from the start;
+   **Record one pass** records exactly one pass to WebM.
+5. **Annotate** — notes and measurements pinned to the geometry.
+6. **Saved compositions** — saved by name and cycled with `[` `]` or 1–9.
 
 **Properties · Output** holds the frame (window, 16:9, 21:9, 1.91:1, 1:1, 4:5, 9:16, 1:2, A-series)
 and its export size, images (the frame as PNG, a screen grab, the geometry alone, the pieces alone),
-video (a WebM of the view, cropped to the frame where the browser can) with *Hide controls* (H) for
-clean takes, 3D (STL, GLB), and motion: shots and their reel, the turntable, the slice sweep.
+video (a WebM of the view, cropped to the frame where the browser can; one pass of the animation)
+with *Hide controls* (H) for clean takes, and 3D (STL, GLB).
+
+Properties keeps the group you pick on its rail; it does not follow the step open in Parameters.
+Sections (Grid · Slice, the slice card, and the cutting plane in the view, which shows itself when you
+move it) are coloured Auto, Grey, Heat or Nations: Auto is Nations while an Evolve turn is on screen.
+
+The drawer has three feeds, each a different source: **Runtime** is this app and the local service
+(requests, steps, warnings); **Evolve log** is the story of the Evolve run, turn by turn; **Atlas
+jobs** is your account on Atlas, including jobs from other sessions. Each is also a piece for the view.
 
 | Key | Anywhere in Lab (not while typing) |
 | --- | --- |
@@ -151,6 +167,7 @@ clean takes, 3D (STL, GLB), and motion: shots and their reel, the turntable, the
 | Backspace / Delete | Remove the selected piece (while arranging) |
 | H | Hide all controls, for a clean frame |
 | T | Turntable on/off |
+| P | Play or stop the animation |
 | `[` `]` | Previous / next saved composition |
 | 1–9 | Load saved composition 1–9 |
 | ← → | Previous / next shot |

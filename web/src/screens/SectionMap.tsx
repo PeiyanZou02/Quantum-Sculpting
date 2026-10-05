@@ -2,10 +2,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from '../store'
 import { section, type Axis, type Grid } from '../qs/grid'
+import { sectionRGBA, type SliceColor } from '../qs/sectionColor'
 
-export function SectionMap({ grid, input, axis, index, level, onIndex, size: S = 344 }: {
+export function SectionMap({ grid, input, axis, index, level, onIndex, size: S = 344, scheme = 'grey', owner }: {
   size?: number
   grid: Grid | null; input?: Grid | null; axis: Axis; index: number; level: number; onIndex?: (i: number) => void
+  /** Grey, Heat or Nations (with Evolve's frame as `owner`). */
+  scheme?: Exclude<SliceColor, 'auto'>; owner?: Uint8Array | null
 }) {
   const ref = useRef<HTMLCanvasElement>(null)
   const theme = useStore((st) => st.theme)
@@ -31,12 +34,14 @@ export function SectionMap({ grid, input, axis, index, level, onIndex, size: S =
     ctx.globalAlpha = 1
     ctx.fillStyle = css('--qs-ink4')
     for (let v = 0; v < n; v++) for (let x = 0; x < n; x++) ctx.fillRect(x * u + u / 2 - 0.5, (n - 1 - v) * u + u / 2 - 0.5, 1, 1)
-    if (!sec) return
+    if (!sec || !grid) return
+    const rgba = sectionRGBA(grid, axis, Math.min(index, grid.n - 1), scheme, theme, owner)
     for (let v = 0; v < n; v++)
       for (let x = 0; x < n; x++) {
-        const val = Math.min(1, sec[v * n + x])
-        if (val <= 0.02) continue
-        ctx.globalAlpha = 0.08 + val * 0.82; ctx.fillStyle = ink
+        const o = (v * n + x) * 4
+        if (!rgba[o + 3]) continue
+        ctx.globalAlpha = rgba[o + 3] / 255
+        ctx.fillStyle = `rgb(${rgba[o]},${rgba[o + 1]},${rgba[o + 2]})`
         ctx.fillRect(x * u + 0.5, (n - 1 - v) * u + 0.5, u - 1, u - 1)
       }
     // marching-squares contour at the level, through cell centres
@@ -70,7 +75,7 @@ export function SectionMap({ grid, input, axis, index, level, onIndex, size: S =
     }
     ctx.globalAlpha = 1; contour(f, ink, [], 1)
     ctx.setLineDash([])
-  }, [sec, inSec, n, level, S, theme])
+  }, [sec, inSec, n, level, S, theme, grid, axis, index, scheme, owner])
 
   const cell = (e: React.PointerEvent) => {
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect()

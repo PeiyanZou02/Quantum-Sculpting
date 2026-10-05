@@ -48,12 +48,13 @@ const INFO: Record<string, [string[], number]> = {
   'levels:v1': [['kept', 'levelsweep'], 3], 'runtime:v1': [['history'], 1], 'runtime:v3': [['log'], 2],
   'field:v1': [['field'], 2], 'values:v1': [['values'], 2], 'values:v2': [['values'], 1],
   'evolve:v1': [['ev-nations'], 3], 'evolve:v2': [['ev-territory'], 3], 'evolve:v3': [['ev-chronicle'], 3], 'evolve:v4': [['ev-relations'], 3], 'evolve:v5': [['ev-record'], 3],
+  'evolve:v6': [['ev-log'], 2], 'evolve:v7': [['ev-nation'], 3], 'runtime:v5': [['jobs'], 2],
 }
 const infoOf = (k: string): [string[], number] => INFO[k] ?? [[k], 1]
 
 /** Topics that explain the quantum step, per mode. The frame and the provenance stay with them. */
 const ESSENTIAL_BLUR = new Set(['frame', 'title', 'history', 'scene', 'qsettings', 'strength', 'qweights', 'register', 'pairing', 'bitstrings', 'shots', 'engine', 'backend', 'result', 'density', 'explain'])
-const ESSENTIAL_EVOLVE = new Set(['frame', 'title', 'history', 'scene', 'result', 'ev-nations', 'ev-territory', 'ev-chronicle', 'ev-relations', 'ev-record'])
+const ESSENTIAL_EVOLVE = new Set(['frame', 'title', 'history', 'scene', 'result', 'ev-nations', 'ev-territory', 'ev-chronicle', 'ev-relations', 'ev-record', 'ev-log', 'ev-nation'])
 
 /** The piece keys to take off for a tidy level. Text notes are always kept. */
 export function toRemove(keys: string[], level: TidyLevel, mode: string): string[] {
@@ -90,6 +91,10 @@ export const CURATED: Curated[] = [
   {
     id: 'evolve', title: 'Evolve', mode: 'nations', desc: 'Record, roster, territory, chronicle and relations.',
     compose: { frame: 'v3', meta: 'v5', bounds: 'v1', evolve: 'v5,v1,v2,v3,v4' },
+  },
+  {
+    id: 'story', title: 'Story', mode: 'nations', desc: 'Territory, the log, one nation and the turn, as it plays.',
+    compose: { frame: 'v2', meta: 'v5', evolve: 'v2,v6,v7', param: 'turn,nations' },
   },
   {
     id: 'measure', title: 'Measure', desc: 'Extents, numbered callouts, kept volume and the print check.',

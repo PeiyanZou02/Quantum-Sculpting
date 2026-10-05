@@ -18,12 +18,14 @@ import { chosenOf, toggleVariant, variantsOf } from '../hud/compose'
 import { MARK_MIME } from './MarkLibrary'
 import { usePresent } from '../present'
 import { usePresentKeys } from './presentKeys'
+import { useAnimator } from './animator'
 import type { HudCtx, Vec3 } from '../hud/types'
 import { MODEL_EXT } from './modelExt'
 import { ShapePicker } from './Shapes'
 import { live, bump } from '../live'
 import { ownerPalette, nationName } from '../view/nations'
 import { fit, frameOf } from '../frames'
+import { sectionRGBA, useSliceScheme } from '../qs/sectionColor'
 
 const MODE_LABEL: Record<string, string> = { gaussian: 'Gaussian', emulator: 'Emulation', atlas: 'Atlas', nations: 'Evolve' }
 const modeLabel = (m: string) => MODE_LABEL[m] ?? m
@@ -84,6 +86,7 @@ export function Stage() {
   const st = useStore()
   const pr = usePresent()
   usePresentKeys()
+  useAnimator()
   // a component previewed from the library is drawn on top of the composition as it is now
   const pv = pr.preview && !pr.preview.startsWith('guide:') ? pr.preview.split(':') : null
   const shown: Record<string, string> = pv && !variantsOf(pr.compose, pv[0]).includes(pv[1]) ? { ...pr.compose, [pv[0]]: toggleVariant(pr.compose, pv[0], pv[1]) } : pr.compose
@@ -127,6 +130,15 @@ export function Stage() {
   useEffect(() => { engine?.setFrame({ bounds: guides.box, floor: guides.floor, divisions: guides.div }) }, [engine, guides.box, guides.floor, guides.div, grid])
   const planeOn = hud.slice || tool === 'slice' || pr.sweep || (shown.slicecard ?? 'off') !== 'off'
   useEffect(() => { engine?.setSlice(planeOn ? slice : null) }, [engine, slice, view, planeOn])
+  // the cutting plane carries the section itself, coloured as the Slice panel says (nations in Evolve)
+  const planeProcessed = (view === 'processed' || view === 'result' || view === 'scan') && !!procData
+  const planeColors = useSliceScheme(planeProcessed)
+  useEffect(() => {
+    if (!engine) return
+    const g = planeProcessed ? procData : gridData
+    if (!planeOn || !g || g.n !== engine.n) { engine.setSliceImage(null, 0, 'z'); return }
+    engine.setSliceImage(sectionRGBA(g, slice.axis, slice.index, planeColors.scheme, theme, planeColors.owner), g.n, slice.axis)
+  }, [engine, planeOn, planeProcessed, procData, gridData, slice.axis, slice.index, planeColors.scheme, planeColors.owner, theme])
   useEffect(() => { if (engine && view === 'scan') engine.setScan(slice.axis === 'z' ? slice.index + 1 : 0) }, [engine, view, slice, grid])
   // entering the scan view turns the plane to z (only then: the axis is read, not watched)
   useEffect(() => { const s = useStore.getState(); if (view === 'scan' && s.slice.axis !== 'z') s.setSlice({ axis: 'z' }) }, [view])
@@ -313,7 +325,7 @@ export function Stage() {
   // slice tool: vertical drag moves the cutting plane one layer per 6 px
   const sliceDrag = useRef<{ y: number; i: number } | null>(null)
   const sliceHandlers = tool === 'slice' && grid ? {
-    onPointerDown: (e: React.PointerEvent) => { if (e.button === 0) { sliceDrag.current = { y: e.clientY, i: useStore.getState().slice.index }; st.setScan({ playing: false }) } },
+    onPointerDown: (e: React.PointerEvent) => { if (e.button === 0) { e.preventDefault(); sliceDrag.current = { y: e.clientY, i: useStore.getState().slice.index }; st.setScan({ playing: false }) } },
     onPointerMove: (e: React.PointerEvent) => {
       const d = sliceDrag.current
       if (!d) return
@@ -820,8 +832,9 @@ function FocusStrip() {
   return (
     <div className="focus-strip" aria-live="polite">
       <ol className="focus-strip__steps" aria-label="Show">
-        {[...steps, { id: 'scan' as StageName, t: 'Scan', done: st.proc && st.grid }].map((x) => {
-          const on = x.id === 'scan' ? focus.stage === 'scan' : x.id === at && focus.stage !== 'scan'
+        {steps.map((x) => {
+          // the scan sweep belongs to the quantum step (and is a piece in the library)
+          const on = x.id === at
           return (
             <li key={x.id}>
               <button className={'focus-strip__s' + (on ? ' focus-strip__s--on' : '') + (x.done ? ' focus-strip__s--done' : '')}

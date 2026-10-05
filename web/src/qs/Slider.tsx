@@ -69,6 +69,9 @@ export function Slider({ label, value, min, max, step = 0.01, onChange, onCommit
             data-tip={tip ? undefined : 'Drag, or double-click to type'}
             onPointerDown={(e) => {
               if (disabled || e.button !== 0 || e.detail > 1) return
+              // no text selection while dragging; keep the keyboard focus a click would have given
+              e.preventDefault()
+              e.currentTarget.focus()
               e.currentTarget.setPointerCapture(e.pointerId)
               setDrag(true)
               onChange(at(e.clientX))

@@ -5,7 +5,6 @@ import { Segmented } from '../qs/Segmented'
 import { Slider } from '../qs/Slider'
 import { QReadout } from '../qs/QReadout'
 import { QPill } from '../qs/QPill'
-import { Panel } from '../ui/Panel'
 import { Icon } from '../qs/Icon'
 import { EvolveSections } from './EvolvePanel'
 import { QuantumSections } from './QuantumPanel'
@@ -14,6 +13,8 @@ import { LevelHistogram } from '../qs/LevelHistogram'
 import { histogram, solidPerLayer, type Axis } from '../qs/grid'
 import { SectionMap } from './SectionMap'
 import { fmt } from './fmt'
+import { SLICE_COLORS, useSliceScheme, type SliceColor } from '../qs/sectionColor'
+import { Panel, Row } from '../ui/Panel'
 import { PresentStyle } from './presentStyle'
 import { ComposeSections, OutputSections } from './PresentPanel'
 import { RunBar } from './RunBar'
@@ -78,21 +79,19 @@ const GROUPS: { id: GroupId; icon: string; t: string }[] = [
   { id: 'output', icon: 'export', t: 'Output' },
 ]
 type GroupId = 'model' | 'voxels' | 'quantum' | 'mesh' | 'compose' | 'output'
-const groupOf = (s: string): GroupId => (s === 'evolve' || s === 'scan' ? 'quantum' : s as GroupId)
-/** Compose and Output are not steps: once opened they stay open while the steps run on. */
-const STAYS = new Set<GroupId>(['compose', 'output'])
+const KEY = 'qs-props'
+const savedGroup = (): GroupId => {
+  try { const v = localStorage.getItem(KEY); return GROUPS.some((x) => x.id === v) ? (v as GroupId) : 'model' } catch { return 'model' }
+}
 
-/** Lab · properties, one group at a time: what the open step produced, or the composition and the
- *  output. The rail follows the step you open on the left; click it to look at another stage's results
- *  without changing the view, or to compose and export. */
+/** Lab · properties, one group at a time: what a step produced, or the composition and the output.
+ *  It has its own rail and keeps what you pick on it, whatever step Parameters has open. */
 export function OutputPane() {
   const evolve = useStore((s) => s.q.mode === 'nations')
-  const stage = useStore((s) => s.focus.stage)
   // nothing computed yet for this mode: the run sits on top of the quantum group
   const ran = useStore((s) => (s.q.mode === 'nations' ? !!s.evolve.history : !!s.proc && s.proc.mode !== 'nations'))
-  const [picked, setPicked] = useState<{ g: GroupId; at: string } | null>(null)
-  // a pick lasts until the focus moves to another step (Compose and Output stay until you leave them)
-  const g: GroupId = picked && (picked.at === stage || STAYS.has(picked.g)) ? picked.g : groupOf(stage)
+  const [g, setG] = useState<GroupId>(savedGroup)
+  const pick = (x: GroupId) => { setG(x); try { localStorage.setItem(KEY, x) } catch { /* per-viewer */ } }
   return (
     <div className="lab-in lab-in--right">
       <div className="lab-in__page">
@@ -112,7 +111,7 @@ export function OutputPane() {
       </div>
       <nav className="lab-rail lab-rail--right" aria-label="Properties by stage">
         {GROUPS.map((x, k) => (
-          <button key={x.id} className={'lab-rail__b' + (g === x.id ? ' lab-rail__b--on' : '') + (x.id === 'compose' ? ' lab-rail__b--sep' : '')} onClick={() => setPicked({ g: x.id, at: stage })}
+          <button key={x.id} className={'lab-rail__b' + (g === x.id ? ' lab-rail__b--on' : '') + (x.id === 'compose' ? ' lab-rail__b--sep' : '')} onClick={() => pick(x.id)}
             aria-current={g === x.id ? 'page' : undefined} data-tip={`${String(k + 1).padStart(2, '0')} ${x.id === 'quantum' && evolve ? 'Evolve' : x.t}`} data-tip-side="left">
             <Icon name={x.id === 'quantum' && evolve ? 'entangle' : x.icon} size={16} />
           </button>
@@ -210,6 +209,8 @@ export function SliceOut() {
   const fitSlice = useEffectEvent(() => { if (slice.index > n - 1) st.setSlice({ index: Math.floor(n / 2) }) })
   useEffect(() => { fitSlice() }, [n])
   const level = src === 'processed' ? m.level : 0.5
+  const colors = useSliceScheme(src === 'processed')
+  const nationsOn = st.proc?.mode === 'nations'
   const scanning = view === 'scan'
   const canScan = !!procData && !!gridData
   const live = st.job?.status === 'running'
@@ -222,15 +223,19 @@ export function SliceOut() {
     <Blk id="out-slice" label="Slice" note={`${slice.axis} ${slice.index} / ${n - 1}`}
       tools={<Shows on={hud.slice} what="the cutting plane" set={(v) => st.setHud({ slice: v })} />}>
       <div ref={box} style={{ width: '100%' }}>
-        {g ? <SectionMap size={w} grid={g} input={src === 'processed' ? gridData : null} axis={slice.axis} index={slice.index} level={level} onIndex={(i) => st.setSlice({ index: i })} />
+        {g ? <SectionMap size={w} grid={g} input={src === 'processed' ? gridData : null} axis={slice.axis} index={slice.index} level={level} scheme={colors.scheme} owner={colors.owner}
+          onIndex={(i) => { st.setSlice({ index: i }); if (!hud.slice) st.setHud({ slice: true }) }} />
           : <Empty>Voxelise to slice the grid.</Empty>}
       </div>
       <div className="out-pair">
         <Segmented size="s" options={[{ value: 'input', label: 'Input' }, { value: 'processed', label: 'Processed', disabled: !procData }]} value={src} onChange={(v) => setSrc(v as 'input' | 'processed')} />
         <Segmented<Axis> size="s" options={(['x', 'y', 'z'] as Axis[]).map((a) => ({ value: a, label: a.toUpperCase(), disabled: scanning && a !== 'z' }))} value={slice.axis} onChange={(a) => st.setSlice({ axis: a })} />
       </div>
+      <Row label="Colour">
+        <Segmented<SliceColor> size="s" options={SLICE_COLORS.map((c) => ({ ...c, disabled: c.value === 'nations' && !nationsOn }))} value={st.sliceColor} onChange={st.setSliceColor} aria-label="Section colour" />
+      </Row>
       <Slider label="Cutting plane" value={slice.index} min={0} max={n - 1} step={1} ticks={8} disabled={scanning && live}
-        onChange={(v) => { st.setScan({ playing: false }); st.setSlice({ index: v }) }}
+        onChange={(v) => { st.setScan({ playing: false }); st.setSlice({ index: v }); if (!hud.slice) st.setHud({ slice: true }) }}
         format={(v) => `${v} · ${(v * (st.grid?.voxel_size ?? 0)).toFixed(1)} mm`} />
       <div className="row" style={{ justifyContent: 'space-between' }}>
         <div className="row" style={{ gap: 4 }}>

@@ -10,7 +10,7 @@ import { countOn, sameComposition, savePng } from '../hud/compose'
 import { Icon, IconButton } from '../qs/Icon'
 import { Segmented } from '../qs/Segmented'
 import { Panel, Button, Buttons, Checkbox, Note } from '../ui/Panel'
-import { Slider } from '../qs/Slider'
+import { Slider, Select } from '../qs/Slider'
 import { Check } from '../qs/Popover'
 import { useLive } from '../live'
 import { exportFrame, exportGlb, renderStill, screenshot, toggleRecording } from './capture'
@@ -18,6 +18,9 @@ import { FRAMES, frameOf, type FrameId } from '../frames'
 import { CURATED, TIDY_LEVELS } from '../hud/tidy'
 import { FloorSize, LibRow, MarkLibrary } from './MarkLibrary'
 import { PRESENT_TOOLS } from './presentTools'
+import { PARAMS, paramOf } from '../hud/paramDefs'
+import { passLength, recordPass } from './animator'
+import type { Track } from '../present'
 
 /** The library's categories as tabs: the scene's own guides and text first, then the Quicksilver sheets. */
 // built on first use: the registry imports Properties' cards, which import this file
@@ -129,7 +132,7 @@ function Presets() {
           )
         })}
       </div>
-      {!evolve && sameComposition(p.compose, CURATED.find((c) => c.id === 'evolve')!.compose) && (
+      {!evolve && CURATED.some((c) => c.mode === 'nations' && sameComposition(p.compose, c.compose)) && (
         <div className="pd-need">
           <Note>These pieces read an Evolve run. The quantum step is set to another engine.</Note>
           <Buttons><Button kind="primary" disabled={!hasGrid} onClick={() => setQ({ mode: 'nations' })} tip="Run Evolve" desc="Switch the quantum step to Evolve; it runs on the voxel grid straight away.">Run Evolve</Button></Buttons>
@@ -306,6 +309,79 @@ function MotionPage() {
   )
 }
 
+/** One animated value: its keyframes (spread evenly over the time), the time, and how it repeats. */
+function TrackCard({ tr }: { tr: Track }) {
+  const p = usePresent()
+  const s = useStore()
+  const d = paramOf(tr.param)
+  if (!d) return null
+  const off = d.get(s) == null
+  const setKey = (i: number, v: number) => p.setTrack(tr.id, { keys: tr.keys.map((k, j) => (j === i ? v : k)) })
+  return (
+    <div className="anim-track">
+      <div className="anim-track__h">
+        <span className="anim-track__t">{d.t}</span>
+        {off && <span className="anim-track__off">not in this mode</span>}
+        <IconButton name="clear" size={22} title="Stop animating this value" onClick={() => p.removeTrack(tr.id)} />
+      </div>
+      <div className="anim-keys" aria-label="Keyframes">
+        {tr.keys.map((k, i) => (
+          <input key={i} className="anim-key" type="number" step={d.step} value={k} aria-label={`Keyframe ${i + 1}`}
+            onChange={(e) => { const v = parseFloat(e.target.value); if (Number.isFinite(v)) setKey(i, v) }} />
+        ))}
+        {tr.keys.length < 6 && <button className="anim-keys__b" onClick={() => p.setTrack(tr.id, { keys: [...tr.keys, tr.keys[tr.keys.length - 1]] })} data-tip="Add a keyframe">+</button>}
+        {tr.keys.length > 2 && <button className="anim-keys__b" onClick={() => p.setTrack(tr.id, { keys: tr.keys.slice(0, -1) })} data-tip="Remove the last keyframe">−</button>}
+      </div>
+      <Slider label="Seconds" value={tr.sec} min={1} max={30} step={0.5} format={(v) => `${v} s`} onChange={(v) => p.setTrack(tr.id, { sec: v })} />
+      <Pills<Track['mode']> value={tr.mode} onChange={(v) => p.setTrack(tr.id, { mode: v })} options={[{ id: 'bounce', t: 'Bounce' }, { id: 'loop', t: 'Loop' }, { id: 'once', t: 'Once' }]} />
+    </div>
+  )
+}
+
+/** Compose · Animate: values with keyframes, the stage reel, the look cycling, the camera and the
+ *  slice; play them together, or record one pass. */
+function Animate() {
+  const p = usePresent()
+  const s = useStore()
+  const len = passLength(p.tracks, p.stageReel, p.cycles)
+  const free = PARAMS.filter((d) => d.set && d.get(s) != null && !p.tracks.some((t) => t.param === d.id))
+  const add = (id: string) => {
+    const d = paramOf(id)
+    if (!d) return
+    const lo = d.min(s), hi = d.max(s), snap = (v: number) => +(Math.round(v / d.step) * d.step).toFixed(4)
+    p.addTrack({ param: id, keys: id === 'turn' ? [0, hi] : [snap(lo + (hi - lo) * 0.2), snap(lo + (hi - lo) * 0.8)], sec: id === 'turn' ? 10 : 4, mode: id === 'turn' ? 'once' : 'bounce' })
+  }
+  return (
+    <>
+      <Buttons>
+        <Button kind="primary" active={p.playing} onClick={() => p.setPlaying(!p.playing)} tip={p.playing ? 'Stop' : 'Play'} desc="Plays the values, the stage reel and the look cycles below together, from the start. Key: P">{p.playing ? 'Stop' : 'Play'}</Button>
+        <Button disabled={!len || p.recording} onClick={() => { recordPass().catch(() => {}) }} tip="Record one pass" desc="Starts a recording, plays everything once from the start, then stops and saves the WebM.">Record a pass</Button>
+      </Buttons>
+      <Note>{len ? `One pass takes ${len.toFixed(1)} s.` : 'Animate a value, the stages or the look to make a pass.'}</Note>
+      <Panel id="anim-values" title="Values" sub aside={p.tracks.length || undefined}>
+        {p.tracks.map((tr) => <TrackCard key={tr.id} tr={tr} />)}
+        <Select label={p.tracks.length ? 'Animate another value' : 'Animate a value'} value="" onChange={add}
+          options={[{ value: '', label: free.length ? 'Choose…' : 'Every value is animated' }, ...free.map((d) => ({ value: d.id, label: d.t }))]} />
+      </Panel>
+      <Panel id="anim-stages" title="Stages" sub>
+        <div className="pd-checks">
+          <Checkbox label="Step through the stages" tip="Model, voxels, quantum or Evolve (its turns play), mesh, one after another." checked={p.stageReel.on} onChange={(v) => p.setStageReel({ on: v })} />
+        </div>
+        <Slider label="Seconds per stage" value={p.stageReel.sec} min={1} max={12} step={0.5} format={(v) => `${v} s`} onChange={(v) => p.setStageReel({ sec: v })} />
+      </Panel>
+      <Panel id="anim-look" title="Look" sub>
+        <div className="pd-checks">
+          <Checkbox label="Cycle the shading" tip="Solid, value, wireframe, entanglement." checked={p.cycles.shading} onChange={(v) => p.setCycles({ shading: v })} />
+          <Checkbox label="Cycle the light" tip="Key, soft, rim, flat." checked={p.cycles.light} onChange={(v) => p.setCycles({ light: v })} />
+          <Checkbox label="Cycle the backdrop" checked={p.cycles.backdrop} onChange={(v) => p.setCycles({ backdrop: v })} />
+        </div>
+        <Slider label="Seconds each" value={p.cycles.sec} min={1} max={10} step={0.5} format={(v) => `${v} s`} onChange={(v) => p.setCycles({ sec: v })} />
+      </Panel>
+      <MotionPage />
+    </>
+  )
+}
+
 /** A frame's shape drawn small, so the ratios read at a glance. */
 function FrameGlyph({ ratio }: { ratio: number | null }) {
   const r = ratio ?? 1.6, w = r >= 1 ? 18 : 18 * r, h = r >= 1 ? 18 / r : 18
@@ -374,6 +450,7 @@ function Exports() {
             data-tip={p.recording ? 'Stop recording' : 'Record'} data-tip-desc={p.frame === 'window' ? 'A WebM of the window with its motion.' : 'A WebM of the frame only, where the browser can crop the capture (Chrome); otherwise the window.'}>
             <span className="pd-rec" />{p.recording ? 'Stop' : 'Record'}
           </button>
+          <button className="pd-chip" disabled={p.recording || !passLength(p.tracks, p.stageReel, p.cycles)} onClick={() => { recordPass().catch(() => {}) }} data-tip="Record one pass" data-tip-desc="Plays the animation set up under Compose · Animate once, recording it.">One pass</button>
           <button className="pd-chip" onClick={() => p.setBare(true)} data-tip="Hide controls" data-tip-key="H" data-tip-desc="Only the view and its pieces, for clean frames and recordings. H or Esc brings the controls back.">Hide controls</button>
         </div>
       </Panel>
@@ -399,20 +476,20 @@ export function ComposeSections() {
       <Panel id="cmp-presets" title="Presets" aside={preset ? preset.title : on ? 'custom' : 'none'}><Presets /></Panel>
       <Panel id="cmp-view" title="On the view"><OnTheView /></Panel>
       <Panel id="cmp-library" title="Library" aside={on ? `${on} on` : undefined} flush><LibraryPage hover={hover} /></Panel>
+      <Panel id="cmp-animate" title="Animate" aside={p.playing ? 'playing' : undefined}><Animate /></Panel>
       <Panel id="cmp-annotate" title="Annotate" defaultOpen={false}><NotesPage /></Panel>
       <Panel id="cmp-saved" title="Saved compositions" aside={p.saved.length || undefined} defaultOpen={false}><Compositions /></Panel>
     </div>
   )
 }
 
-/** Properties · 06 Output: the frame, images, video, 3D and motion. */
+/** Properties · 06 Output: the frame, images, video and 3D. */
 export function OutputSections() {
   const frame = usePresent((p) => frameOf(p.frame).t)
   return (
     <div className="pd pd--props">
       <Panel id="out-frame" title="Frame" aside={frame}><FramePick /></Panel>
       <Panel id="out-export" title="Export"><Exports /></Panel>
-      <Panel id="out-motion" title="Motion" defaultOpen={false}><MotionPage /></Panel>
     </div>
   )
 }
