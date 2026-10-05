@@ -750,6 +750,7 @@ class ServerTest(unittest.TestCase):
         before = self.fake.submits
         job = self.post("/api/process", self.QRNG).get_json()
         self.assertEqual((job["status"], job["kind"]), ("running", "qrng"))
+        self.assertEqual((job["tile_shape"], job["tiles_total"]), ([], 1), "界面会拿分块的形状去算，不能是空值")
         self.assertEqual(self.c.get("/api/state").get_json()["job"]["kind"], "qrng")      # 刷新页面后靠这个接回去
         job = self.wait_for_job(job["job_id"])
         self.assertEqual(job["status"], "done", job["error"])

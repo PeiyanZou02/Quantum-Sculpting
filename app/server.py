@@ -580,7 +580,7 @@ def new_job(run, params, tile_mode, **more):
     return {"id": uuid.uuid4().hex[:12], "kind": "blur", "status": "running", "atlas_status": "submitting",
             "started": time.time(), "finished": None, "error": None, "meta": None,
             "stale": False, "note": None, "tiles_total": 1, "tiles_done": 0,
-            "tiles_cached": 0, "tile_shape": None, "version": 0, "partial": None,
+            "tiles_cached": 0, "tile_shape": [], "version": 0, "partial": None,
             "cancel": False, "lock": threading.Lock(), "run": run, "params": params,
             "tiling": tile_mode, "layers": None, "done": set(), "pool": None, **more}
 
