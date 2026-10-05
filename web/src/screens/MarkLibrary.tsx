@@ -12,6 +12,7 @@ import type { HudModule } from '../hud/types'
 import { Slider } from '../qs/Slider'
 import { Segmented } from '../qs/Segmented'
 import { IconButton } from '../qs/Icon'
+import { animatable } from '../hud/motion'
 
 /** Sentence case for the library's short names ("polar" → "Polar"). */
 const cap = (s: string) => (s ? s[0].toUpperCase() + s.slice(1) : s)
@@ -26,13 +27,16 @@ const catOf = (family: string) => CATEGORIES.find((c) => c.fams.includes(family 
 
 const TIERS: { v: 1 | 2 | 3; t: string }[] = [{ v: 1, t: 'Primary' }, { v: 2, t: 'Secondary' }, { v: 3, t: 'Tertiary' }]
 
-/** One library row: the name, and a dot when it is on. */
-export function LibRow({ on, name, drag, onToggle, onHover, onDragStart }: {
+/** One library row: the name, its motion switch when it has something to animate, and a dot when it
+ *  is on the view. */
+export function LibRow({ on, name, drag, moves, onMoves, onToggle, onHover, onDragStart }: {
   on: boolean; name: string; drag?: string
+  /** Whether the piece moves with the clock; leave out for pieces with nothing to animate. */
+  moves?: boolean; onMoves?: () => void
   onToggle: () => void; onHover?: (h: boolean) => void; onDragStart?: () => void
 }) {
   return (
-    <div role="switch" tabIndex={0} aria-checked={on} aria-label={name} className={'mk-row' + (on ? ' mk-row--on' : '') + (drag ? ' mk-row--drag' : '')}
+    <div role="switch" tabIndex={0} aria-checked={on} aria-label={name} className={'mk-row' + (on ? ' mk-row--on' : '') + (drag ? ' mk-row--drag' : '') + (moves != null ? ' mk-row--motion' : '')}
       draggable={!!drag}
       onDragStart={(e) => {
         if (!drag) return
@@ -45,6 +49,13 @@ export function LibRow({ on, name, drag, onToggle, onHover, onDragStart }: {
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle() } }}
       onPointerEnter={() => onHover?.(true)} onFocus={() => onHover?.(true)} onPointerLeave={() => onHover?.(false)} onBlur={() => onHover?.(false)}>
       <span className="mk-row__t">{name}</span>
+      {moves != null && (
+        <button type="button" className={'mk-anim' + (moves ? ' mk-anim--on' : '')} aria-pressed={moves} aria-label={`Animate ${name}`}
+          data-tip={moves ? 'Animated' : 'Holds still'} data-tip-desc={moves ? 'Moves with the clock under Animate. Click to hold it still.' : 'Keeps what it shows while the animation plays. Click to animate it.'}
+          onClick={(e) => { e.stopPropagation(); onMoves?.() }} onKeyDown={(e) => e.stopPropagation()}>
+          <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden><path d="M2 1.2v7.6L8.6 5z" /></svg>
+        </button>
+      )}
       <span className="mk-dot" aria-hidden />
     </div>
   )
@@ -57,6 +68,8 @@ function FamilyRows({ id, compose, open, onOpen, drag, onToggle, onPreview, onDr
   onToggle: (fam: string, v: string, on: boolean) => void; onPreview?: (key: string | null, on: boolean) => void; onDragStart?: () => void
 }) {
   const f = familyOf(id)
+  const still = usePresent((p) => p.still)
+  const setStill = usePresent((p) => p.setStill)
   if (!f || !f.modules.length) return null
   const on = variantsOf(compose, f.id)
   return (
@@ -71,6 +84,7 @@ function FamilyRows({ id, compose, open, onOpen, drag, onToggle, onPreview, onDr
         const isOn = on.includes(m.id)
         return (
           <LibRow key={m.id} on={isOn} name={cap(m.label)} drag={drag ? keyOf(m) : undefined}
+            moves={animatable(m) ? !still[keyOf(m)] : undefined} onMoves={() => setStill(keyOf(m), !still[keyOf(m)])}
             onToggle={() => { onToggle(f.id, m.id, !isOn); onPreview?.(keyOf(m), !isOn) }}
             onHover={(h) => onPreview?.(h ? keyOf(m) : null, isOn)}
             onDragStart={onDragStart} />

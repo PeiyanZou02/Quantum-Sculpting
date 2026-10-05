@@ -349,3 +349,11 @@
 .pd-preset__t { font: var(--qs-t-title); color: var(--qs-ink); }
 .pd-preset__t em { font-style: normal; font-weight: 400; color: var(--qs-ink2); }
 .pd-preset__d { font: var(--qs-t-prose); color: var(--qs-ink2); }
+/* the motion switch beside the dot: filled while the piece moves with the clock */
+.mk-row--motion { grid-template-columns: 1fr 22px 10px; gap: 6px; }
+.mk-anim { width: 22px; height: 22px; display: grid; place-items: center; padding: 0; border: 1px solid transparent; border-radius: 0; background: none; color: var(--qs-ink4); cursor: pointer; }
+.mk-anim svg { fill: none; stroke: currentColor; stroke-width: 1; }
+.mk-anim:hover { border-color: var(--qs-ink4); color: var(--qs-ink); }
+.mk-anim--on { color: var(--qs-ink); }
+.mk-anim--on svg { fill: currentColor; }
+.mk-anim:focus-visible { outline: 2px solid var(--qs-ink); outline-offset: -2px; }

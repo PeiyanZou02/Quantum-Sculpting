@@ -76,3 +76,7 @@
   .qs-lab-march, .qs-lab-ping, .qs-lab-blink { animation: none; }
   .qs-lab-slide, .qs-lab-grow, .qs-lab-move, .qs-lab-turn, .qs-lab-fade, .qs-lab-stroke, .qs-lab-pill { transition: none; }
 }
+/* layer stack: the cutting plane's rule glides from layer to layer */
+.qs-lab-cursor { position: absolute; left: 0; top: 0; right: 0; height: 0; display: flex; align-items: center; gap: 8px; pointer-events: none; transition: transform .25s cubic-bezier(.2, .8, .2, 1); }
+.qs-lab-cursor__rule { width: 120px; height: 1px; background: var(--qs-ink); flex: none; }
+@media (prefers-reduced-motion: reduce) { .qs-lab-cursor { transition: none; } }

@@ -67,7 +67,10 @@ export function settle(root: HTMLElement, model: Rect | null, onMove: (k: string
     .map((p) => ({ k: p.dataset.hud!, r: boxOf(p) }))
     .filter((p) => p.r.width > 0 && p.k !== skip)   // a piece only previewed from the library takes no part
   const stays = (k: string) => k.startsWith('chrome:') || fixed(k)
-  const order = [...pieces.filter((p) => stays(p.k)), ...pieces.filter((p) => !stays(p.k)).sort((a, b) => a.r.top - b.r.top || a.r.left - b.r.left)]
+  // pieces laid out by hand settle before the rest, so a piece added later finds its own place
+  // instead of pushing them off theirs
+  const byPos = (a: { r: DOMRect }, b: { r: DOMRect }) => a.r.top - b.r.top || a.r.left - b.r.left
+  const order = [...pieces.filter((p) => stays(p.k)), ...pieces.filter((p) => !stays(p.k) && anchored(p.k)).sort(byPos), ...pieces.filter((p) => !stays(p.k) && !anchored(p.k)).sort(byPos)]
   const settled: DOMRect[] = fixedBlockers()
   const handset = new Set<DOMRect>()
   let moved = 0, stuck = 0

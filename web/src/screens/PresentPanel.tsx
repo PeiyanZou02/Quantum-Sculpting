@@ -1,17 +1,16 @@
 // Lab · Properties · Compose and Output: the HUD composed over the view, and everything that leaves the
 // app. Compose: presets (one list), what the view's own controls show, the component library by
-// category, annotations and saved compositions. Output: the frame and its export (image, video, 3D)
-// and motion (shots, turntable, slice sweep).
+// category (each piece with its motion switch), the animation's clock, annotations and saved
+// compositions. Output: the frame and its export (image, video, 3D).
 import { useState, type ReactNode } from 'react'
 import { useStore, type Tool } from '../store'
-import { clockOf, isDirty, usePresent, type Sweep } from '../present'
+import { clockOf, isDirty, usePresent } from '../present'
 import { CATEGORIES } from '../hud/registry'
 import { countOn, sameComposition, savePng } from '../hud/compose'
 import { Icon, IconButton } from '../qs/Icon'
 import { Segmented } from '../qs/Segmented'
 import { Panel, Button, Buttons, Checkbox, Note } from '../ui/Panel'
-import { Slider, Select } from '../qs/Slider'
-import { Check } from '../qs/Popover'
+import { Slider } from '../qs/Slider'
 import { useLive } from '../live'
 import { exportFrame, exportGlb, renderStill, screenshot, toggleRecording } from './capture'
 import { FRAMES, frameOf, type FrameId } from '../frames'
@@ -19,10 +18,8 @@ import { CURATED, TIDY_LEVELS, presetCompose } from '../hud/tidy'
 import { DEFAULT_COMPOSITION, DEFAULT_HUD, DEFAULT_ID } from '../hud/defaultComposition'
 import { FloorSize, LibRow, MarkLibrary } from './MarkLibrary'
 import { PRESENT_TOOLS } from './presentTools'
-import { PARAMS, paramOf } from '../hud/paramDefs'
 import { passLength, recordPass, storySegments } from './animator'
 import { useNow } from '../useNow'
-import type { Track } from '../present'
 
 /** The library's categories as tabs: the scene's own guides and text first, then the Quicksilver sheets. */
 // built on first use: the registry imports Properties' cards, which import this file
@@ -261,92 +258,6 @@ function NotesPage() {
   )
 }
 
-/** The slice sweep: on or off, where the plane is now, the range it covers, the step, how long a pass takes, direction. */
-function SweepSettings() {
-  const p = usePresent()
-  const grid = useStore((s) => s.grid)
-  const slice = useStore((s) => s.slice)
-  const setSlice = useStore((s) => s.setSlice)
-  const n = grid?.n ?? 32, mm = grid?.voxel_size ?? 1
-  const c = p.sweepCfg
-  const at = (f: number) => Math.round(f * (n - 1))
-  const layer = (i: number) => `${i} · ${(i * mm).toFixed(0)} mm`
-  return (
-    <Group label="Slice sweep">
-      <Check label="Sweep" checked={p.sweep} disabled={!grid} onChange={p.setSweep} />
-      <Slider label="Plane" value={slice.index} min={0} max={n - 1} step={1} ticks={8} format={layer} onChange={(v) => setSlice({ index: v })} />
-      <Slider label="From" value={at(c.from)} min={0} max={n - 1} step={1} ticks={8} format={layer} onChange={(v) => p.setSweepCfg({ from: v / (n - 1) })} />
-      <Slider label="To" value={at(c.to)} min={0} max={n - 1} step={1} ticks={8} format={layer} onChange={(v) => p.setSweepCfg({ to: v / (n - 1) })} />
-      <Slider label="Step" value={c.step} min={1} max={8} step={1} ticks={8} format={(v) => `${v} layer${v === 1 ? '' : 's'}`} onChange={(v) => p.setSweepCfg({ step: v })} />
-      <Slider label="One pass" value={c.sec} min={1} max={30} step={1} ticks={7} format={(v) => `${v} s`} onChange={(v) => p.setSweepCfg({ sec: v })} />
-      <Pills<Sweep['mode']> value={c.mode} onChange={(v) => p.setSweepCfg({ mode: v })}
-        options={[{ id: 'bounce', t: 'Up and down' }, { id: 'up', t: 'Up' }, { id: 'down', t: 'Down' }]} />
-    </Group>
-  )
-}
-
-function MotionPage() {
-  const p = usePresent()
-  const lv = useLive()
-  return (
-    <>
-      <Group label="Shots">
-        <div className="pd-chips">
-          {p.shots.map((_, i) => (
-            <button key={i} className={'pd-shot pd-shot--s' + (p.shot === i ? ' pd-shot--on' : '')} onClick={() => p.setShot(i)} aria-label={`Shot ${i + 1}`}>{i + 1}</button>
-          ))}
-          <button className="pd-chip pd-chip--s" disabled={p.shots.length >= 10} onClick={() => { const e = lv.engine; if (!e) return; const a = e.angles(), l = e.lens(); p.addShot({ az: a.az, el: a.el, dist: l.dist }) }}
-            data-tip="Save this camera angle as a shot">+ Shot</button>
-          {p.shots.length > 0 && <IconButton name="clear" size={22} title="Remove the current shot" onClick={() => p.removeShot(p.shot)} />}
-        </div>
-        <Check label="Reel" checked={p.reel} disabled={p.shots.length < 2} onChange={p.setReel} />
-        <Slider label="Seconds per shot" value={p.reelSec} min={2} max={12} step={1} ticks={10} format={(v) => `${v} s`} onChange={(v) => p.setMotion({ reelSec: v })} />
-      </Group>
-      <Group label="Turntable">
-        <Check label="Turn" checked={p.spin} onChange={p.setSpin} />
-        <Slider label="Speed" value={p.spinSpeed} min={2} max={45} step={1} ticks={9} format={(v) => `${v}°/s`} onChange={(v) => p.setMotion({ spinSpeed: v })} />
-        <Pills<string> value={String(p.spinDir)} onChange={(v) => p.setSpinDir(+v as 1 | -1)} options={[{ id: '1', t: '↺ Counter-clockwise' }, { id: '-1', t: '↻ Clockwise' }]} />
-      </Group>
-      <SweepSettings />
-      {p.saved.length > 1 && (
-        <Group label="Compositions">
-          <Check label="Cycle the saved ones" checked={p.cycle} onChange={p.setCycle} />
-          <Slider label="Seconds each" value={p.cycleSec} min={3} max={20} step={1} ticks={9} format={(v) => `${v} s`} onChange={(v) => p.setMotion({ cycleSec: v })} />
-        </Group>
-      )}
-    </>
-  )
-}
-
-/** One animated value: its keyframes (spread evenly over the time), the time, and how it repeats. */
-function TrackCard({ tr }: { tr: Track }) {
-  const p = usePresent()
-  const s = useStore()
-  const d = paramOf(tr.param)
-  if (!d) return null
-  const off = d.get(s) == null
-  const setKey = (i: number, v: number) => p.setTrack(tr.id, { keys: tr.keys.map((k, j) => (j === i ? v : k)) })
-  return (
-    <div className="anim-track">
-      <div className="anim-track__h">
-        <span className="anim-track__t">{d.t}</span>
-        {off && <span className="anim-track__off">not in this mode</span>}
-        <IconButton name="clear" size={22} title="Stop animating this value" onClick={() => p.removeTrack(tr.id)} />
-      </div>
-      <div className="anim-keys" aria-label="Keyframes">
-        {tr.keys.map((k, i) => (
-          <input key={i} className="anim-key" type="number" step={d.step} value={k} aria-label={`Keyframe ${i + 1}`}
-            onChange={(e) => { const v = parseFloat(e.target.value); if (Number.isFinite(v)) setKey(i, v) }} />
-        ))}
-        {tr.keys.length < 6 && <button className="anim-keys__b" onClick={() => p.setTrack(tr.id, { keys: [...tr.keys, tr.keys[tr.keys.length - 1]] })} data-tip="Add a keyframe">+</button>}
-        {tr.keys.length > 2 && <button className="anim-keys__b" onClick={() => p.setTrack(tr.id, { keys: tr.keys.slice(0, -1) })} data-tip="Remove the last keyframe">−</button>}
-      </div>
-      <Slider label="Seconds" value={tr.sec} min={1} max={30} step={0.5} format={(v) => `${v} s`} onChange={(v) => p.setTrack(tr.id, { sec: v })} />
-      <Pills<Track['mode']> value={tr.mode} onChange={(v) => p.setTrack(tr.id, { mode: v })} options={[{ id: 'bounce', t: 'Bounce' }, { id: 'loop', t: 'Loop' }, { id: 'once', t: 'Once' }]} />
-    </div>
-  )
-}
-
 /** The pass on one line: the story's segments to scale, the playhead; drag anywhere on it to scrub. */
 function Timeline({ len }: { len: number }) {
   const p = usePresent()
@@ -354,6 +265,8 @@ function Timeline({ len }: { len: number }) {
   const raw = clockOf(p, now)
   const t = len ? (p.loop ? raw % len : Math.min(raw, len)) : 0
   const segs = storySegments(p.stageReel)
+  const seg = segs.find((x) => t >= x.start && t < x.start + x.dur) ?? (t >= len && segs.length ? segs[segs.length - 1] : null)
+  const turn = useStore((s) => s.evolve.turn)
   const seekAt = (e: React.PointerEvent<HTMLDivElement>) => {
     const r = e.currentTarget.getBoundingClientRect()
     p.seek(Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * len)
@@ -365,31 +278,33 @@ function Timeline({ len }: { len: number }) {
         onPointerMove={(e) => { if (e.buttons & 1 && len) seekAt(e) }}
         onKeyDown={(e) => { if (e.key === 'ArrowRight') p.seek(Math.min(len, t + 1)); if (e.key === 'ArrowLeft') p.seek(Math.max(0, t - 1)) }}>
         {segs.map((x) => (
-          <span key={x.stage} className={'anim-time__seg' + (t >= x.start && t < x.start + x.dur ? ' anim-time__seg--on' : '')} style={{ left: `${(x.start / (len || 1)) * 100}%`, width: `${(x.dur / (len || 1)) * 100}%` }}>{x.t}</span>
+          <span key={x.stage} className={'anim-time__seg' + (t >= x.start && t < x.start + x.dur ? ' anim-time__seg--on' : '')} style={{ left: `${(x.start / (len || 1)) * 100}%`, width: `${(x.dur / (len || 1)) * 100}%` }}
+            data-tip={`${x.t} · ${x.dur.toFixed(1)} s`}>{x.t}</span>
         ))}
         {!segs.length && <span className="anim-time__empty">{len ? 'values and look' : 'nothing to play'}</span>}
         <span className="anim-time__head" style={{ left: `${len ? (t / len) * 100 : 0}%` }} />
       </div>
-      <div className="anim-time__read"><span>{t.toFixed(1)} s</span><span>{len.toFixed(1)} s</span></div>
+      <div className="anim-time__read"><span>{t.toFixed(1)} s</span><span className="anim-time__now">{seg ? seg.t : ''}{seg?.turns != null ? ` · T ${turn}` : ''}</span><span>{len.toFixed(1)} s</span></div>
     </div>
   )
 }
 
-/** Compose · Animate: one clock for everything: the story of the run (geometry to mesh, Evolve turn by
- *  turn), values with keyframes, the look, the camera and the slice. Play, scrub, speed, loop, record. */
+const STEP_IDS = ['model', 'voxels', 'quantum', 'mesh'] as const
+
+/** Compose · Animate: the rhythm of one clock that every piece and the view read. The loop goes from the
+ *  original geometry to the mesh (each step optional), the cutting plane sweeps with it, the camera
+ *  turns, the look cycles. Which pieces move is set per piece in the Library. */
 function Animate() {
   const p = usePresent()
   const s = useStore()
-  const len = passLength(p.tracks, p.stageReel, p.cycles)
+  const lv = useLive()
+  const r = p.stageReel
+  const len = passLength(r, p.cycles)
   const evolve = s.q.mode === 'nations'
-  const free = PARAMS.filter((d) => d.set && d.get(s) != null && !p.tracks.some((t) => t.param === d.id))
-  const add = (id: string) => {
-    const d = paramOf(id)
-    if (!d) return
-    const lo = d.min(s), hi = d.max(s), snap = (v: number) => +(Math.round(v / d.step) * d.step).toFixed(4)
-    p.addTrack({ param: id, keys: id === 'turn' ? [0, hi] : [snap(lo + (hi - lo) * 0.2), snap(lo + (hi - lo) * 0.8)], sec: id === 'turn' ? 10 : 4, mode: id === 'turn' ? 'once' : 'bounce' })
-  }
-  const segs = p.stageReel.segs
+  const n = s.grid?.n ?? 32, mm = s.grid?.voxel_size ?? 1
+  const at = (f: number) => Math.round(f * (n - 1))
+  const layer = (i: number) => `${i} · ${(i * mm).toFixed(0)} mm`
+  const name = { model: 'Model', voxels: 'Voxels', quantum: evolve ? 'Evolve' : 'Quantum', mesh: 'Mesh' }
   return (
     <>
       <Timeline len={len} />
@@ -400,21 +315,53 @@ function Animate() {
       </div>
       <Pills<string> label="Speed" value={String(p.speed)} onChange={(v) => p.setSpeed(+v)} options={[0.25, 0.5, 1, 2, 4].map((v) => ({ id: String(v), t: `${v}×` }))} />
       <div className="pd-checks"><Checkbox label="Loop" checked={p.loop} onChange={p.setLoop} /></div>
-      <Panel id="anim-stages" title="Story" sub aside={p.stageReel.on ? 'on' : undefined}>
-        <div className="pd-checks">
-          <Checkbox label="Tell the run, step by step" tip="From the original geometry to the mesh; Evolve plays every turn." checked={p.stageReel.on} onChange={(v) => p.setStageReel({ on: v })} />
-          <Checkbox label="Model" checked={segs.model} onChange={(v) => p.setStageReel({ segs: { ...segs, model: v } })} />
-          <Checkbox label="Voxels" checked={segs.voxels} onChange={(v) => p.setStageReel({ segs: { ...segs, voxels: v } })} />
-          <Checkbox label={evolve ? 'Evolve, turn by turn' : 'Quantum'} checked={segs.quantum} onChange={(v) => p.setStageReel({ segs: { ...segs, quantum: v } })} />
-          <Checkbox label="Mesh" checked={segs.mesh} onChange={(v) => p.setStageReel({ segs: { ...segs, mesh: v } })} />
+      <Panel id="anim-steps" title="Steps" sub aside={r.on ? `${len.toFixed(0)} s` : 'off'}>
+        <div className="pd-checks"><Checkbox label="Cycle through the steps" checked={r.on} onChange={(v) => p.setStageReel({ on: v })} /></div>
+        <div className="anim-steps" role="group" aria-label="Steps in the loop">
+          {STEP_IDS.map((id) => (
+            <button key={id} type="button" className={'anim-step' + (r.segs[id] ? ' anim-step--on' : '')} aria-pressed={r.segs[id]} disabled={!r.on}
+              onClick={() => p.setStageReel({ segs: { ...r.segs, [id]: !r.segs[id] } })}>{name[id]}</button>
+          ))}
         </div>
-        <Slider label="Seconds per step" value={p.stageReel.sec} min={0.5} max={12} step={0.5} format={(v) => `${v} s`} onChange={(v) => p.setStageReel({ sec: v })} />
-        {evolve && <Slider label="Turns per second" value={p.stageReel.tps} min={1} max={30} step={1} format={(v) => `${v} / s · ${(s.evolve.turns / v).toFixed(1)} s`} onChange={(v) => p.setStageReel({ tps: v })} />}
+        <Slider label="Seconds per step" value={r.sec} min={1} max={12} step={0.5} format={(v) => `${v} s`} onChange={(v) => p.setStageReel({ sec: v })} />
+        {evolve && <Slider label="Turns per second" value={r.tps} min={1} max={30} step={1} format={(v) => `${v} / s · ${(s.evolve.turns / v).toFixed(1)} s`} onChange={(v) => p.setStageReel({ tps: v })} />}
+        <div className="pd-checks"><Checkbox label="Blend between steps" tip="Each step fades in; the result rises out of the voxels on a plane." checked={r.blend} onChange={(v) => p.setStageReel({ blend: v })} /></div>
       </Panel>
-      <Panel id="anim-values" title="Values" sub aside={p.tracks.length || undefined}>
-        {p.tracks.map((tr) => <TrackCard key={tr.id} tr={tr} />)}
-        <Select label={p.tracks.length ? 'Animate another value' : 'Animate a value'} value="" onChange={add}
-          options={[{ value: '', label: free.length ? 'Choose…' : 'Every value is animated' }, ...free.map((d) => ({ value: d.id, label: d.t }))]} />
+      <Panel id="anim-plane" title="Cutting plane" sub aside={r.plane === 'off' ? 'off' : `${r.planeSec} s`}>
+        <Pills<typeof r.plane> value={r.plane} onChange={(v) => p.setStageReel({ plane: v })}
+          options={[{ id: 'off', t: 'Off' }, { id: 'loop', t: 'Whole loop' }, { id: 'mesh', t: 'With the mesh' }]} />
+        {r.plane !== 'off' && (
+          <>
+            <Pills<typeof r.planeMode> value={r.planeMode} onChange={(v) => p.setStageReel({ planeMode: v })}
+              options={[{ id: 'bounce', t: 'Up and down' }, { id: 'up', t: 'Up' }, { id: 'down', t: 'Down' }]} />
+            <Slider label="One pass" value={r.planeSec} min={2} max={30} step={1} ticks={7} format={(v) => `${v} s`} onChange={(v) => p.setStageReel({ planeSec: v })} />
+            <Slider label="From" value={at(r.from)} min={0} max={n - 1} step={1} ticks={8} format={layer} onChange={(v) => p.setStageReel({ from: v / (n - 1) })} />
+            <Slider label="To" value={at(r.to)} min={0} max={n - 1} step={1} ticks={8} format={layer} onChange={(v) => p.setStageReel({ to: v / (n - 1) })} />
+          </>
+        )}
+      </Panel>
+      <Panel id="anim-camera" title="Camera" sub aside={p.spin ? `${p.spinSpeed}°/s` : undefined}>
+        <div className="pd-checks"><Checkbox label="Turntable" checked={p.spin} onChange={p.setSpin} /></div>
+        {p.spin && (
+          <>
+            <Slider label="Speed" value={p.spinSpeed} min={2} max={45} step={1} ticks={9} format={(v) => `${v}°/s`} onChange={(v) => p.setMotion({ spinSpeed: v })} />
+            <Pills<string> value={String(p.spinDir)} onChange={(v) => p.setSpinDir(+v as 1 | -1)} options={[{ id: '1', t: '↺ Counter-clockwise' }, { id: '-1', t: '↻ Clockwise' }]} />
+          </>
+        )}
+        <div className="pd-chips">
+          {p.shots.map((_, i) => (
+            <button key={i} className={'pd-shot pd-shot--s' + (p.shot === i ? ' pd-shot--on' : '')} onClick={() => p.setShot(i)} aria-label={`Shot ${i + 1}`}>{i + 1}</button>
+          ))}
+          <button className="pd-chip pd-chip--s" disabled={p.shots.length >= 10} onClick={() => { const e = lv.engine; if (!e) return; const a = e.angles(), l = e.lens(); p.addShot({ az: a.az, el: a.el, dist: l.dist }) }}
+            data-tip="Save this camera angle as a shot">+ Shot</button>
+          {p.shots.length > 0 && <IconButton name="clear" size={22} title="Remove the current shot" onClick={() => p.removeShot(p.shot)} />}
+        </div>
+        {p.shots.length > 1 && (
+          <>
+            <div className="pd-checks"><Checkbox label="Fly through the shots" checked={p.reel} onChange={p.setReel} /></div>
+            <Slider label="Seconds per shot" value={p.reelSec} min={2} max={12} step={1} ticks={10} format={(v) => `${v} s`} onChange={(v) => p.setMotion({ reelSec: v })} />
+          </>
+        )}
       </Panel>
       <Panel id="anim-look" title="Look" sub>
         <div className="pd-checks">
@@ -423,8 +370,13 @@ function Animate() {
           <Checkbox label="Cycle the backdrop" checked={p.cycles.backdrop} onChange={(v) => p.setCycles({ backdrop: v })} />
         </div>
         <Slider label="Seconds each" value={p.cycles.sec} min={1} max={10} step={0.5} format={(v) => `${v} s`} onChange={(v) => p.setCycles({ sec: v })} />
+        {p.saved.length > 1 && (
+          <>
+            <div className="pd-checks"><Checkbox label="Cycle the saved compositions" checked={p.cycle} onChange={p.setCycle} /></div>
+            <Slider label="Seconds each" value={p.cycleSec} min={3} max={20} step={1} ticks={9} format={(v) => `${v} s`} onChange={(v) => p.setMotion({ cycleSec: v })} />
+          </>
+        )}
       </Panel>
-      <MotionPage />
     </>
   )
 }
@@ -497,7 +449,7 @@ function Exports() {
             data-tip={p.recording ? 'Stop recording' : 'Record'} data-tip-desc={p.frame === 'window' ? 'A WebM of the window with its motion.' : 'A WebM of the frame only, where the browser can crop the capture (Chrome); otherwise the window.'}>
             <span className="pd-rec" />{p.recording ? 'Stop' : 'Record'}
           </button>
-          <button className="pd-chip" disabled={p.recording || !passLength(p.tracks, p.stageReel, p.cycles)} onClick={() => { recordPass().catch(() => {}) }} data-tip="Record one pass" data-tip-desc="Plays the animation set up under Compose · Animate once, recording it.">One pass</button>
+          <button className="pd-chip" disabled={p.recording || !passLength(p.stageReel, p.cycles)} onClick={() => { recordPass().catch(() => {}) }} data-tip="Record one pass" data-tip-desc="Plays the animation set up under Compose · Animate once, recording it.">One pass</button>
           <button className="pd-chip" onClick={() => p.setBare(true)} data-tip="Hide controls" data-tip-key="H" data-tip-desc="Only the view and its pieces, for clean frames and recordings. H or Esc brings the controls back.">Hide controls</button>
         </div>
       </Panel>

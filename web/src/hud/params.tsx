@@ -3,6 +3,7 @@
 import { useStore } from '../store'
 import { paramOf } from './paramDefs'
 import { useTween } from './tween'
+import { useHeld } from './motion'
 import type { HudCtx } from './types'
 import './params.css'
 
@@ -10,7 +11,7 @@ import './params.css'
 export function Param({ id }: { id: string }) {
   const s = useStore()
   const p = paramOf(id)
-  const raw = p?.get(s) ?? null
+  const raw = useHeld(p?.get(s) ?? null)
   // the value counts to where it is going (its bar eases by CSS)
   const eased = useTween(raw ?? 0, 300)
   if (!p) return null

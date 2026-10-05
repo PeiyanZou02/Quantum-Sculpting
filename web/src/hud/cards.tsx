@@ -9,10 +9,12 @@ import { useSliceScheme } from '../qs/sectionColor'
 import { LevelHistogram } from '../qs/LevelHistogram'
 import { PresentStyle } from '../screens/presentStyle'
 import { Count } from './Num'
+import { useHeld } from './motion'
 import './cards.css'
 
 export function SliceCard({ layers }: { layers?: boolean }) {
-  const { procData, gridData, slice, m, grid } = useStore()
+  const { procData, gridData, slice: live, m, grid } = useStore()
+  const slice = useHeld(live)
   const g = procData ?? gridData
   const counts = useMemo(() => (gridData && layers ? solidPerLayer(gridData, slice.axis) : []), [gridData, layers, slice.axis])
   const colors = useSliceScheme(!!procData)

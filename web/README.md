@@ -154,18 +154,27 @@ always stays in the centre. **Properties · Compose** holds it:
    Besides marks, glyphs and data, the library holds **Parameters** (any setting as a readout: grid,
    strength, reach, sigma, turn, nations, turns, growth, level, smoothing, thicken, cutting plane,
    film, colour) and live feeds: the runtime log, the Atlas jobs, the Evolve log and one nation.
-4. **Animate** — everything plays on one clock. The **timeline** shows the pass to scale, with the
-   playhead; drag on it to scrub to any moment. **Play** (P), **Start**, **Record** (one pass from the
-   start, to WebM), speed 0.25× to 4×, and loop. *Story* tells the run from the original geometry to
-   the mesh: model, voxels, quantum (or Evolve, every turn at the turns per second you set) and mesh,
-   each one optional, so a story can be the Evolve turns alone. *Values*: pick a setting, give it
-   keyframes (two to six, spread evenly), the seconds and bounce, loop or once. *Look*: cycle the
-   shading, the light, the backdrop. Then shots and their reel, the turntable, the slice sweep and
-   cycling saved compositions.
-   Every piece reads the same state, so all of them move with the clock: figures count to their new
-   value, bars and rules ease, the chronicle and the logs add their lines, the territory chart's
-   playhead glides, and Relations (each nation in its own place, sized by its territory) draws
-   alliances in, sends attacks along their arrows and fades the nations that fall.
+   Every piece with something to animate has a **motion switch** (▶) beside its dot: filled, it moves
+   with the clock; empty, it holds still, keeping what it showed when the animation began. All pieces
+   read the same run, so the ones that move stay in step.
+4. **Animate** — the rhythm of one clock. The **timeline** shows the pass to scale with the step on
+   screen; drag on it to scrub. **Play** (P), **Start**, **Record** (one pass from the start, to
+   WebM), speed 0.25× to 4×, and loop.
+   *Steps* cycles the run from the original geometry to the mesh (on by default): Model, Voxels,
+   Evolve (or Quantum) and Mesh, each a toggle, so the loop can be Evolve alone or any mix; seconds
+   per step, and for Evolve turns per second (every turn of the history plays, the territory morphing
+   from one to the next). *Blend between steps* fades each step in and raises the result out of the
+   voxels on a plane before it plays.
+   *Cutting plane*: off, through the whole loop, or with the mesh; up and down, up or down; one pass
+   in so many seconds, between two layers. The plane on the view, the slice card and the layer stack
+   follow it.
+   *Camera*: turntable, and saved shots to fly through. *Look*: cycle the shading, the light, the
+   backdrop, and the saved compositions.
+   As the clock runs, figures count to their new value, bars and rules ease, the chronicle and logs
+   add their lines, the territory playhead glides, the layer stack's cursor slides with the plane, and
+   Relations (Peiyan's nation graph: each nation where it sits on the model, seen from the front,
+   sized by territory; borders weighted by their ties, heavy at alliances; this turn's attacks in red;
+   exiles ringed) drifts, swells and thickens with the turns.
 5. **Annotate** — notes and measurements pinned to the geometry.
 6. **Saved compositions** — saved by name and cycled with `[` `]` or 1–9.
 

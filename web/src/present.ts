@@ -19,19 +19,24 @@ export interface TextNote { id: string; text: string }
 /** Guides drawn in the scene itself: the grid volume's bounding box and the print grid on its floor
  *  (`div` cells a side). */
 export interface Guides { box: boolean; floor: boolean; div: number }
-/** The slice sweep: the range it covers (fractions of the grid height), layers per step, seconds for one
- *  pass through the range, and whether it goes up and down, only up or only down. */
-export interface Sweep { from: number; to: number; step: number; sec: number; mode: 'bounce' | 'up' | 'down' }
 export type PanelTab = 'view' | 'layers' | 'library' | 'notes' | 'motion' | 'output'
-/** A value animated over time: keyframes spread evenly over `sec` seconds, played round and round
- *  (loop), there and back (bounce) or once. `param` is an id from hud/paramDefs.ts. */
-export interface Track { id: string; param: string; keys: number[]; sec: number; mode: 'loop' | 'bounce' | 'once' }
 /** The look cycling on its own: shading modes, lights, backdrops, `sec` seconds each. */
 export interface Cycles { shading: boolean; light: boolean; backdrop: boolean; sec: number }
-/** The story: the run told from the original geometry to the mesh, one segment per step (each can be
+/** Where the cutting plane runs on the clock: not at all, through the whole loop, or during the mesh. */
+export type PlaneRun = 'off' | 'loop' | 'mesh'
+/** The loop: the run told from the original geometry to the mesh, one segment per step (each can be
  *  left out): model, voxels and mesh hold `sec` seconds; Evolve plays its turns at `tps` a second (the
- *  quantum step holds `sec`). */
-export interface Reel { on: boolean; sec: number; tps: number; segs: { model: boolean; voxels: boolean; quantum: boolean; mesh: boolean } }
+ *  quantum step holds `sec`). `blend` fades each step in and reveals the result with a rising plane.
+ *  The cutting plane sweeps between `from` and `to` (fractions of the grid), one pass in `planeSec`. */
+export interface Reel {
+  on: boolean; sec: number; tps: number; segs: { model: boolean; voxels: boolean; quantum: boolean; mesh: boolean }
+  blend: boolean
+  plane: PlaneRun; planeSec: number; planeMode: 'bounce' | 'up' | 'down'; from: number; to: number
+}
+export const REEL: Reel = {
+  on: true, sec: 4, tps: 4, segs: { model: true, voxels: true, quantum: true, mesh: true },
+  blend: true, plane: 'loop', planeSec: 8, planeMode: 'bounce', from: 0, to: 1,
+}
 export interface Saved { id: string; name: string; compose: Record<string, string>; pos: Record<string, Pos>; looks: Record<string, Look>; texts: TextNote[]; guides?: Guides }
 
 interface P {
@@ -119,11 +124,6 @@ interface P {
   /** Step through the saved compositions on their own. */
   cycle: boolean
   setCycle: (v: boolean) => void
-  /** Sweep the cutting plane up and down through the grid. */
-  sweep: boolean
-  setSweep: (v: boolean) => void
-  sweepCfg: Sweep
-  setSweepCfg: (s: Partial<Sweep>) => void
   recording: boolean
   setRecording: (v: boolean) => void
   /** Per-piece looks, keyed like positions but without the mode. */
@@ -141,15 +141,16 @@ interface P {
   /** Ink of exported PNGs (see savePng). */
   pngInk: 'auto' | 'dark' | 'light'
   setPngInk: (i: 'auto' | 'dark' | 'light') => void
-  /** Animation: tracks of values, the look cycling, the stage reel, and whether they are playing. */
-  tracks: Track[]
-  addTrack: (t: Omit<Track, 'id'>) => void
-  setTrack: (id: string, p: Partial<Track>) => void
-  removeTrack: (id: string) => void
+  /** Animation: the look cycling, the loop through the steps, and whether they are playing. */
   cycles: Cycles
   setCycles: (c: Partial<Cycles>) => void
   stageReel: Reel
   setStageReel: (r: Partial<Reel>) => void
+  /** Pieces that hold still instead of moving with the clock (keyed "family:variant"). */
+  still: Record<string, true>
+  setStill: (k: string, still: boolean) => void
+  /** The clock is moving the cutting plane right now (so the view shows it). */
+  planeLive: boolean
   /** The one clock all of it reads: `t0` seconds into the pass when play began (or where it is paused),
    *  `playFrom` the wall time it began (ms), at `speed`; `loop` goes round at the end. `seekKey` bumps on
    *  every seek so a paused view shows that moment. */
@@ -177,12 +178,13 @@ interface P {
 
 const KEY = 'qs-present'
 const VERSION = 2   // v2: compositions start clean and are saved by name; the old presets are gone
-const read = (): Partial<P> & { v?: number } => { try { return JSON.parse(localStorage.getItem(KEY) ?? '{}') } catch { return {} } }
+type Kept = Partial<P> & { v?: number; story?: Partial<Reel> }
+const read = (): Kept => { try { return JSON.parse(localStorage.getItem(KEY) ?? '{}') } catch { return {} } }
 const raw = read()
 // a first visit opens on the default composition (Lab's layout as laid out by hand)
 const fresh = !Object.keys(raw).length
 const firstPos = Object.fromEntries(Object.entries(DEFAULT_COMPOSITION.pos).map(([k, v]) => [`present|${k}`, v]))
-const saved: Partial<P> = raw.v === VERSION ? raw : {
+const saved: Kept = raw.v === VERSION ? raw : {
   shots: raw.shots, spin: raw.spin, reelSec: raw.reelSec, spinSpeed: raw.spinSpeed,
   cycleSec: raw.cycleSec, drawer: raw.drawer, pngInk: raw.pngInk, spinDir: raw.spinDir,
 }
@@ -190,7 +192,7 @@ const keep = (s: P) => {
   try {
     localStorage.setItem(KEY, JSON.stringify({
       v: VERSION, compose: s.compose, pos: s.pos, shots: s.shots, spin: s.spin, reelSec: s.reelSec, spinSpeed: s.spinSpeed,
-      cycleSec: s.cycleSec, drawer: s.drawer, looks: s.looks, tracks: s.tracks, cycles: s.cycles, stageReel: s.stageReel, speed: s.speed, loop: s.loop, notes: s.notes, frame: s.frame, outSize: s.outSize, spinDir: s.spinDir, texts: s.texts, pngInk: s.pngInk, saved: s.saved, current: s.current, guides: s.guides, sweepCfg: s.sweepCfg, tab: s.tab, libCat: s.libCat, opened: s.opened,
+      cycleSec: s.cycleSec, drawer: s.drawer, looks: s.looks, cycles: s.cycles, story: s.stageReel, still: s.still, speed: s.speed, loop: s.loop, notes: s.notes, frame: s.frame, outSize: s.outSize, spinDir: s.spinDir, texts: s.texts, pngInk: s.pngInk, saved: s.saved, current: s.current, guides: s.guides, tab: s.tab, libCat: s.libCat, opened: s.opened,
     }))
   } catch { /* per-viewer only */ }
 }
@@ -319,10 +321,6 @@ export const usePresent = create<P>()((set, get) => {
     setDrawer: (v) => up(v ? { drawer: v } : { drawer: v, preview: null, hl: null }),
     cycle: false,
     setCycle: (v) => set({ cycle: v }),
-    sweep: false,
-    setSweep: (v) => set({ sweep: v }),
-    sweepCfg: { from: 0, to: 1, step: 1, sec: 6, mode: 'bounce', ...saved.sweepCfg },
-    setSweepCfg: (c) => up({ sweepCfg: { ...get().sweepCfg, ...c } }),
     recording: false,
     setRecording: (v) => set({ recording: v }),
     looks: saved.looks ?? {},
@@ -355,14 +353,14 @@ export const usePresent = create<P>()((set, get) => {
     setNotes: (v) => up({ notes: v }),
     pngInk: saved.pngInk ?? 'auto',
     setPngInk: (i) => up({ pngInk: i }),
-    tracks: saved.tracks ?? [],
-    addTrack: (t) => up({ tracks: [...get().tracks, { ...t, id: uid() }] }),
-    setTrack: (id, p) => up({ tracks: get().tracks.map((t) => (t.id === id ? { ...t, ...p } : t)) }),
-    removeTrack: (id) => up({ tracks: get().tracks.filter((t) => t.id !== id) }),
     cycles: { shading: false, light: false, backdrop: false, sec: 3, ...saved.cycles },
     setCycles: (c) => up({ cycles: { ...get().cycles, ...c } }),
-    stageReel: { on: false, sec: 3, tps: 6, ...saved.stageReel, segs: { model: true, voxels: true, quantum: true, mesh: true, ...saved.stageReel?.segs } },
+    // the loop is kept under `story` (the older stage reel, off by default, is left behind)
+    stageReel: { ...REEL, ...saved.story, segs: { ...REEL.segs, ...saved.story?.segs } },
     setStageReel: (r) => up({ stageReel: { ...get().stageReel, ...r } }),
+    still: saved.still ?? {},
+    planeLive: false,
+    setStill: (k, v) => { const still = { ...get().still }; if (v) still[k] = true; else delete still[k]; up({ still }) },
     playing: false,
     playFrom: 0,
     t0: 0,

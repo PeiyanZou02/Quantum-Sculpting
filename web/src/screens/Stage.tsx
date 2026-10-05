@@ -119,7 +119,10 @@ export function Stage() {
     if (!nations) { engine.setVoxels('processed', procData, m.level, valued); return }
     // from turn to turn the territory morphs (snaps when off or when the viewer asks for less motion)
     const still = matchMedia('(prefers-reduced-motion: reduce)').matches
-    engine.setLabels('processed', nations.owner, nations.n, ownerPalette(theme), still ? 0 : MORPH_MS[useStore.getState().morph])
+    // while the loop plays the turns, each morph lasts about one turn, so the territory flows
+    const pl = usePresent.getState()
+    const ms = pl.playing && pl.stageReel.on ? Math.min(600, 900 / Math.max(0.5, pl.stageReel.tps * pl.speed)) : MORPH_MS[useStore.getState().morph]
+    engine.setLabels('processed', nations.owner, nations.n, ownerPalette(theme), still ? 0 : ms)
   }, [engine, procData, m.level, valued, nations, theme])
   useEffect(() => { engine?.setMesh('result', resultMesh) }, [engine, resultMesh])
   useEffect(() => { engine?.show(view as ViewName) }, [engine, view, gridData, procData, resultMesh, modelMesh])
@@ -127,8 +130,17 @@ export function Stage() {
   // the bounding box and print grid (a guide previewed from the library shows too)
   const guides = { ...pr.guides, box: pr.guides.box || pr.preview === 'guide:box', floor: pr.guides.floor || pr.preview === 'guide:floor' }
   useEffect(() => { engine?.setFrame({ bounds: guides.box, floor: guides.floor, divisions: guides.div }) }, [engine, guides.box, guides.floor, guides.div, grid])
-  const planeOn = hud.slice || tool === 'slice' || pr.sweep || (shown.slicecard ?? 'off') !== 'off'
+  const planeOn = hud.slice || tool === 'slice' || pr.planeLive || (shown.slicecard ?? 'off') !== 'off'
   useEffect(() => { engine?.setSlice(planeOn ? slice : null) }, [engine, slice, view, planeOn])
+  // while the loop plays, each step fades in rather than cutting
+  const step = useStore((s) => s.focus.stage)
+  useEffect(() => {
+    const el = host.current, p = usePresent.getState()
+    if (!el || !p.playing || !p.stageReel.blend) return
+    el.classList.remove('stage__view--in')
+    void el.offsetWidth
+    el.classList.add('stage__view--in')
+  }, [step])
   // the cutting plane carries the section itself, coloured as the Slice panel says (nations in Evolve)
   const planeProcessed = (view === 'processed' || view === 'result' || view === 'scan') && !!procData
   const planeColors = useSliceScheme(planeProcessed)
@@ -178,26 +190,7 @@ export function Stage() {
     return () => clearInterval(t)
   }, [pr.reel, pr.shots.length, pr.reelSec])
   useEffect(() => { if (engine) { (window as unknown as { __qsEngine?: Engine }).__qsEngine = engine; live.engine = engine } }, [engine])
-  // the cutting plane sweeps up and down; compositions can cycle on their own
-  useEffect(() => {
-    if (!pr.sweep || !grid) return
-    // within its range, `step` layers at a time, one pass in `sec` seconds; changes apply as it runs
-    const { from, to, step, sec, mode } = pr.sweepCfg
-    const lo = Math.round(Math.min(from, to) * (grid.n - 1)), hi = Math.round(Math.max(from, to) * (grid.n - 1))
-    let dir = mode === 'down' ? -1 : 1
-    const s0 = useStore.getState().slice.index
-    if (s0 < lo || s0 > hi) useStore.getState().setSlice({ index: mode === 'down' ? hi : lo })
-    const t = setInterval(() => {
-      const i = useStore.getState().slice.index
-      let next = i + dir * step
-      if (next > hi || next < lo) {
-        if (mode === 'bounce') { dir = -dir; next = Math.min(hi, Math.max(lo, i + dir * step)) }
-        else next = mode === 'up' ? lo : hi
-      }
-      useStore.getState().setSlice({ index: next })
-    }, (sec * 1000 * step) / Math.max(1, hi - lo))
-    return () => clearInterval(t)
-  }, [pr.sweep, grid, pr.sweepCfg])
+  // compositions can cycle on their own (the cutting plane sweeps on the clock: animator.ts)
   useEffect(() => {
     if (!pr.cycle) return
     const t = setInterval(() => {

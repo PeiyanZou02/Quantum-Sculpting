@@ -1,8 +1,9 @@
 // Scan and slice: the layer being read or printed (QLMarks4, "Scan and slice").
 // v1 sweep, v2 plane + index (QSlice-style cabinet cube), v3 layer stack, v4 marching.
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { PointerEvent as RPointerEvent } from 'react'
-import type { Axis } from '../qs/grid'
+import { solidPerLayer, type Axis } from '../qs/grid'
+import { Count } from './Num'
 import type { HudCtx } from './types'
 import './lab.css'
 
@@ -196,7 +197,8 @@ export function PlaneIndex({ ctx }: { ctx: HudCtx }) {
 
 const ROW = 7 // px per stroke row (1px stroke + gap)
 
-/** One stroke per layer group, top = highest layer; the current one is longer and labelled. Click or drag to set the slice. */
+/** One stroke per layer group, top = highest layer, as long as the cells the model fills in it; the
+ *  cursor at the cutting plane glides with it. Click or drag to set the slice. */
 export function LayerStack({ ctx }: { ctx: HudCtx }) {
   const N = Math.max(1, ctx.n)
   const g = Math.max(1, Math.ceil(N / 32)) // layers per stroke
@@ -204,6 +206,12 @@ export function LayerStack({ ctx }: { ctx: HudCtx }) {
   const k = clamp(Math.round(ctx.slice.index), 0, N - 1)
   const cur = Math.floor(k / g)
   const [drag, setDrag] = useState<number | null>(null)
+  const grid = ctx.data.grid
+  const counts = useMemo(() => {
+    const per = grid && grid.n === N ? solidPerLayer(grid, ctx.slice.axis) : []
+    return Array.from({ length: G }, (_, grp) => per.slice(grp * g, grp * g + g).reduce((a, v) => a + v, 0))
+  }, [grid, N, G, g, ctx.slice.axis])
+  const peak = Math.max(1, ...counts)
 
   const at = (e: RPointerEvent<HTMLDivElement>) => {
     const rc = e.currentTarget.getBoundingClientRect()
@@ -228,14 +236,7 @@ export function LayerStack({ ctx }: { ctx: HudCtx }) {
     if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId)
     setDrag(null)
   }
-
-  const rows = Array.from({ length: G }, (_, r) => {
-    const grp = G - 1 - r
-    const d = Math.abs(grp - cur)
-    const lo = grp * g
-    const hi = Math.min(N - 1, lo + g - 1)
-    return { grp, w: grp === cur ? 120 : Math.max(28, 90 - d * 6), lo, hi }
-  })
+  const width = (grp: number) => (counts[grp] ? 6 + 94 * (counts[grp] / peak) : 2)
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'flex-start' }}>
@@ -248,31 +249,24 @@ export function LayerStack({ ctx }: { ctx: HudCtx }) {
         onPointerCancel={up}
         style={{ position: 'relative', width: 200, cursor: drag != null ? 'grabbing' : 'pointer', userSelect: 'none', touchAction: 'none' }}
       >
-        {rows.map((r) => {
-          const on = r.grp === cur
+        {Array.from({ length: G }, (_, r) => {
+          const grp = G - 1 - r, lo = grp * g, hi = Math.min(N - 1, lo + g - 1)
+          const d = Math.abs(grp - cur)
           return (
-            <div
-              key={r.grp}
-              className="qs-lab-row"
-              data-tip={on ? `Layer ${k}` : g > 1 ? `Layers ${r.lo}–${r.hi}` : `Layer ${r.lo}`}
-              data-tip-desc={on ? 'Current slice' : 'Click to move the slice here'}
-              style={{ height: ROW, display: 'flex', alignItems: 'center', gap: 10 }}
-            >
-              <span
-                className={'qs-lab-stroke' + (on ? ' is-cur' : '')}
-                style={{ width: r.w, height: 1, background: on ? 'var(--qs-ink)' : 'var(--qs-ink4)', flex: 'none' }}
-              />
-              {on && (
-                <span className="qs-lab-small" style={{ color: 'var(--qs-ink)' }}>
-                  layer {k}
-                </span>
-              )}
+            <div key={grp} className="qs-lab-row" data-tip={g > 1 ? `Layers ${lo}–${hi}` : `Layer ${lo}`} data-tip-desc={`${counts[grp] ?? 0} cells`}
+              style={{ height: ROW, display: 'flex', alignItems: 'center' }}>
+              <span className="qs-lab-stroke" style={{ width: width(grp), height: 1, flex: 'none', background: d === 0 ? 'var(--qs-ink)' : d < 3 ? 'var(--qs-ink3)' : 'var(--qs-ink4)' }} />
             </div>
           )
         })}
+        {/* the cutting plane: a rule across the stack and its layer, gliding as it moves */}
+        <div className="qs-lab-cursor" style={{ transform: `translateY(${(G - 1 - cur) * ROW + ROW / 2}px)` }} aria-hidden>
+          <span className="qs-lab-cursor__rule" />
+          <span className="qs-lab-small" style={{ color: 'var(--qs-ink)' }}>layer {k}</span>
+        </div>
       </div>
       <span className="qs-lab-small" style={{ color: 'var(--qs-ink3)' }}>
-        {ctx.slice.axis} 0–{N - 1}
+        {ctx.slice.axis} 0–{N - 1} · <Count>{counts[cur] ?? 0}</Count> cells
       </span>
     </div>
   )

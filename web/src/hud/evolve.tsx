@@ -6,11 +6,13 @@ import { useStore } from '../store'
 import type { NationEvent, NationsHistory } from '../api'
 import { nationColor, nationName, type Theme } from '../view/nations'
 import { Num } from './Num'
+import { useHeld } from './motion'
 import './evolve.css'
 
 function useEvolve() {
   const history = useStore((s) => (s.proc?.mode === 'nations' ? s.evolve.history : null))
-  const turn = useStore((s) => s.evolve.turn)
+  // a piece holding still keeps the turn it showed when the clock took over
+  const turn = useHeld(useStore((s) => s.evolve.turn))
   const theme = useStore((s) => s.theme)
   return { history, turn: history ? Math.min(turn, history.turns.length - 1) : 0, theme }
 }
@@ -149,48 +151,76 @@ export function Chronicle() {
   )
 }
 
-// ── relations: every nation in its own place, alliances and this turn's attacks ─────────────────
-// Each nation keeps one slot for the whole history, so the figure moves with the turns rather than
-// reshuffling: sizes ease with territory, the fallen fade, alliances draw in, attacks march.
-const R = 88, S = 220
+// ── relations: Peiyan's nation graph (app/static/app.js · renderSaga) ─────────────────────────────
+// Each nation sits where it is on the model, seen from the front (across the wider of x and y, up the
+// height), in one frame for the whole history, so the graph moves with the turns: nations drift and
+// swell, borders thicken as ties grow (heavy at alliances), this turn's attacks fly in red to the edge
+// of their target, and nations that left the continent carry a dashed ring.
+const S = 232, PAD = 26
+const RED = '#D23F35'
+const css = (x: Record<string, string | number>) => x as React.CSSProperties
 export function Relations() {
   const { history: h, turn, theme } = useEvolve()
-  if (!h) return <Empty />
+  const frame = useMemo(() => {
+    if (!h) return null
+    const homes = h.turns.flatMap((t) => t.home.filter((p): p is [number, number, number] => !!p))
+    if (!homes.length) return null
+    const range = (a: number) => [Math.min(...homes.map((p) => p[a])), Math.max(...homes.map((p) => p[a]))] as const
+    const [x0, x1] = range(0), [y0, y1] = range(1), [z0, z1] = range(2)
+    const across = x1 - x0 >= y1 - y0 ? 0 : 1
+    return { across, a: across ? [y0, y1] : [x0, x1], z: [z0, z1] }
+  }, [h])
+  if (!h || !frame) return <Empty />
   const rec = h.turns[turn]
   const big = Math.max(1, ...rec.size)
-  const at = (i: number): [number, number] => {
-    const a = (i / Math.max(1, h.total)) * Math.PI * 2 - Math.PI / 2
-    return [S / 2 + R * Math.cos(a), S / 2 + R * Math.sin(a)]
-  }
-  const alive = (i: number) => (rec.size[i] ?? 0) > 0
+  const span = S - PAD * 2
+  const place = (p: [number, number, number]): [number, number] => [
+    PAD + (span * (p[frame.across] - frame.a[0])) / Math.max(frame.a[1] - frame.a[0], 1),
+    S - PAD - (span * (p[2] - frame.z[0])) / Math.max(frame.z[1] - frame.z[0], 1),
+  ]
+  const at = rec.home.map((p) => (p ? place(p) : null))
+  const radius = (i: number) => 5 + 11 * Math.sqrt((rec.size[i] ?? 0) / big)
+  const tie = new Map(rec.ties.map(([i, j, t]) => [`${i}-${j}`, t]))
   const allies = rec.ties.filter(([, , t]) => t >= 0.5).length
+  const f1 = (v: number) => +v.toFixed(1)
   return (
     <div className="hev hev--relations">
       <Head t="Relations" n={`T ${turn} · ${allies} allied · ${rec.attacks.length} attacks`} />
-      <svg width={S} height={S} viewBox={`0 0 ${S} ${S}`} className="hev-svg">
-        <defs><marker id="hev-arrow" viewBox="0 0 6 6" refX="5" refY="3" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L6 3L0 6z" fill="var(--qs-ink)" /></marker></defs>
-        {rec.ties.map(([i, j, t]) => {
-          if (!alive(i) || !alive(j) || t < 0.15) return null
-          const a = at(i), b = at(j)
-          return <line key={`${i}-${j}`} className={'hev-tie' + (t >= 0.5 ? ' hev-tie--ally' : '')} pathLength={1} x1={a[0]} y1={a[1]} x2={b[0]} y2={b[1]} />
+      <svg width={S} height={S} viewBox={`0 0 ${S} ${S}`} className="hev-svg hev-graph">
+        <defs><marker id="hev-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 8 4 0 8Z" fill={RED} /></marker></defs>
+        {rec.borders.map(([i, j]) => {
+          const a = at[i], b = at[j]
+          if (!a || !b) return null
+          const t = tie.get(`${i}-${j}`) ?? tie.get(`${j}-${i}`) ?? 0
+          return <path key={`${Math.min(i, j)}-${Math.max(i, j)}`} className={'hev-border' + (t >= 0.5 ? ' hev-border--ally' : '')}
+            style={css({ d: `path("M${f1(a[0])} ${f1(a[1])}L${f1(b[0])} ${f1(b[1])}")`, strokeWidth: 1 + 4 * t, opacity: 0.3 + 0.7 * t })} />
         })}
         {rec.attacks.map(([i, j]) => {
-          const a = at(i), b = at(j)
-          const mx = (a[0] + b[0]) / 2 + (S / 2 - (a[0] + b[0]) / 2) * 0.35, my = (a[1] + b[1]) / 2 + (S / 2 - (a[1] + b[1]) / 2) * 0.35
-          return <path key={`${i}>${j}`} className="hev-atk" d={`M${a[0]} ${a[1]} Q${mx} ${my} ${b[0]} ${b[1]}`} markerEnd="url(#hev-arrow)" />
+          const a = at[i], b = at[j]
+          if (!a || !b) return null
+          const dx = b[0] - a[0], dy = b[1] - a[1], d = Math.hypot(dx, dy) || 1
+          const stop = Math.max(d - radius(j) - 5, 0) / d   // the arrow stops at the edge of the target
+          return <path key={`${turn}:${i}>${j}`} className="hev-atk" pathLength={1} d={`M${f1(a[0])} ${f1(a[1])}L${f1(a[0] + dx * stop)} ${f1(a[1] + dy * stop)}`} markerEnd="url(#hev-arrow)" />
         })}
         {Array.from({ length: h.total }, (_, i) => {
-          const p = at(i), v = rec.size[i] ?? 0, on = v > 0
-          const r = on ? 5 + 9 * Math.sqrt(v / big) : 3
+          const p = at[i], v = rec.size[i] ?? 0
+          if (!p || !v) return null
+          const r = radius(i)
           return (
-            <g key={i} className={'hev-nat' + (on ? '' : ' hev-nat--gone')}>
-              <circle cx={p[0]} cy={p[1]} style={{ r } as React.CSSProperties} fill={on ? nationColor(i, theme) : 'none'} stroke={on ? 'var(--qs-bg)' : 'var(--qs-ink3)'} strokeWidth={on ? 1.5 : 1} />
-              {on && <text x={p[0]} y={p[1] + 4} textAnchor="middle" className="hev-node">{nationName(i)}</text>}
+            <g key={i} className="hev-nat" style={css({ transform: `translate(${f1(p[0])}px, ${f1(p[1])}px)` })}>
+              {rec.exiled.includes(i) && <circle className="hev-exile" style={css({ r: r + 3.5 })} />}
+              <circle style={css({ r })} fill={nationColor(i, theme)} stroke="var(--qs-bg)" strokeWidth={1.5} />
+              <text className="hev-label" style={css({ transform: `translate(${f1(r + 3)}px, 4px)` })}>{nationName(i)}</text>
             </g>
           )
         })}
       </svg>
-      <div className="hev-legend"><span><svg width="14" height="6"><line x1="0" x2="14" y1="3" y2="3" stroke="currentColor" strokeWidth="2" /></svg>alliance</span><span><svg width="14" height="6"><line x1="0" x2="14" y1="3" y2="3" stroke="currentColor" strokeDasharray="3 3" /></svg>attack</span></div>
+      <div className="hev-legend">
+        <span><svg width="14" height="6"><line x1="0" x2="14" y1="3" y2="3" stroke="currentColor" strokeWidth="1" opacity=".5" /></svg>border</span>
+        <span><svg width="14" height="6"><line x1="0" x2="14" y1="3" y2="3" stroke="currentColor" strokeWidth="4" /></svg>ally</span>
+        <span><svg width="14" height="6"><line x1="0" x2="10" y1="3" y2="3" stroke={RED} strokeWidth="1.5" /><path d="M9 0 14 3 9 6Z" fill={RED} /></svg>attack</span>
+        <span><svg width="10" height="10"><circle cx="5" cy="5" r="4" fill="none" stroke="currentColor" strokeDasharray="2 2" /></svg>exiled</span>
+      </div>
     </div>
   )
 }

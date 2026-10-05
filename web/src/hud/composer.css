@@ -89,3 +89,6 @@
 .hud-piece--sel, .hud-piece--dragging { z-index: 6; }
 /* data only: the sentences inside pieces give way (captions, notes, empty-state lines) */
 .hud-layer--terse :is(.qg-cap, .qdm-cap, .qg-note, .hev-note, .hev-foot, .hev-empty, .hpar__empty, .qs-lab-title__p) { display: none; }
+/* a piece holding still: no easing, no keyframes of its own */
+.hud-still { display: contents; }
+.hud-still *, .hud-still *::before, .hud-still *::after { animation: none !important; transition: none !important; }
