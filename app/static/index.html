@@ -70,7 +70,7 @@
         <div class="select-wrap">
           <select id="up-select" class="select select-sm">
             <option value="+z">+Z（3D 打印常用）</option>
-            <option value="+y">+Y（Blender、glTF 导出常用）</option>
+            <option value="+y" selected>+Y（Blender、glTF 导出常用）</option>
             <option value="+x">+X</option>
             <option value="-z">−Z（上下颠倒）</option>
             <option value="-y">−Y</option>
@@ -89,9 +89,9 @@
         <span class="field-label" id="n-label">网格尺寸</span>
         <div class="segmented block" role="radiogroup" aria-labelledby="n-label" id="n-seg">
           <button type="button" role="radio" data-value="16" aria-checked="false">16³</button>
-          <button type="button" role="radio" data-value="32" aria-checked="true">32³</button>
+          <button type="button" role="radio" data-value="32" aria-checked="false">32³</button>
           <button type="button" role="radio" data-value="64" aria-checked="false">64³</button>
-          <button type="button" role="radio" data-value="128" aria-checked="false">128³</button>
+          <button type="button" role="radio" data-value="128" aria-checked="true">128³</button>
           <button type="button" role="radio" data-value="256" aria-checked="false">256³</button>
         </div>
       </div>
@@ -100,7 +100,7 @@
         <div class="select-wrap">
           <select id="fill-select" class="select select-sm">
             <option value="holes">填满封闭的内部</option>
-            <option value="capped">先封住底部再填（底部敞开的扫描模型）</option>
+            <option value="capped" selected>先封住底部再填（底部敞开的扫描模型）</option>
             <option value="none">不填，只要外壳</option>
           </select>
           <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg>
@@ -129,9 +129,9 @@
       <div class="field">
         <div class="segmented block" role="radiogroup" aria-label="处理方式" id="mode-seg">
           <button type="button" role="radio" data-value="gaussian" aria-checked="false">高斯替身</button>
-          <button type="button" role="radio" data-value="emulator" aria-checked="true">本地模拟</button>
+          <button type="button" role="radio" data-value="emulator" aria-checked="false">本地模拟</button>
           <button type="button" role="radio" data-value="atlas" aria-checked="false">Atlas</button>
-          <button type="button" role="radio" data-value="nations" aria-checked="false">演化</button>
+          <button type="button" role="radio" data-value="nations" aria-checked="true">演化</button>
         </div>
         <p class="help" id="mode-help"></p>
       </div>
@@ -158,6 +158,22 @@
           <p class="help">筑的墙、长出来的角，最多离原来的表面这么远。设成 0 就只有吞并、裂缝、逃离和萎缩。</p>
         </div>
         <label class="toggle"><input type="checkbox" class="switch" id="nations-grooves"><span>最后在国界上刻一道沟</span></label>
+        <div class="field">
+          <span class="field-label" id="source-label">随机数从哪来</span>
+          <div class="segmented block" role="radiogroup" aria-labelledby="source-label" id="source-seg">
+            <button type="button" role="radio" data-value="local" aria-checked="false">本机</button>
+            <button type="button" role="radio" data-value="qrng" aria-checked="true">Atlas 量子随机数</button>
+          </div>
+          <p class="help" id="source-help"></p>
+        </div>
+        <div class="field" id="device-field" hidden>
+          <span class="field-label" id="device-label">在哪里测量</span>
+          <div class="segmented block" role="radiogroup" aria-labelledby="device-label" id="device-seg">
+            <button type="button" role="radio" data-value="emu" aria-checked="false">模拟器</button>
+            <button type="button" role="radio" data-value="qpu" aria-checked="true">真芯片</button>
+          </div>
+          <p class="help" id="device-help"></p>
+        </div>
       </div>
 
       <div id="quantum-params" class="group">
@@ -221,6 +237,14 @@
         <p class="help" id="atlas-stale-note" hidden>下面显示的还不是这组参数在 Atlas 上的结果，提交后才会更新。</p>
       </div>
 
+      <div id="qrng-actions" class="group" hidden>
+        <div class="row">
+          <button type="button" id="start-run" class="btn btn-sm btn-secondary">开始运行</button>
+        </div>
+        <p class="status-line" id="qrng-status" hidden></p>
+        <p class="help" id="qrng-stale-note" hidden>下面显示的还不是用 Atlas 的随机数演化出来的，点「开始运行」后才会更新。</p>
+      </div>
+
       <dl class="stats" id="process-stats" hidden></dl>
     </section>
 
@@ -228,14 +252,14 @@
       <header class="card-head"><span class="step-no">04</span><h2>转回模型</h2></header>
       <div class="field">
         <div class="field-head"><label for="level">阈值</label><output id="level-out" class="mono"></output></div>
-        <input type="range" class="slider" id="level" min="0.05" max="0.95" step="0.01" value="0.5">
+        <input type="range" class="slider" id="level" min="0.05" max="0.95" step="0.01" value="0.18">
         <p class="help">相对原模型实体的密度，原来的实体是 1。调低会膨胀、粘连；调高会侵蚀、碎裂。</p>
       </div>
       <div class="field">
         <span class="field-label" id="method-label">表面怎么来</span>
         <div class="segmented block" role="radiogroup" aria-labelledby="method-label" id="method-seg">
-          <button type="button" role="radio" data-value="threshold" aria-checked="true">取阈值</button>
-          <button type="button" role="radio" data-value="advect" aria-checked="false">量子场推动表面</button>
+          <button type="button" role="radio" data-value="threshold" aria-checked="false">取阈值</button>
+          <button type="button" role="radio" data-value="advect" aria-checked="true">量子场推动表面</button>
         </div>
         <p class="help" id="method-help"></p>
       </div>
@@ -243,7 +267,7 @@
       <div id="advect-params" class="group" hidden>
         <div class="field">
           <div class="field-head"><label for="amount">推移量（量子网格的格）</label><output id="amount-out" class="mono"></output></div>
-          <input type="range" class="slider" id="amount" min="0" max="8" step="0.25" value="2">
+          <input type="range" class="slider" id="amount" min="0" max="8" step="0.25" value="6">
         </div>
         <div class="field">
           <label for="field-select">推动表面的场</label>
@@ -263,7 +287,7 @@
         <div class="select-wrap">
           <select id="refine-select" class="select select-sm">
             <option value="1">×1（和量子网格一样细）</option>
-            <option value="2">×2</option>
+            <option value="2" selected>×2</option>
             <option value="4">×4</option>
             <option value="8">×8</option>
           </select>
@@ -289,7 +313,7 @@
         </div>
         <div class="field">
           <div class="field-head"><label for="vwidth">宽度（细格）</label><output id="vwidth-out" class="mono"></output></div>
-          <input type="range" class="slider" id="vwidth" min="0.5" max="4" step="0.25" value="1">
+          <input type="range" class="slider" id="vwidth" min="0.5" max="4" step="0.25" value="2.25">
         </div>
       </div>
       <div class="field">
@@ -298,20 +322,20 @@
       </div>
       <div class="field">
         <div class="field-head"><label for="close">闭合缝隙（细格）</label><output id="close-out" class="mono"></output></div>
-        <input type="range" class="slider" id="close" min="0" max="4" step="0.5" value="0">
+        <input type="range" class="slider" id="close" min="0" max="4" step="0.5" value="1.5">
         <p class="help">这几项都在体素上做，再取表面，相当于 Houdini 的 VDB Smooth SDF 和 VDB Reshape SDF。</p>
       </div>
 
       <h3 class="subhead">网格</h3>
       <div class="field">
         <div class="field-head"><label for="smooth">网格平滑次数</label><output id="smooth-out" class="mono"></output></div>
-        <input type="range" class="slider" id="smooth" min="0" max="30" step="1" value="5">
+        <input type="range" class="slider" id="smooth" min="0" max="30" step="1" value="19">
       </div>
       <div class="field">
         <span class="field-label" id="keep-label">碎块</span>
         <div class="segmented block" role="radiogroup" aria-labelledby="keep-label" id="keep-seg">
-          <button type="button" role="radio" data-value="largest" aria-checked="true">只留最大一块</button>
-          <button type="button" role="radio" data-value="all" aria-checked="false">保留所有大块</button>
+          <button type="button" role="radio" data-value="largest" aria-checked="false">只留最大一块</button>
+          <button type="button" role="radio" data-value="all" aria-checked="true">保留所有大块</button>
         </div>
         <p class="help">不到 200 个面的碎屑两种方式都会去掉。</p>
       </div>

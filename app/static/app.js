@@ -393,10 +393,21 @@ const MODE_HELP = {
   atlas: '把体素网格提交给 Atlas 的 blur-core-v1，大网格会自动分块。相同参数和实验名的结果会缓存，不会重复提交。',
   nations: '把模型分成几块，每块是一个「国家」、对应一个量子比特。测量之前每国都处在「做」和「不做」的叠加里；'
     + '每回合问它一件事，测出来是什么就做什么：进攻或逃离，筑墙或分裂，生长或萎缩。国家会结盟、被吞并、'
-    + '独立、逃离大陆、灭亡。在本机模拟，不找 Atlas。换一个实验名就是另一段历史。',
+    + '独立、逃离大陆、灭亡。量子态在本机模拟；随机数可以用本机的，也可以向 Atlas 取。',
+};
+const SOURCE_HELP = {
+  local: '本机的伪随机数，不找 Atlas。同一个实验名每次得到同一段历史，换一个名字就是另一段。',
+  qrng: '点「开始运行」时向 Atlas 的 comet-qrng-v1 取一池随机字节：建国怎么分、每回合问什么、测出什么，都从里面拿。'
+    + '每次运行提交一个任务，花 5 个 credits，得到的历史不会重样。取回之后再调参数，用的还是这一池，不再提交。',
+};
+const DEVICE_HELP = {
+  emu: 'Atlas 的模拟器。出来的是伪随机数，引擎自己把它评为「只作对照」，适合先把流程走通。',
+  qpu: '真的 IBM 量子芯片，用的是 Moth 的 IBM 账户：一次占用芯片约 5 秒，从提交到取回大约 2 分钟，'
+    + '结果里会写明是哪一块芯片。账户没有权限时提交会被拒绝，不花额度。',
 };
 const ATLAS_STATE = {
   submitting: '正在提交', queued: '排队中', pending: '排队中', running: '运行中', processing: '运行中',
+  evolving: '随机字节已取回，正在演化',
 };
 
 const state = {
@@ -417,6 +428,7 @@ const state = {
   frame: null,          // 「演化」现在显示的那一回合：{ turn, turns, bytes, box, record }
   saga: null,           // 「演化」的整段历史：每回合各国问了什么、答了什么、做了什么，关系和大事
   recovered: false,     // 服务重启后刚把模型送回去：Atlas 的结果从缓存里读回来
+  pool: null,           // 「演化」手上那一池 Atlas 随机字节的任务号：调参数时用它重算，不再提交
   atlasJob: null,
   run: null,            // 正在 Atlas 上跑的那次提交：分块进度、实验名
   atlasStatus: null,    // [dot, text]
@@ -486,6 +498,8 @@ const processParams = () => ({
   turns: Number($('nations-turns').value),
   spread: Number($('nations-spread').value),
   grooves: $('nations-grooves').checked,
+  source: segValue('source-seg'),
+  device: segValue('device-seg'),
 });
 
 const meshParams = () => ({
@@ -668,6 +682,18 @@ async function doProcess(signal) {
     if (found && found.status === 'done') await adoptProcessed();
     return;
   }
+  if (params.mode === 'nations' && params.source === 'qrng') {
+    // Atlas 的随机字节只在点「开始运行」时取。手上已经有一池：调参数就用它重算，不花额度
+    if (!state.pool) return;
+    try {
+      await postJSON('/api/process', { ...params, qrng_job: state.pool }, signal);
+    } catch (e) {
+      if (e.status === 404) state.pool = null;         // 这一池在本机找不到了，要重新取
+      throw e;
+    }
+    await adoptProcessed();
+    return;
+  }
   if (params.axes.length === 0) throw new Error('至少选择一个模糊方向（X、Y 或 Z）。');
   await postJSON('/api/process', params, signal);
   await adoptProcessed();
@@ -685,6 +711,7 @@ async function adoptProcessed() {
     state.saga = await getJSON('/api/nations/history');
     sagaBuilt = null;
     state.frame = await getTurn(meta.proc.nations.turns);     // 先显示最后一回合
+    if (meta.proc.qrng) state.pool = meta.proc.job_id;
   }
   // 服务端会把实验名整理成能当文件名的样子，写回来保持一致
   if (document.activeElement !== $('run-input')) $('run-input').value = meta.proc.run;
@@ -1053,12 +1080,50 @@ async function submitAtlas() {
   }
 }
 
+// 「演化」向 Atlas 取一池随机字节，取回来就用它演化。每点一次提交一个任务
+async function startRun() {
+  if (state.atlasJob) return;
+  await idle();
+  if (!state.key || !state.key.set) {
+    openKeyModal();
+    return;
+  }
+  state.atlasStatus = ['info', '正在提交…'];
+  render();
+  try {
+    watchAtlas(await postJSON('/api/process', processParams()));
+  } catch (e) {
+    state.atlasStatus = ['err', e.message];
+    render();
+  }
+}
+
+function runFinished(job) {
+  if (job.status === 'failed') {
+    state.atlasStatus = ['err', job.error];
+    return;
+  }
+  state.pool = job.pool;
+  if (job.stale) {
+    // 字节已经存在本机：接下来的重算会用它，不用再取
+    state.atlasStatus = ['warn', '随机字节已经取回。等待期间体素网格改过，现在用这一池字节在新的网格上演化。'];
+  } else {
+    state.atlasStatus = ['ok', `完成：从 Atlas 取回 ${fmt(job.meta.qrng.bytes)} 个随机字节，`
+      + `用时 ${formatWait(job.meta.seconds)}。${job.note ? `${job.note}。` : ''}`];
+    state.adopt = true;
+  }
+  if (state.view !== 'result') state.view = 'processed';
+  invalidate(STAGE.process);
+}
+
 // 跟着一次提交直到它结束。刷新页面后也从这里接回去
 async function watchAtlas(job) {
   state.atlasJob = job.job_id;
   state.run = job;
-  stopScan();
-  scan.z = scan.goal = 0;                              // 扫描面从底下重新开始
+  if (job.kind !== 'qrng') {
+    stopScan();
+    scan.z = scan.goal = 0;                            // 扫描面从底下重新开始
+  }
   revealJobs();
   render();
   let seen = -1, lastPartial = 0;
@@ -1082,6 +1147,10 @@ async function watchAtlas(job) {
         continue;
       }
       state.atlasJob = null;
+      if (job.kind === 'qrng') {
+        runFinished(job);
+        break;
+      }
       if (job.status !== 'done' || job.stale) dropPartial();
       if (job.status === 'failed') state.atlasStatus = ['err', job.error];
       else if (job.stale) state.atlasStatus = ['warn', '结果已返回并缓存。等待期间体素网格改过，所以没有套用。'];
@@ -1090,9 +1159,10 @@ async function watchAtlas(job) {
   } catch (e) {
     state.atlasJob = null;
     dropPartial();
-    state.atlasStatus = ['err', e.restarted || e.status === 404
-      ? '本地服务重启了，这次提交中断了。已经提交的分块留着任务号，再点一次「提交到 Atlas」会接着等，不会重复提交。'
-      : e.message];
+    const lost = job.kind === 'qrng'
+      ? '本地服务重启了，这次运行中断了。任务号已经存下，再点一次「开始运行」会接着等，不会重新提交。'
+      : '本地服务重启了，这次提交中断了。已经提交的分块留着任务号，再点一次「提交到 Atlas」会接着等，不会重复提交。';
+    state.atlasStatus = ['err', e.restarted || e.status === 404 ? lost : e.message];
   }
   render();
   refreshJobs();
@@ -1740,6 +1810,23 @@ function drawSlice() {
 // ── 把状态画到页面上 ───────────────────────────────────────────────────────
 
 const yesNo = (ok) => (ok ? '是' : '否');
+
+// 这段历史用的随机数是哪来的，照实说：模拟器出的是伪随机数
+function qrngRows(p) {
+  const q = p.qrng;
+  const chip = (q.device || p.params.device) === 'qpu';
+  const where = chip ? `IBM 量子芯片${q.backend ? ` ${q.backend}` : ''}` : 'Atlas 的模拟器，是伪随机数';
+  const spent = chip && q.qpu_seconds != null ? `，占用 ${q.qpu_seconds} 秒` : '';
+  return [
+    ['随机数', `${where}${spent}`, chip ? (q.accounted === false ? 'warn' : 'ok') : 'warn'],
+    ...(q.grade ? [['引擎的评级', q.grade + (q.h_bit != null ? `，每比特的熵 ${q.h_bit.toFixed(2)}` : '')]] : []),
+    ['随机字节', (q.stretched
+      ? `取回 ${fmt(q.bytes)} 个，第 ${q.dry_turn} 回合用完，之后是用它们展开出来的`
+      : `取回 ${fmt(q.bytes)} 个，用了 ${fmt(q.used)} 个`) + (q.reused ? '（同一池重算）' : '')],
+    ...(q.bell ? [['Bell 检验', `S = ${q.bell.s.toFixed(2)}${q.bell.sigma != null ? ` ± ${q.bell.sigma.toFixed(2)}` : ''}，`
+      + `${q.bell.violates ? '超过' : '没有超过'}经典上限 2`]] : []),
+  ];
+}
 const dims = (extents) => extents.join(' × ');
 
 function available(view) {
@@ -1769,7 +1856,7 @@ function footText(view) {
   if (view === 'processed') return `阈值 ${level().toFixed(2)} · ${fmt(state.procCount)} 个格子在阈值以上`;
   if (view === 'result') return `${fmt(r.faces)} 个面 · ${r.parts} 块 · ${dims(r.extents)} mm`;
   if (view === 'scan') {
-    if (state.atlasJob) return 'Atlas 正在一层一层往上算，扫描面以下是已经算完的';
+    if (state.atlasJob && state.run.kind !== 'qrng') return 'Atlas 正在一层一层往上算，扫描面以下是已经算完的';
     const t = state.proc && state.proc.tiles;
     return '扫描面以下是量子结果，以上是原来的体素'
       + (t && t.mode === 'layers' && t.jobs > 1 ? ' · 这个结果就是这样从下往上一层层算出来的' : '');
@@ -1812,6 +1899,13 @@ function render() {
   $('quantum-params').hidden = mode === 'gaussian' || mode === 'nations';
   $('atlas-actions').hidden = mode !== 'atlas';
   $('mode-help').textContent = MODE_HELP[mode];
+  const source = segValue('source-seg');
+  const viaAtlas = mode === 'nations' && source === 'qrng';     // 「演化」的随机数向 Atlas 取
+  $('source-help').textContent = SOURCE_HELP[source];
+  $('device-field').hidden = source !== 'qrng';
+  $('device-help').textContent = DEVICE_HELP[segValue('device-seg')];
+  $('qrng-actions').hidden = !viaAtlas;
+  setStatusLine('qrng-status', viaAtlas ? state.atlasStatus : null);
   $('atlas-jobs-note').hidden = !(tiles && tiles.total > 1);
   if (tiles && tiles.total > 1) {
     $('atlas-jobs-note').textContent = `会提交 ${tiles.jobs} 个任务，大约 ${formatWait(tiles.jobs * 4 + 10)}。`
@@ -1826,12 +1920,15 @@ function render() {
       ['独立 / 吞并 / 灭亡', `${p.nations.split} / ${p.nations.annexed} / ${p.nations.died}`],
       ['逃离大陆 / 互相开战', `${p.nations.exiled} / ${p.nations.wars}`],
       ['体素', `${fmt(p.nations.start)} → ${fmt(p.nations.end)}`],
+      ...(p.qrng ? qrngRows(p) : []),
     ] : [['原始数值范围', `${p.min} – ${p.max}`]]),
     ...(p.seconds != null ? [['用时', `${p.seconds} 秒`]] : []),
     ...(p.job_id ? [['任务号', p.job_id]] : []),
   ] : []);
   const needAtlas = mode === 'atlas' && !!g && !atlasCurrent();
   $('atlas-stale-note').hidden = !(needAtlas && p && !state.atlasJob);
+  const needRun = viaAtlas && !!g && !(p && p.qrng);
+  $('qrng-stale-note').hidden = !(needRun && p && !state.atlasJob);
 
   $('report-empty').hidden = !!r || !!state.meshError;
   renderStats('report-stats', r ? [
@@ -1859,13 +1956,14 @@ function render() {
   $('report-note').textContent = notes.join(' ');
 
   // 一个界面只有一个主按钮：指向当前该做的那一步
-  const primary = !m ? 'pick-file' : needAtlas ? 'submit-atlas' : r ? 'export' : null;
-  for (const id of ['pick-file', 'submit-atlas', 'export']) {
+  const primary = !m ? 'pick-file' : needAtlas ? 'submit-atlas' : needRun ? 'start-run' : r ? 'export' : null;
+  for (const id of ['pick-file', 'submit-atlas', 'start-run', 'export']) {
     $(id).classList.toggle('btn-primary', id === primary);
     $(id).classList.toggle('btn-secondary', id !== primary);
   }
   $('export').disabled = !r;
   $('submit-atlas').disabled = !g || !!state.atlasJob;
+  $('start-run').disabled = !g || !!state.atlasJob;
 
   const view = currentView();
   for (const b of $('view-seg').querySelectorAll('button')) {
@@ -1877,8 +1975,8 @@ function render() {
   $('stage-foot-text').textContent = loading ? '正在载入模型…' : view ? footText(view) : '';
   for (const id of ['pick-file', 'use-test-cup', 'model-select', 'up-select']) $(id).disabled = loading;
 
-  // 任务栏只在 Atlas 模式下（或有一次提交还在跑时）出现
-  const showJobs = mode === 'atlas' || !!state.atlasJob;
+  // 任务栏只在会向 Atlas 提交的时候出现：Atlas 模式、「演化」向 Atlas 取随机数、或有一次提交还在跑
+  const showJobs = mode === 'atlas' || viaAtlas || !!state.atlasJob;
   if ($('jobs').hidden === showJobs) {
     $('jobs').hidden = !showJobs;
     if (showJobs) resumeJobs();
@@ -1944,12 +2042,22 @@ function bind() {
     render();                                          // 模式对应的控件、任务栏马上跟着变，不等算完
     invalidate(STAGE.process, 120);
   };
-  bindSeg('mode-seg', processChanged);
+  bindSeg('mode-seg', () => {
+    if (!state.atlasJob) state.atlasStatus = null;     // 上一次提交的状态是另一种处理方式的
+    processChanged();
+  });
   bindSeg('tiling-seg', processChanged);
   for (const id of ['sigma', 'strength', 'reach']) bindSlider(id, 2, processChanged);
   for (const id of ['nations-k', 'nations-turns']) bindSlider(id, 0, () => invalidateNations());
   bindSlider('nations-spread', 1, () => invalidateNations());
   $('nations-grooves').addEventListener('change', processChanged);
+  bindSeg('source-seg', () => {
+    if (!state.atlasJob) state.atlasStatus = null;
+    render();
+    invalidateNations();      // 本机：马上重算。Atlas：手上有一池字节就用它重算，没有就等「开始运行」
+  });
+  bindSeg('device-seg', render);
+  $('start-run').addEventListener('click', startRun);
   $('turn-play').addEventListener('click', () => {
     if (turns.timer) stopTurns();
     else playTurns();
@@ -2081,6 +2189,8 @@ function showProcessParams(mode, run, params, tiling) {
     $('nations-turns').value = params.turns;
     $('nations-spread').value = params.reach;
     $('nations-grooves').checked = !!params.grooves;
+    setSeg('source-seg', params.source === 'qrng' ? 'qrng' : 'local');
+    if (params.device) setSeg('device-seg', params.device);
     for (const id of ['nations-k', 'nations-turns', 'nations-spread']) $(id).paint();
   } else {
     $('strength').value = params.strength;
@@ -2145,7 +2255,8 @@ async function init() {
       }
     }
     if (saved.job) {                                   // 有一次提交还在 Atlas 上跑：接回去看着它
-      showProcessParams('atlas', saved.job.run, saved.job.params, saved.job.tiling);
+      showProcessParams(saved.job.kind === 'qrng' ? 'nations' : 'atlas', saved.job.run, saved.job.params,
+        saved.job.tiling);
       watchAtlas(saved.job);
     }
   } catch (e) {

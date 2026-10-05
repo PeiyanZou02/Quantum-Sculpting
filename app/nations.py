@@ -31,7 +31,8 @@
 关系冲掉，各国的行动变成互不相干的抛硬币。只有少数几段排他的关系，盟友才会真的一起行动。
 
 量子的部分是真的线路模拟（状态矢量），每回合只有还活着的国家占量子比特，可以原样放到真实设备上跑。
-随机数在模拟里用带种子的伪随机数代替测量的随机性，同样的种子得到同样的历史。
+随机数在模拟里用带种子的伪随机数代替测量的随机性，同样的种子得到同样的历史。也可以换成外面给的
+一池随机字节（dice，见 qrng.Pool）：建国怎么分、每回合问什么、测出什么，都按顺序从那一池里拿。
 """
 from dataclasses import dataclass, field
 
@@ -171,17 +172,18 @@ class World:
     history: list = field(default_factory=list)
 
 
-def found(solid, k, seed=0):
+def found(solid, k, seed=0, dice=None):
     """建国：分块，再按每块在身体上的位置定它一开始的性格。
-    露在外面的面多 → 想探索；被邻国围着的面多 → 想防守；地盘小 → 想进攻。"""
+    露在外面的面多 → 想探索；被邻国围着的面多 → 想防守；地盘小 → 想进攻。
+    dice：随机数的来源；不给就用种子。"""
     solid = np.asarray(solid) > 0.5
     if not 2 <= k <= MAX_ALIVE:
         raise ValueError(f"国家数要在 2 到 {MAX_ALIVE} 之间")
-    owner = partition(solid, k, seed)
+    owner = partition(solid, k, seed if dice is None else dice.integers(2 ** 31))
     shared, exposed = borders(owner, k)
     size = np.bincount(owner[owner >= 0], minlength=k).astype(np.float64)
     faces = shared.sum(axis=1) + exposed + 1e-9
-    rng = np.random.default_rng(seed)
+    rng = dice if dice is not None else np.random.default_rng(seed)
     want = np.ones((MAX_TOTAL, 3))
     want[:k] = np.clip(np.stack([size.mean() / (size + 1e-9), 2.0 * shared.sum(axis=1) / faces,
                                  2.0 * exposed / faces], axis=1), 0.3, 3.0) * rng.uniform(0.8, 1.25, size=(k, 3))
@@ -192,11 +194,12 @@ def found(solid, k, seed=0):
                  np.array(ndimage.center_of_mass(solid)), home, float(size.mean()), [None] * k)
 
 
-def step(world, seed=0, reach=6.0, memory=0.8):
+def step(world, seed=0, reach=6.0, memory=0.8, dice=None):
     """演化一回合，就地修改 world，返回这一回合的记录。
-    reach：长出来的东西最多离原来的表面多远（体素）；memory：性格变化的惯性。"""
+    reach：长出来的东西最多离原来的表面多远（体素）；memory：性格变化的惯性；
+    dice：随机数的来源，不给就用种子和回合数。"""
     owner = world.owner
-    rng = np.random.default_rng([seed % (2 ** 32), world.turn])
+    rng = dice if dice is not None else np.random.default_rng([seed % (2 ** 32), world.turn])
     shared, exposed = borders(owner, MAX_TOTAL)
     size = np.bincount(owner[owner >= 0], minlength=MAX_TOTAL)
     alive = [i for i in range(world.total) if size[i] > 0]
@@ -417,13 +420,13 @@ def step(world, seed=0, reach=6.0, memory=0.8):
     return record
 
 
-def run(solid, k=12, turns=30, seed=0, reach=6.0):
+def run(solid, k=12, turns=30, seed=0, reach=6.0, dice=None):
     """从一个体素网格开始演化 turns 回合，全都灭亡了就提前停。
     返回 (world, 每回合结束时的领土图)，第 0 张是建国时的。"""
-    world = found(solid, k, seed)
+    world = found(solid, k, seed, dice=dice)
     frames = [world.owner.copy()]
     for _ in range(turns):
-        step(world, seed=seed, reach=reach)
+        step(world, seed=seed, reach=reach, dice=dice)
         frames.append(world.owner.copy())
         if not (world.owner >= 0).any():
             break

@@ -20,6 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import emulator                              # noqa: E402
 import pipeline                              # noqa: E402
+import qrng                                  # noqa: E402
 import server                                # noqa: E402
 import tiling                                # noqa: E402
 from fake_atlas import TEST_KEY, FakeAtlas   # noqa: E402
@@ -59,6 +60,9 @@ class ServerTest(unittest.TestCase):
         self.fake.bare_result = self.fake.fail_jobs = False
         self.fake.max_values, self.fake.throttle, self.fake.polls_needed = None, 0, 3
         self.fake.stale_list = False
+        self.fake.qrng_bytes, self.fake.gate_qpu = None, False
+        for old in server.GRIDS.glob("atlas_qrng_*.json"):        # 上一个测试留下的随机字节和没等完的任务
+            old.unlink()
         (server.HOME / "limits.json").unlink(missing_ok=True)
         self.c.delete("/api/key")
 
@@ -733,6 +737,181 @@ class ServerTest(unittest.TestCase):
             server.S.grid_id += 1
         self.assertIn("128", self.post("/api/process", {"mode": "nations"}, expect=400).get_json()["error"])
 
+    # ── 演化的随机数从 Atlas 取 ──
+
+    QRNG = {"mode": "nations", "k": 5, "turns": 8, "spread": 6, "run": "dice", "source": "qrng"}
+
+    def history(self):
+        return self.c.get("/api/nations/history").get_json()["turns"]
+
+    def test_nations_can_take_their_randomness_from_atlas(self):
+        self.post("/api/key", {"key": TEST_KEY})
+        self.ready(32)
+        before = self.fake.submits
+        job = self.post("/api/process", self.QRNG).get_json()
+        self.assertEqual((job["status"], job["kind"]), ("running", "qrng"))
+        self.assertEqual(self.c.get("/api/state").get_json()["job"]["kind"], "qrng")      # 刷新页面后靠这个接回去
+        job = self.wait_for_job(job["job_id"])
+        self.assertEqual(job["status"], "done", job["error"])
+        meta = job["meta"]
+        self.assertEqual((meta["mode"], meta["params"]["source"], meta["params"]["device"]), ("nations", "qrng", "emu"))
+        self.assertEqual(job["pool"], meta["job_id"])
+
+        # 提交的是量子随机数引擎，要的字节数按回合数估
+        sent = self.fake.jobs[meta["job_id"]]
+        self.assertEqual((sent["engine_id"], sent["qrng"]["mode"]), ("comet-qrng-v1", "emu"))
+        self.assertEqual(sent["params"]["output_bytes"], qrng.need(8))
+        self.assertLessEqual(sent["params"]["num_qubits"] + (8 if sent["params"]["bell_witness"] else 0), 20)
+
+        # 结果里照实写着这批随机数的来历：模拟器出的，只作对照
+        told = meta["qrng"]
+        self.assertEqual((told["bytes"], told["accounted"], told["grade"], told["device"], told["backend"]),
+                         (qrng.need(8), False, "simulator-baseline", "emu", "aer"))
+        self.assertIsNone(told["bell"], "模拟器上不做 Bell 检验")
+        self.assertGreater(told["used"], 8 * 16)
+        self.assertEqual((told["stretched"], told["dry_turn"], told["reused"]), (0, None, False))
+        first = self.history()
+        self.assertEqual(len(first), 9)
+        final = self.c.get("/api/grid/processed").data
+        self.assertEqual(int(np.frombuffer(final, dtype="<f4").sum()), meta["nations"]["end"])
+
+        # 取回之后再算：用同一池字节，得到同一段历史，不再提交；调了参数也一样不提交
+        again = self.post("/api/process", {**self.QRNG, "qrng_job": job["pool"]}).get_json()
+        self.assertEqual((again["status"], again["meta"]["job_id"]), ("done", meta["job_id"]))
+        self.assertTrue(again["meta"]["qrng"]["reused"])
+        self.assertEqual(self.history(), first)
+        self.assertEqual(self.c.get("/api/grid/processed").data, final)
+        longer = self.post("/api/process", {**self.QRNG, "turns": 12, "qrng_job": job["pool"]}).get_json()
+        self.assertEqual(longer["meta"]["nations"]["turns"], 12)
+        self.assertEqual(self.history()[:9], first, "多跑几回合，前面的历史不变")
+        self.assertEqual(self.fake.submits, before + 1)
+
+        # 导出时把来历一起记下
+        out = self.post("/api/export", {"level": 0.5}).get_json()
+        sidecar = json.loads((server.OUTPUT / out["file"]).with_suffix(".json").read_text(encoding="utf-8"))
+        self.assertEqual(sidecar["process"]["qrng"]["grade"], "simulator-baseline")
+        self.assertEqual(sidecar["process"]["job_id"], meta["job_id"])
+
+        # 任务列表里认得出这是本应用提交的
+        rows = self.c.get("/api/atlas/jobs").get_json()["jobs"]
+        mine = next(r for r in rows if r["job_id"] == meta["job_id"])
+        self.assertEqual((mine["engine"], mine["local"]["run"]), ("comet-qrng-v1", "dice"))
+
+        # 再开始一次：另一池字节，另一段历史
+        second = self.wait_for_job(self.post("/api/process", self.QRNG).get_json()["job_id"])
+        self.assertEqual(second["status"], "done", second["error"])
+        self.assertEqual(self.fake.submits, before + 2)
+        self.assertNotEqual(second["meta"]["job_id"], meta["job_id"])
+        self.assertNotEqual(self.history(), first)
+
+    def test_a_pool_that_runs_out_is_stretched_and_the_result_says_from_which_turn(self):
+        self.post("/api/key", {"key": TEST_KEY})
+        self.ready(32)
+        self.fake.qrng_bytes = 60
+        job = self.wait_for_job(self.post("/api/process", self.QRNG).get_json()["job_id"])
+        self.assertEqual(job["status"], "done", job["error"])
+        told = job["meta"]["qrng"]
+        self.assertEqual((told["bytes"], told["used"]), (60, 60))
+        self.assertGreater(told["stretched"], 0)
+        self.assertIn(told["dry_turn"], (1, 2, 3))
+        self.assertEqual(job["meta"]["nations"]["turns"], 8, "字节不够也照样演完")
+
+    def test_the_real_chip_and_what_happens_when_the_account_may_not_use_it(self):
+        self.post("/api/key", {"key": TEST_KEY})
+        self.ready(16)
+        before = self.fake.submits
+        body = {**self.QRNG, "device": "qpu"}
+        self.fake.gate_qpu = True                    # 被拒绝：说清楚原因，不产生任务，不花额度
+        job = self.wait_for_job(self.post("/api/process", body).get_json()["job_id"])
+        self.assertEqual(job["status"], "failed")
+        self.assertIn("run_quantum", job["error"])
+        self.assertEqual(self.fake.submits, before)
+        self.assertIsNone(job["pool"])
+
+        self.fake.gate_qpu = False
+        job = self.wait_for_job(self.post("/api/process", body).get_json()["job_id"])
+        self.assertEqual(job["status"], "done", job["error"])
+        sent = self.fake.jobs[job["meta"]["job_id"]]
+        self.assertEqual(sent["qrng"]["mode"], "qpu")
+        self.assertNotIn("mode", sent["params"], "真芯片的开关在顶层，不能同时写进 params")
+        told = job["meta"]["qrng"]
+        self.assertEqual((told["accounted"], told["grade"], told["device"], told["backend"]),
+                         (True, "hardware-accounted", "qpu", "ibm_fake"))
+        self.assertEqual((told["h_bit"], told["healthy"], told["qpu_seconds"]), (0.66, True, 5.0))
+        self.assertEqual((told["bell"]["s"], told["bell"]["violates"]), (2.61, True))
+
+        # 早先存下的摘要是照引擎说明读的，全是空的：重算时从留档的说明里现读
+        stem = server._qrng_stem(job["pool"])
+        record = server._read_record(stem)
+        record["summary"] = {"bytes": told["bytes"], "certified": None, "grade": None}
+        stem.with_suffix(".json").write_text(json.dumps(record), encoding="utf-8")
+        again = self.post("/api/process", {**body, "qrng_job": job["pool"]}).get_json()["meta"]["qrng"]
+        self.assertEqual((again["grade"], again["backend"], again["reused"]), ("hardware-accounted", "ibm_fake", True))
+
+    def test_an_interrupted_wait_is_picked_up_again_without_paying_twice(self):
+        self.post("/api/key", {"key": TEST_KEY})
+        self.ready(16)
+        before = self.fake.submits
+        self.fake.polls_needed = 10 ** 6
+        patience, server.ATLAS_TIMEOUT = server.ATLAS_TIMEOUT, 0.1
+        try:
+            job = self.wait_for_job(self.post("/api/process", self.QRNG).get_json()["job_id"])
+        finally:
+            server.ATLAS_TIMEOUT = patience
+        self.assertEqual(job["status"], "failed")
+        self.assertIn("接着等", job["error"])
+        self.assertEqual(self.fake.submits, before + 1)
+        waiting = next(j for j, v in self.fake.jobs.items() if v["engine_id"] == "comet-qrng-v1"
+                       and v["status"] != "completed")
+
+        self.fake.polls_needed = 1
+        job = self.wait_for_job(self.post("/api/process", self.QRNG).get_json()["job_id"])
+        self.assertEqual(job["status"], "done", job["error"])
+        self.assertIn("没有重新提交", job["note"])
+        self.assertEqual(job["meta"]["job_id"], waiting)
+        self.assertEqual(self.fake.submits, before + 1)
+
+        # 在 Atlas 上失败的任务不会被接着等：再开始一次是新的提交
+        self.fake.fail_jobs = True
+        job = self.wait_for_job(self.post("/api/process", self.QRNG).get_json()["job_id"])
+        self.assertEqual(job["status"], "failed")
+        self.assertIn("simulated failure", job["error"])
+        self.fake.fail_jobs = False
+        job = self.wait_for_job(self.post("/api/process", self.QRNG).get_json()["job_id"])
+        self.assertEqual(job["status"], "done", job["error"])
+        self.assertEqual(self.fake.submits, before + 3)
+
+    def test_nothing_is_submitted_for_randomness_that_could_not_be_used(self):
+        self.ready(16)
+        before = self.fake.submits
+        self.assertIn("API key", self.post("/api/process", self.QRNG, expect=400).get_json()["error"])
+        self.post("/api/key", {"key": TEST_KEY})
+        # 说的是「用这一池重算」，这一池不在：报错，而不是悄悄去取一池新的
+        missing = self.post("/api/process", {**self.QRNG, "qrng_job": "0" * 8 + "-0000-0000-0000-" + "0" * 12},
+                            expect=404).get_json()
+        self.assertIn("开始运行", missing["error"])
+        self.assertEqual(self.post("/api/process", {**self.QRNG, "cached_only": True}).get_json()["status"], "missing")
+        with server.S.lock:
+            server.S.grid = np.zeros((16, 16, 16), dtype=np.float32)
+            server.S.grid_id += 1
+        self.assertIn("没有实体", self.post("/api/process", self.QRNG, expect=400).get_json()["error"])
+        self.assertEqual(self.fake.submits, before)
+
+    def test_bytes_that_arrive_after_the_grid_changed_are_kept_for_the_new_grid(self):
+        self.fake.polls_needed = 40
+        self.post("/api/key", {"key": TEST_KEY})
+        self.ready(32)
+        before = self.fake.submits
+        job = self.post("/api/process", self.QRNG).get_json()
+        self.post("/api/voxelize", {"n": 16})
+        job = self.wait_for_job(job["job_id"])
+        self.assertEqual((job["status"], job["stale"]), ("done", True))
+        self.assertIsNone(self.c.get("/api/state").get_json()["processed"])
+        self.assertTrue(job["pool"])
+        done = self.post("/api/process", {**self.QRNG, "qrng_job": job["pool"]}).get_json()
+        self.assertEqual((done["status"], done["meta"]["job_id"]), ("done", job["pool"]))
+        self.assertEqual(self.fake.submits, before + 1)
+
     # ── 算得久的时候 ──
 
     def test_a_long_computation_does_not_freeze_the_page_and_stops_when_superseded(self):
@@ -823,6 +1002,22 @@ class ServerTest(unittest.TestCase):
             server.pipeline.grid_to_mesh = original
 
     # ── 服务重启之后 ──
+
+    def test_a_new_model_from_another_page_invalidates_work_on_the_old_grid(self):
+        """两个页面共用一个服务：一个页面换了模型，另一个页面正用旧网格算的结果不能再套用。
+        以前换模型不算「网格变了」，那边算完时会撞上已经清空的网格，程序出错。"""
+        self.ready(16)
+        with server.S.lock:
+            grid, grid_id = server.S.grid, server.S.grid_id
+        self.post("/api/model/test-cup")                 # 另一个页面换了模型
+        with server.S.lock:
+            self.assertIsNone(server.S.grid)
+            self.assertNotEqual(server.S.grid_id, grid_id)
+        with server.app.test_request_context("/api/process", method="POST"):
+            with self.assertRaises(server.Superseded):   # 用旧网格算完的那一次，到这里被拦下
+                server.evolve(grid, grid_id, "late", {"k": 3, "turns": 1, "reach": 2.0, "grooves": False},
+                              {"mode": "nations", "run": "late", "params": {}})
+        self.assertIsNone(self.c.get("/api/state").get_json()["processed"])
 
     def test_every_response_says_which_start_of_the_service_it_came_from(self):
         boots = {self.c.get(path).headers.get("X-Boot") for path in ("/", "/api/state", "/api/grid/input")}

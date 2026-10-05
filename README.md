@@ -26,7 +26,7 @@ enter the key once.
    available. If the model is lying on its side, change the "up axis".
 2. **Voxelise** — pick a grid size from 16³ to 256³, how the inside is filled, and what a
    voxel holds:
-   - fill: enclosed interiors (the default); cap the bottom first, then fill — for scans that
+   - fill: enclosed interiors; cap the bottom first, then fill (the default) — for scans that
      are open underneath, such as statues; or shell only.
    - values: *coverage* (the default) stores how much of each voxel the model occupies, so the
      0.5 level is the model's true surface; *0 or 1* is the original behaviour, where every
@@ -38,12 +38,20 @@ enter the key once.
    - *Atlas*: click the key button (top right), paste your key, then submit. Results are cached
      in `grids/` and never submitted twice.
    - *Evolve*: split the model into "nations" and let them evolve turn by turn (see "Evolve"
-     below). Runs locally.
+     below). The nations are simulated locally; their random numbers come from this machine
+     or from Atlas.
 4. **Back to a mesh** — choose how the surface is made (see "Level sets" below), drag the
    threshold or the push amount to see the shape change, then export the STL. The file is
    written to `output/` together with a `.json` that records every parameter used.
 
 The interface is in Chinese.
+
+The page opens with the settings of the piece being worked on: up axis +Y, a 128³ grid with
+the bottom capped, *Evolve* with 12 nations and 60 turns, random numbers from Atlas on a real
+chip, and a surface pushed by the result (amount 6, threshold 0.18, ×2 refinement, gaps
+closed by 1.5, 19 smoothing passes, all large pieces kept). With Atlas as the source nothing
+is computed in step 3 until **Start run** is pressed; switch *Random numbers from* to *This
+machine* for an immediate local preview.
 
 ## Evolve: voxel regions as nations
 
@@ -101,6 +109,49 @@ Things measured on the statue, worth knowing:
 The quantum part is a real circuit simulation (state vector, one qubit per living nation)
 that could be sent to hardware as it is; in the simulation a seeded generator stands in for
 measurement randomness. Grids up to 128³: about 25 ms a turn at 64³ and 170 ms at 128³.
+
+### Random numbers from Atlas
+
+*Random numbers from* chooses where the randomness of a history comes from:
+
+- **This machine**: the seeded generator described above. Nothing is sent to Atlas.
+- **Atlas quantum random numbers**: pressing **Start run** submits one job to Atlas's
+  `comet-qrng-v1` engine (5 credits), which prepares qubits in |+⟩, measures them and returns
+  random bytes with a certificate. Everything random in the history — how the model is split
+  into nations, which question each nation is asked, what each measurement gives — is taken
+  from those bytes in order. The quantum state of the nations is still simulated locally; it
+  is the dice that come from Atlas.
+
+Two devices, and the interface says which one was used:
+
+- **Simulator** (`emu`): Atlas's own simulator. The bytes are pseudo-random and the engine
+  grades them `simulator-baseline`. Good for trying the path.
+- **Real chip** (`qpu`): an IBM quantum processor, reached through Moth's own IBM account.
+  The engine grades the bytes `hardware-accounted` (the entropy is estimated from the measured
+  data) and adds a Bell test, which it describes as a check of the chip's gates and readout,
+  not a device-independent certificate. If an account is not allowed to use hardware the
+  submission is refused (HTTP 403) and costs nothing.
+
+Things worth knowing:
+
+- One run is one job. The job id and the bytes are kept in `grids/`, so after the bytes have
+  arrived, moving a slider, changing the grid or restarting the service re-evolves from the
+  same pool without submitting again. Only **Start run** spends credits.
+- A wait that was cut short (a timeout, a restart) is picked up again on the next **Start
+  run** instead of being paid for twice.
+- A history uses about 45 bytes a turn with 12–16 nations. If the pool runs out, the rest is
+  derived from the pool with SHAKE-256 and the result says from which turn.
+- The result, and the `.json` next to an exported STL, record where the bytes came from:
+  device, backend, the engine's grade, how many arrived and how many were used. The full
+  report the engine returned (which qubits, their biases, the Bell test) stays in `grids/`.
+
+Observed on the real service (5 October 2026): the simulator returned 8,388 bytes in 42
+seconds; three hardware runs landed on `ibm_marrakesh`, `ibm_boston` and `ibm_fez`, each
+using 5 seconds of processor time and about two minutes from submission to bytes, with Bell
+values S = 2.45 and 2.72 on the first two (2 is the classical limit, 2.83 the quantum one).
+How many bytes a hardware run can give depends on its most biased qubit: one chip allowed
+8 KB, another 67 KB. The response differs from the engine's description — the grade is in
+`entropy_report`, there is no `certificate` — and the code reads what the service sends.
 
 ## Scan view
 
@@ -235,7 +286,8 @@ app/levelset.py     signed distance fields: from a mesh, smooth, offset, advect,
 app/tiling.py       cutting a grid into Atlas-sized tiles and stitching results
 app/emulator.py     Gaussian stand-in + local approximation of Quantum Blur Core
 app/nations.py      voxel regions as nations: one qubit each, evolving turn by turn
-app/atlas.py        Atlas API client (blur-core-v1)
+app/qrng.py         random bytes from Atlas's comet-qrng-v1 as the nations' dice
+app/atlas.py        Atlas API client (blur-core-v1, comet-qrng-v1)
 app/server.py       local service (Flask, listens on 127.0.0.1 only)
 app/static/         the interface
 tests/              unit tests, API tests, and a fake Atlas server
@@ -250,6 +302,9 @@ Taken from the official OpenAPI document, <https://api.mothquantum.com/openapi.j
 - `POST /api/v1/engines/blur-core-v1/process` with
   `{"params": {"values": <nested list>, "strength", "style", "reach", "axes", "shots"}}`
   returns a `job_id`
+- `POST /api/v1/engines/comet-qrng-v1/process` with
+  `{"params": {"num_qubits", "shots", "output_bytes", "bell_witness", ...}}`, plus a top-level
+  `"mode": "qpu"` for real hardware; the bytes are in `result.output.random.hex`
 - `GET /api/v1/jobs/{job_id}/status` — poll until `completed`
 - `GET /api/v1/jobs/{job_id}/result` — fetch the result
 - `GET /api/v1/jobs?limit=&cursor=` — the account's jobs, newest first, 200 per page at most
@@ -267,8 +322,8 @@ Observed on the real service: jobs of 32³, 32 × 32 × 64 and 256 × 256 × 1 v
 ```
 
 `tests/run_with_fake_atlas.py` starts a fake Atlas server and a copy of the app pointed at it
-(port 8766), so the Atlas path — including tiling, size limits and rate limiting — can be
-exercised without a real key. Its key and outputs live in a temporary folder, and its job list
+(port 8766), so the Atlas path — including tiling, size limits, rate limiting and the random
+number engine — can be exercised without a real key. Its key and outputs live in a temporary folder, and its job list
 starts with about 250 made-up jobs so the panel has something to show.
 
 ## Notes

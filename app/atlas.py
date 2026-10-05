@@ -1,4 +1,5 @@
-"""Moth Atlas 上 Quantum Blur Core（blur-core-v1）的客户端。
+"""Moth Atlas 的客户端。主要给 Quantum Blur Core（blur-core-v1）用；「演化」取随机数时
+提交的是 comet-qrng-v1（见 qrng.py），走的是同一套 提交 → 轮询 → 取结果。
 
 接口取自官方 OpenAPI 文档 https://api.mothquantum.com/openapi.json ：
   POST /engines/blur-core-v1/process  {"params": {...}} → 202 {"job_id", "status", "submitted_at"}
@@ -26,7 +27,7 @@ FAILED = {"failed", "cancelled", "canceled"}
 
 _HINTS = {
     401: "API key 无效，或账户未激活。",
-    403: "这个 key 没有权限使用该引擎。",
+    403: "这个账户没有权限这样使用该引擎。",
     429: "请求太频繁，稍等一会儿再试。",
     503: "Atlas 暂时不可用，稍后重试。",
 }
@@ -81,8 +82,10 @@ class Atlas:
     def me(self):
         return self._request("GET", "/me")
 
-    def submit(self, params):
-        return self._request("POST", f"/engines/{ENGINE}/process", {"params": params})
+    def submit(self, params, engine=ENGINE, mode=None):
+        """mode 是平台保留的开关（比如 "qpu"：在真芯片上跑），要放在顶层，不能同时再写进 params。"""
+        body = {"params": params, **({"mode": mode} if mode else {})}
+        return self._request("POST", f"/engines/{engine}/process", body)
 
     def status(self, job_id):
         return self._request("GET", f"/jobs/{job_id}/status")

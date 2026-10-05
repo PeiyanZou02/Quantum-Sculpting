@@ -29,6 +29,7 @@ import emulator
 import levelset
 import nations
 import pipeline
+import qrng
 import tiling
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -282,6 +283,7 @@ def set_model(mesh, name, file, up="+z", builtin=False):
         S.raw_mesh, S.name, S.file, S.up, S.builtin = mesh, name, file, up, builtin
         S.mesh = pipeline.orient(mesh, up)
         S.model_id += 1
+        S.grid_id += 1          # 旧网格没了：别的页面还在用它算的结果，算完时会发现已经作废
         S.grid = S.processed = S.proc_meta = S.frames = None
 
 
@@ -465,10 +467,13 @@ def read_process_request(b):
     if mode == "gaussian":
         return mode, run, {"sigma": clamp(b.get("sigma"), 0.2, 6.0, 1.0)}, tile_mode
     if mode == "nations":
-        return mode, run, {"k": int(clamp(b.get("k"), 2, nations.MAX_ALIVE, 12)),
-                           "turns": int(clamp(b.get("turns"), 1, 300, 60)),
-                           "reach": clamp(b.get("spread"), 0.0, 10.0, 4.0),     # 占网格边长的百分之几
-                           "grooves": bool(b.get("grooves"))}, tile_mode
+        params = {"k": int(clamp(b.get("k"), 2, nations.MAX_ALIVE, 12)),
+                  "turns": int(clamp(b.get("turns"), 1, 300, 60)),
+                  "reach": clamp(b.get("spread"), 0.0, 10.0, 4.0),              # 占网格边长的百分之几
+                  "grooves": bool(b.get("grooves"))}
+        if b.get("source") == "qrng":                # 随机数从 Atlas 的量子随机数引擎取，见 qrng.py
+            params.update(source="qrng", device="qpu" if b.get("device") == "qpu" else "emu")
+        return mode, run, params, tile_mode
     style = str(b.get("style") or "x")
     if not re.fullmatch(r"[xy]{1,4}", style):
         raise ValueError("style 只能由 x、y 组成，最多 4 个字母。")
@@ -507,6 +512,8 @@ def process():
     meta = {"mode": mode, "run": run, "params": params, "cached": False, "job_id": None, "tiles": None}
 
     if mode == "nations":
+        if params.get("source") == "qrng":
+            return evolve_with_atlas(b, grid, grid_id, run, params, meta)
         return evolve(grid, grid_id, run, params, meta)
 
     if mode != "atlas":
@@ -555,77 +562,260 @@ def process():
         if b.get("cached_only"):      # 只想知道有没有现成的结果（服务重启后恢复用），没有也不提交
             return jsonify(status="missing")
 
-        job = {"id": uuid.uuid4().hex[:12], "status": "running", "atlas_status": "submitting",
-               "started": time.time(), "finished": None, "error": None, "meta": None,
-               "stale": False, "note": None, "tiles_total": len(todo), "tiles_done": 0,
-               "tiles_cached": 0, "tile_shape": list(shape), "version": 0, "partial": None,
-               "cancel": False, "lock": threading.Lock(), "run": run, "params": params,
-               "tiling": tile_mode, "layers": _layers(grid.shape[0], shape, every), "done": set()}
+        job = new_job(run, params, tile_mode, tiles_total=len(todo), tile_shape=list(shape),
+                      layers=_layers(grid.shape[0], shape, every))
         S.jobs[job["id"]] = job
         threading.Thread(target=_run_atlas_job, daemon=True,
                          args=(job, grid, grid_id, params, meta, key, tile_mode)).start()
         return jsonify(_job_view(job))
 
 
-def evolve(grid, grid_id, run, params, meta):
-    """「演化」：把体素分成几个国家，一回合一回合地改领土（见 nations.py）。结果是最后的形状，不做归一化：
-    这里体素只有「有」和「没有」，而且总量本来就会变（长出来的、打没了的）。"""
-    n = grid.shape[0]
-    if n > NATIONS_MAX_GRID:
+def new_job(run, params, tile_mode, **more):
+    """一次向 Atlas 的提交在本应用里的记录。kind："blur" 是把网格交给 blur-core，"qrng" 是给「演化」取随机数。"""
+    return {"id": uuid.uuid4().hex[:12], "kind": "blur", "status": "running", "atlas_status": "submitting",
+            "started": time.time(), "finished": None, "error": None, "meta": None,
+            "stale": False, "note": None, "tiles_total": 1, "tiles_done": 0,
+            "tiles_cached": 0, "tile_shape": None, "version": 0, "partial": None,
+            "cancel": False, "lock": threading.Lock(), "run": run, "params": params,
+            "tiling": tile_mode, "layers": None, "done": set(), "pool": None, **more}
+
+
+def _check_nations(grid, params):
+    """这个网格能不能演化。向 Atlas 取随机数之前先查，免得白花一次额度。"""
+    if grid.shape[0] > NATIONS_MAX_GRID:
         raise ValueError(f"「演化」最大支持 {NATIONS_MAX_GRID}³ 的网格，先把网格尺寸调小。")
+    solid = int((grid >= 0.5).sum())
+    if solid == 0:
+        raise ValueError("体素网格里没有实体格子。")
+    if solid < params["k"]:
+        raise ValueError("实体体素比国家数还少。")
+
+
+def _evolve(grid, params, check, seed=0, dice=None):
+    """算一整段历史（见 nations.py）。dice 是随机数的来源（qrng.Pool），不给就用种子。
+    结果是最后的形状，不做归一化：这里体素只有「有」和「没有」，而且总量本来就会变（长出来的、打没了的）。"""
+    n = grid.shape[0]
+    whole = grid >= 0.5
+    # 世界只取模型周围的一个盒子：留出能长出去、能逃出去的余地。盒子的边就是世界的尽头
+    reach = params["reach"] / 100.0 * n
+    margin = int(np.ceil(reach)) + n // 8
+    box = []
+    for axis in range(3):
+        hit = np.flatnonzero(whole.any(axis=tuple(a for a in range(3) if a != axis)))
+        box.append((max(int(hit[0]) - margin, 0), min(int(hit[-1]) + margin + 1, n)))
+    crop = tuple(slice(a, b) for a, b in box)
+    solid = whole[crop]
+    world = nations.found(solid, params["k"], seed, dice=dice)
+    size = np.bincount(world.owner[world.owner >= 0], minlength=world.total)
+    shared, _ = nations.borders(world.owner, world.total)
+    founding = {"turn": 0, "size": size.tolist(), "action": [None] * world.total, "attacks": [], "events": [],
+                "ties": [[i, j, round(t, 2)] for (i, j), t in sorted(world.ties.items())],
+                "borders": [[i, j] for i in range(world.total) for j in range(i + 1, world.total) if shared[i, j]],
+                "home": np.round(world.home[:world.total], 1).tolist(), "exiled": []}
+    frames = [world.owner.copy()]
+    dry = None
+    for _ in range(params["turns"]):
+        check()
+        nations.step(world, seed=seed, reach=reach, dice=dice)
+        frames.append(world.owner.copy())
+        if dice is not None and dry is None and dice.stretched:
+            dry = world.turn                         # 那一池随机字节是在这一回合里用完的
+        if not (world.owner >= 0).any():
+            break                                    # 全都灭亡了，历史到此为止
+    if params["grooves"]:
+        frames[-1] = nations.grooves(frames[-1])
+    final = np.zeros(grid.shape, dtype=bool)
+    final[crop] = frames[-1] >= 0
+    count = lambda kind: sum(1 for r in world.history for e in r["events"] if e["type"] == kind)   # noqa: E731
+    sizes = np.bincount(frames[-1][frames[-1] >= 0], minlength=world.total)
+    return SimpleNamespace(
+        final=final.astype(np.float32), dry=dry,
+        frames={"n": n, "k": params["k"], "box": box, "history": [founding] + world.history,
+                "total": world.total, "parent": world.parent, "shape": list(solid.shape),
+                "data": [np.ascontiguousarray((f + 1).astype(np.uint8)) for f in frames]},
+        nations={"k": params["k"], "turns": len(frames) - 1, "total": world.total,
+                 "alive": int((sizes > 0).sum()),
+                 "wars": count("war"), "annexed": count("annex"), "died": count("death"),
+                 "split": count("split"), "exiled": count("exile"),
+                 "grown": int((final & ~whole).sum()), "carved": int((whole & ~final).sum()),
+                 "start": int(whole.sum()), "end": int(final.sum())})
+
+
+def apply_evolved(result, meta):
+    """调用方必须已经持有 S.lock。"""
+    S.processed = result.final
+    S.proc_id += 1
+    S.frames = {"proc_id": S.proc_id, **result.frames}
+    S.proc_meta = {**meta, "proc_id": S.proc_id, "grid_id": S.grid_id, "min": 0.0, "max": 1.0,
+                   "nations": result.nations}
+    return S.proc_meta
+
+
+def evolve(grid, grid_id, run, params, meta):
+    """「演化」：把体素分成几个国家，一回合一回合地改领土。随机数用本机的，种子就是实验名。"""
+    _check_nations(grid, params)
     with heavy(PROCESS) as check:
         t0 = time.time()
         seed = int(hashlib.sha256(run.encode()).hexdigest()[:8], 16)
-        whole = grid >= 0.5
-        if not whole.any():
-            raise ValueError("体素网格里没有实体格子。")
-        # 世界只取模型周围的一个盒子：留出能长出去、能逃出去的余地。盒子的边就是世界的尽头
-        reach = params["reach"] / 100.0 * n
-        margin = int(np.ceil(reach)) + n // 8
-        box = []
-        for axis in range(3):
-            hit = np.flatnonzero(whole.any(axis=tuple(a for a in range(3) if a != axis)))
-            box.append((max(int(hit[0]) - margin, 0), min(int(hit[-1]) + margin + 1, n)))
-        crop = tuple(slice(a, b) for a, b in box)
-        solid = whole[crop]
-        world = nations.found(solid, params["k"], seed)
-        size = np.bincount(world.owner[world.owner >= 0], minlength=world.total)
-        shared, _ = nations.borders(world.owner, world.total)
-        founding = {"turn": 0, "size": size.tolist(), "action": [None] * world.total, "attacks": [], "events": [],
-                    "ties": [[i, j, round(t, 2)] for (i, j), t in sorted(world.ties.items())],
-                    "borders": [[i, j] for i in range(world.total) for j in range(i + 1, world.total) if shared[i, j]],
-                    "home": np.round(world.home[:world.total], 1).tolist(), "exiled": []}
-        frames = [world.owner.copy()]
-        for _ in range(params["turns"]):
-            check()
-            nations.step(world, seed=seed, reach=reach)
-            frames.append(world.owner.copy())
-            if not (world.owner >= 0).any():
-                break                                    # 全都灭亡了，历史到此为止
-        if params["grooves"]:
-            frames[-1] = nations.grooves(frames[-1])
-        final = np.zeros(grid.shape, dtype=bool)
-        final[crop] = frames[-1] >= 0
-        count = lambda kind: sum(1 for r in world.history for e in r["events"] if e["type"] == kind)   # noqa: E731
-        sizes = np.bincount(frames[-1][frames[-1] >= 0], minlength=world.total)
+        result = _evolve(grid, params, check, seed=seed)
         with S.lock:
             if S.grid_id != grid_id:
                 raise Superseded()
-            S.processed = final.astype(np.float32)
-            S.proc_id += 1
-            S.frames = {"proc_id": S.proc_id, "n": n, "k": params["k"], "box": box,
-                        "history": [founding] + world.history, "total": world.total,
-                        "parent": world.parent, "shape": list(solid.shape),
-                        "data": [np.ascontiguousarray((f + 1).astype(np.uint8)) for f in frames]}
-            S.proc_meta = {**meta, "seconds": round(time.time() - t0, 2), "proc_id": S.proc_id,
-                           "grid_id": S.grid_id, "min": 0.0, "max": 1.0,
-                           "nations": {"k": params["k"], "turns": len(frames) - 1, "total": world.total,
-                                       "alive": int((sizes > 0).sum()),
-                                       "wars": count("war"), "annexed": count("annex"), "died": count("death"),
-                                       "split": count("split"), "exiled": count("exile"),
-                                       "grown": int((final & ~whole).sum()), "carved": int((whole & ~final).sum()),
-                                       "start": int(whole.sum()), "end": int(final.sum())}}
-            return jsonify(status="done", meta=S.proc_meta)
+            return jsonify(status="done", meta=apply_evolved(
+                result, {**meta, "seconds": round(time.time() - t0, 2)}))
+
+
+# ── 「演化」的随机数从 Atlas 取 ──────────────────────────────────────────────
+# 点「开始运行」时提交一个 comet-qrng-v1 任务，取回一池随机字节，整段历史的随机都从里面拿。
+# 任务号和取回的字节都存在 grids/ 里：中途断了，下次接着等同一个任务；取回之后调参数、换网格、
+# 服务重启，都是用这一池重算，不再提交。只有再点一次「开始运行」才会再花一次额度。
+
+def _qrng_stem(job_id):
+    return GRIDS / f"atlas_qrng_{re.sub(r'[^0-9A-Za-z_-]+', '_', str(job_id))[:80]}"
+
+
+def _save_qrng(record):
+    GRIDS.mkdir(exist_ok=True)
+    _qrng_stem(record["job_id"]).with_suffix(".json").write_text(json.dumps(record, indent=1), encoding="utf-8")
+
+
+def _pending_qrng(device):
+    """提交了但没等到结果的任务（服务重启过，或者等超时了）。接着等它，不再花一次额度。"""
+    waiting = [r for r in local_records().values()
+               if r.get("engine") == qrng.ENGINE and not r.get("finished") and not r.get("failed")
+               and r.get("base") == ATLAS_BASE and r.get("device") == device]
+    return max(waiting, key=lambda r: str(r.get("submitted_at") or ""), default=None)
+
+
+def _qrng_meta(record, pool, result, reused):
+    # 摘要每次从留档的说明里现算：早先存下的摘要是照引擎说明读的，和真实的返回对不上
+    detail = record.get("detail")
+    summary = qrng.summarise(len(pool.data), detail) if isinstance(detail, dict) else record.get("summary") or {}
+    return {**summary, "engine": qrng.ENGINE,
+            "used": min(pool.used, len(pool.data)), "stretched": pool.stretched,
+            "dry_turn": result.dry, "reused": reused}
+
+
+def evolve_with_atlas(b, grid, grid_id, run, params, meta):
+    _check_nations(grid, params)
+    again = str(b.get("qrng_job") or "")
+    if again:
+        # 这一池字节已经在本机：用它重算，不找 Atlas
+        record = _read_record(_qrng_stem(again))
+        if not record.get("finished") or not record.get("hex"):
+            abort(404, "这一池随机字节在本机找不到了。点「开始运行」向 Atlas 取一池新的。")
+        params = {**params, "device": record.get("device") or params["device"]}
+        with heavy(PROCESS) as check:
+            t0 = time.time()
+            pool = qrng.Pool(bytes.fromhex(record["hex"]))
+            result = _evolve(grid, params, check, dice=pool)
+            with S.lock:
+                if S.grid_id != grid_id:
+                    raise Superseded()
+                return jsonify(status="done", meta=apply_evolved(result, {
+                    **meta, "params": params, "job_id": record["job_id"],
+                    "seconds": round(time.time() - t0, 2), "qrng": _qrng_meta(record, pool, result, True)}))
+    if b.get("cached_only"):
+        return jsonify(status="missing")
+    key, _ = load_key()
+    if not key:
+        raise ValueError("还没有设置 Atlas API key。点右上角的「设置 API key」。")
+    with S.lock:
+        busy = running_job()
+        if busy:
+            abort(409, f"「{busy['run']}」还在 Atlas 上运行，等它结束再开始。")
+        job = new_job(run, params, None, kind="qrng")
+        S.jobs[job["id"]] = job
+    threading.Thread(target=_run_qrng_job, daemon=True, args=(job, grid, grid_id, params, meta, key)).start()
+    return jsonify(_job_view(job))
+
+
+def _run_qrng_job(job, grid, grid_id, params, meta, key):
+    try:
+        client = atlas.Atlas(key, ATLAS_BASE)
+        record = _pending_qrng(params["device"])
+        resumed = record is not None
+        if resumed:
+            job["note"] = "接着等上次没等完的那个任务，没有重新提交"
+        else:
+            request_params, mode = qrng.request(params["device"], qrng.need(params["turns"]))
+            accepted = client.submit(request_params, engine=qrng.ENGINE, mode=mode)
+            record = {"engine": qrng.ENGINE, "job_id": accepted["job_id"],
+                      "submitted_at": accepted.get("submitted_at"), "run": meta["run"],
+                      "device": params["device"], "base": ATLAS_BASE, "request": request_params}
+            _save_qrng(record)
+            S.live[record["job_id"]] = {"status": str(accepted.get("status") or "queued").lower()}
+        job_id = record["job_id"]
+
+        def give_up():
+            _save_qrng({**record, "failed": True})        # 留作记录，下次不再接着等它
+
+        started = time.time()
+        while True:
+            try:
+                status = client.status(job_id)
+            except atlas.AtlasError as e:
+                if resumed and e.status == 404:
+                    give_up()
+                    raise atlas.AtlasError(f"之前保存的任务已经查不到了，再点一次「开始运行」会重新提交。（{e}）") from e
+                raise
+            resumed = False
+            state = str(status.get("status", "")).lower()
+            job["atlas_status"] = state
+            S.live[job_id] = {"status": state, "progress": status.get("progress")}
+            if state in atlas.DONE:
+                break
+            if state in atlas.FAILED:
+                give_up()
+                err = status.get("error")
+                detail = err.get("message") if isinstance(err, dict) else err
+                raise atlas.AtlasError(f"Atlas 任务 {state}：{detail or '没有给出原因'}")
+            if time.time() - started > ATLAS_TIMEOUT:
+                raise atlas.AtlasError(
+                    f"等了 {ATLAS_TIMEOUT // 60} 分钟任务还是 {state}。任务号已保存，再点一次「开始运行」会接着等，不会重新提交。")
+            time.sleep(ATLAS_POLL)
+
+        try:
+            answer = client.result(job_id)
+        except atlas.AtlasError as e:
+            if e.status == 404:
+                give_up()
+            raise                                         # 只是连不上的话，任务还留着，下次接着取
+        try:
+            data, summary, detail = qrng.parse(answer)
+        except atlas.AtlasError:
+            give_up()
+            raise
+        record.update(finished=True, seconds=round(time.time() - started, 1), hex=data.hex(),
+                      summary=summary, detail=detail)
+        _save_qrng(record)
+        job["pool"] = job_id
+        job["atlas_status"] = "evolving"
+
+        def check():
+            if S.grid_id != grid_id:
+                raise Superseded()
+
+        with WORK:
+            check()
+            pool = qrng.Pool(data)
+            result = _evolve(grid, params, check, dice=pool)
+        with S.lock:
+            check()
+            job["meta"] = apply_evolved(result, {
+                **meta, "job_id": job_id, "seconds": round(time.time() - job["started"], 1),
+                "qrng": _qrng_meta(record, pool, result, False)})
+        job["status"] = "done"
+    except Superseded:
+        job["stale"] = True               # 等的时候网格换了。字节已经存下，界面会用它在新的网格上重算
+        job["status"] = "done"
+    except Exception as e:
+        if not isinstance(e, (atlas.AtlasError, ValueError)):
+            traceback.print_exc()
+        job["error"] = str(e) if isinstance(e, (atlas.AtlasError, ValueError)) else f"{type(e).__name__}: {e}"
+        job["status"] = "failed"
+    finally:
+        job["finished"] = time.time()
 
 
 @app.get("/api/nations/frame/<int:turn>")
@@ -842,7 +1032,8 @@ def running_job():
 
 
 def _job_view(job):
-    return {"job_id": job["id"], "status": job["status"], "atlas_status": job["atlas_status"],
+    return {"job_id": job["id"], "kind": job["kind"], "pool": job["pool"],
+            "status": job["status"], "atlas_status": job["atlas_status"],
             "run": job["run"], "params": job["params"], "tiling": job["tiling"],
             "elapsed": round((job["finished"] or time.time()) - job["started"], 1),
             "error": job["error"], "meta": job["meta"], "stale": job["stale"], "note": job["note"],
@@ -1067,7 +1258,8 @@ def export():
         # 同名 .json 记下这次用的全部参数，方便复现和提交作品时说明流程
         sidecar = {"model": now.name, "up": now.up, "grid": {"n": n, **now.grid_params},
                    "process": {k: meta.get(k) for k in
-                               ("mode", "run", "params", "tiles", "job_id", "min", "max")},
+                               ("mode", "run", "params", "tiles", "job_id", "min", "max", "nations", "qrng")
+                               if meta.get(k) is not None or k in ("tiles", "job_id")},
                    "mesh": report, "exported_at": time.strftime("%Y-%m-%d %H:%M:%S")}
         (OUTPUT / f"{name}.json").write_text(
             json.dumps(sidecar, indent=1, ensure_ascii=False), encoding="utf-8")

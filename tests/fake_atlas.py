@@ -3,7 +3,11 @@
 没有 API key 时，用它把「提交 → 轮询 → 取结果」整条路径走一遍：接口路径、
 认证方式、错误体的格式都照 https://api.mothquantum.com/openapi.json 写，
 结果用本地模拟器算。它只接受下面这个测试用的 key。
+
+comet-qrng-v1（量子随机数）的返回结构照 2026-10-05 在真实服务上见到的写（比它在 OpenAPI 里的说明
+多了 entropy_report，少了 certificate），数值是编的。
 """
+import os
 import sys
 import threading
 import time
@@ -41,6 +45,8 @@ class FakeAtlas:
         self.max_values = None        # 结果超过这么多个数就失败，模拟真实服务约 2 MB 的上限
         self.throttle = 0             # 接下来这么多次提交返回 429
         self.stale_list = False       # True：任务列表里的状态停在 queued，模拟列表比实时状态慢
+        self.qrng_bytes = None        # comet-qrng 最多给这么多字节，模拟「能提取的熵不够」；None：要多少给多少
+        self.gate_qpu = False         # True：账户没有在真芯片上跑的权限，mode=qpu 会被拒绝
         self.submits = 0
         self.jobs = {}
         self.app = self._build()
@@ -101,6 +107,32 @@ class FakeAtlas:
             resp.status_code = 202
             return resp
 
+        @app.post("/api/v1/engines/comet-qrng-v1/process")
+        def submit_qrng():
+            body = request.get_json(silent=True) or {}
+            params = body.get("params") or {}
+            if body.get("mode") and "mode" in params:
+                return problem(422, "Unprocessable Entity", "Set mode at the top level or in params, never both.")
+            mode = body.get("mode") or params.get("mode", "emu")
+            if mode == "qpu" and self.gate_qpu:
+                return problem(403, "Forbidden", "mode=qpu requires the run_quantum feature.")
+            qubits, shots = params.get("num_qubits", 12), params.get("shots", 4096)
+            want = params.get("output_bytes", 32)
+            witness = 8 if params.get("bell_witness", True) else 0
+            if (mode not in ("emu", "qpu") or not 1 <= qubits <= 256 or not 0 < shots <= 10000
+                    or not 1 <= want <= 1_000_000 or (mode == "emu" and qubits + witness > 20)):
+                return problem(422, "invalid_params", "One or more params fields failed validation.")
+            self.submits += 1
+            job_id = str(uuid.uuid4())
+            now = time.time()
+            given = os.urandom(want if self.qrng_bytes is None else min(want, self.qrng_bytes))
+            self.jobs[job_id] = {"params": params, "values": None, "qrng": {"mode": mode, "bytes": given},
+                                 "polls": 0, "engine_id": "comet-qrng-v1", "owner": ACCOUNT,
+                                 "status": "queued", "error": None, "created": now, "updated": now}
+            resp = jsonify(job_id=job_id, status="queued", submitted_at=stamp(now))
+            resp.status_code = 202
+            return resp
+
         @app.get("/api/v1/jobs")
         def list_jobs():
             """新的在前；cursor 就是下一页从第几个开始。"""
@@ -108,7 +140,7 @@ class FakeAtlas:
             start = request.args.get("cursor", 0, type=int)
             order = sorted(self.jobs.items(), key=lambda kv: kv[1]["created"], reverse=True)
             page = [{"job_id": job_id, "engine_id": job["engine_id"], "owner": job["owner"],
-                     "status": "queued" if self.stale_list and job["values"] is not None else job["status"],
+                     "status": "queued" if self.stale_list and job["params"] is not None else job["status"],
                      "gated_features": [], "created_at": stamp(job["created"]),
                      "updated_at": stamp(job["updated"])}
                     for job_id, job in order[start:start + limit]]
@@ -122,7 +154,7 @@ class FakeAtlas:
             job = self.jobs.get(job_id)
             if job is None:
                 return problem(404, "Not Found", "no such job")
-            if job["values"] is None:                 # add_job() 放进来的：状态是定好的
+            if job["params"] is None:                 # add_job() 放进来的：状态是定好的
                 body = {"job_id": job_id, "engine_id": job["engine_id"], "status": job["status"],
                         "submitted_at": stamp(job["created"]), "updated_at": stamp(job["updated"])}
                 if job["error"]:
@@ -130,18 +162,21 @@ class FakeAtlas:
                 return jsonify(body)
             job["polls"] += 1
             job["updated"] = time.time()
-            body = {"job_id": job_id, "engine_id": "blur-core-v1",
+            body = {"job_id": job_id, "engine_id": job["engine_id"],
                     "submitted_at": stamp(job["created"]), "updated_at": stamp(job["updated"])}
             if job["polls"] < self.polls_needed:
                 body["status"] = "queued" if job["polls"] == 1 else "running"
                 # 真实服务运行中的 step 叫什么没有见过，这里的名字是编的
                 body["progress"] = {"step": "simulate", "detail": "Simulating the circuit"}
-            elif self.max_values and job["values"].size > self.max_values:
+            elif self.max_values and job["values"] is not None and job["values"].size > self.max_values:
                 body["status"] = "failed"       # 真实服务就是这样：先接受任务，交结果时才失败
                 body["error"] = {"type": "ApplicationError", "retryable": False, "message": TOO_LARGE}
             elif self.fail_jobs:
                 body["status"] = "failed"
                 body["error"] = {"type": "engine_error", "message": "simulated failure", "retryable": False}
+            elif "qrng" in job:
+                body["status"] = "completed"
+                body["progress"] = {"step": "format", "detail": f"Extracted {len(job['qrng']['bytes'])} bytes"}
             else:
                 body["status"] = "completed"
                 qubits = int(np.log2(job["values"].size))
@@ -153,6 +188,8 @@ class FakeAtlas:
         @app.get("/api/v1/jobs/<job_id>/result")
         def result(job_id):
             job = self.jobs.get(job_id)
+            if job is not None and "qrng" in job:
+                return jsonify(result={"output": self._qrng_output(job)}, outputs=None)
             if job is None or job["values"] is None:
                 return problem(404, "Not Found", "no such job")
             p = job["params"]
@@ -163,3 +200,27 @@ class FakeAtlas:
             return jsonify(result=nested if self.bare_result else {"output": nested}, outputs=None)
 
         return app
+
+    @staticmethod
+    def _qrng_output(job):
+        data, real = job["qrng"]["bytes"], job["qrng"]["mode"] == "qpu"
+        witness = job["params"].get("bell_witness", True)
+        h_bit = 0.66 if real else 0.93
+        return {
+            "random": {"hex": data.hex(), "bytes": len(data), "bits": 8 * len(data),
+                       "requested_bytes": job["params"].get("output_bytes", 32), "derived": {}},
+            "entropy_report": {"grade": "hardware-accounted" if real else "simulator-baseline",
+                               "entropy_accounted": real, "h_bit": h_bit, "health_passed": True,
+                               "output_bits": 8 * len(data), "epsilon_log2": 64,
+                               "statements": ["made up by the fake service"],
+                               "witness_violates_classical": True if real and witness else None},
+            "entropy": {"readout": "counts", "h_bit": h_bit},
+            "extractor": {"kind": "toeplitz", "output_bits": 8 * len(data), "public_seed": "toeplitz-v1"},
+            "provenance": {"mode": job["qrng"]["mode"], "backend": "ibm_fake" if real else "aer",
+                           "provider_job_id": "fake-provider-job", "qpu_seconds": 5 if real else None,
+                           "circuit_hash": "0" * 64},
+            "bell_witness": ({"enabled": True, "kind": "chsh_fidelity_witness", "S": 2.61 if real else 2.83,
+                              "sigma_S": 0.012, "violates_classical_3sigma": True}
+                             if witness else {"enabled": False}),
+            "raw": {"counts_sha256": "0" * 64},
+        }
