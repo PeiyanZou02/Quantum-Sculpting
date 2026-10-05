@@ -19,6 +19,7 @@ import { MARK_MIME } from './MarkLibrary'
 import { usePresent } from '../present'
 import { usePresentKeys } from './presentKeys'
 import { useAnimator } from './animator'
+import { DEFAULT_COMPOSITION } from '../hud/defaultComposition'
 import type { HudCtx, Vec3 } from '../hud/types'
 import { live, bump } from '../live'
 import { ownerPalette, nationName } from '../view/nations'
@@ -349,7 +350,11 @@ export function Stage() {
     const t = setTimeout(() => {
       const p = usePresent.getState()
       const mine = Object.entries(p.pos).filter(([k]) => k.startsWith('present|') && !k.startsWith('present|chrome:'))
-      if (mine.length && mine.every(([, v]) => v.auto)) p.tidyUp()
+      // anchored pieces (the default layout) go back to their places and settle again instead
+      if (mine.some(([, v]) => v.anchor)) {
+        const d = DEFAULT_COMPOSITION.pos
+        for (const [k, v] of mine) { const home = d[k.slice(8)]; if (v.anchor && home) p.setPos(k, { ...home }) }
+      } else if (mine.length && mine.every(([, v]) => v.auto)) p.tidyUp()
     }, 220)
     return () => clearTimeout(t)
   }, [vsize.w, vsize.h])
@@ -517,11 +522,12 @@ export function Stage() {
             hideHover={(shown.selection ?? 'off') !== 'off'} hidePins={(shown.callout ?? 'off') !== 'off'} showPins />
         )}
 
-        {model && engine && (
+        {engine && (
           <HudLayer ctx={hudCtx(engine)} compose={shown}
             edit={pr.composing && !pr.bare && !pr.recording ? { sel: pr.sel, onSelect: pr.setSel, onRemove: pr.removePiece, onResize: (k, size) => pr.setLook(k, { size }) } : undefined}
             looks={pr.looks} hl={pr.hl} ghost={pr.preview}
             texts={pr.texts} onText={pr.setText}
+            fit={Math.max(0.4, Math.min(1, vsize.w / 2400, vsize.h / 1650))}
             autoArrange onCrowded={pr.setCrowded} onLeftOut={pr.setLeftOut} tidyKey={pr.tidyKey} onHero={onHero}
             inset={{ l: side, r: side, t: 0, b: 0 }}
             positions={Object.fromEntries(Object.entries(pr.pos).filter(([k]) => k.startsWith('present|')).map(([k, v]) => [k.slice(8), v]))}
@@ -536,6 +542,8 @@ export function Stage() {
                     <IconButton name={t.icon} title={t.t} desc={t.d} hotkey={t.key} side="right" on={tool === t.id} onClick={() => st.setTool(t.id)} />
                   </span>
                 ))}
+                <span className="toolshelf__sep" />
+                <IconButton name="eyeOff" title="Hide the tool shelf" desc="Bring it back under Properties · Compose · On the view." side="right" onClick={() => st.setHud({ tools: false })} />
                 {probe.pins.length > 0 && (
                   <>
                     <span className="toolshelf__sep" />

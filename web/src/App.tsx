@@ -62,8 +62,9 @@ export default function App() {
   }, [init])
 
   const lab = tab === 'lab'
-  // no model open: the start page takes the whole window under the top bar
-  const home = lab && !hasModel
+  // the start page (from the title) takes the whole window under the top bar until a model opens
+  const home = lab && sh.home && !hasModel
+  useEffect(() => { if (hasModel && useShell.getState().home) useShell.getState().setHome(false) }, [hasModel])
   const sides = lab && !bare && !home
   // Parameters | view | Properties, or swapped
   const cols = [{ t: 'Parameters', icon: 'sliceTool', body: <InputPane /> }, { t: 'Properties', icon: 'model', body: <OutputPane /> }]

@@ -16,6 +16,7 @@ import { useLive } from '../live'
 import { exportFrame, exportGlb, renderStill, screenshot, toggleRecording } from './capture'
 import { FRAMES, frameOf, type FrameId } from '../frames'
 import { CURATED, TIDY_LEVELS, presetCompose } from '../hud/tidy'
+import { DEFAULT_COMPOSITION, DEFAULT_HUD, DEFAULT_ID } from '../hud/defaultComposition'
 import { FloorSize, LibRow, MarkLibrary } from './MarkLibrary'
 import { PRESENT_TOOLS } from './presentTools'
 import { PARAMS, paramOf } from '../hud/paramDefs'
@@ -122,6 +123,11 @@ function Presets() {
   return (
     <>
       <div className="pd-plist" role="radiogroup" aria-label="Presets">
+        <button role="radio" aria-checked={p.current === DEFAULT_ID && sameComposition(p.compose, DEFAULT_COMPOSITION.compose)} className={'pd-prow' + (sameComposition(p.compose, DEFAULT_COMPOSITION.compose) ? ' pd-prow--on' : '')}
+          onClick={() => { p.applyDefault(); useStore.getState().setHud(DEFAULT_HUD) }}>
+          <span className="pd-prow__t">Default</span>
+          <span className="pd-prow__d">Lab's own layout: readouts down the sides, steps on top, the run underneath.</span>
+        </button>
         {CURATED.map((c) => {
           const on = sameComposition(p.compose, presetCompose(c, mode))
           const off = c.mode === 'nations' ? !evolve : c.mode === 'blur' ? evolve : false
@@ -471,7 +477,7 @@ export function ComposeSections() {
   // hovering a library row: it shows on the view and everything else dims
   const hover = (k: string | null, on: boolean) => { p.setPreview(k && !on ? k : null); p.setHl(k) }
   const mode = useStore((s) => s.q.mode)
-  const preset = CURATED.find((c) => sameComposition(p.compose, presetCompose(c, mode)))
+  const preset = sameComposition(p.compose, DEFAULT_COMPOSITION.compose) ? { title: 'Default' } : CURATED.find((c) => sameComposition(p.compose, presetCompose(c, mode)))
   const on = countOn(p.compose, CATEGORIES.flatMap((c) => c.fams)) + p.texts.length
   return (
     <div className={'pd pd--props' + (p.composing ? ' pd--composing' : '')} onPointerLeave={() => { p.setHl(null); p.setPreview(null) }}>

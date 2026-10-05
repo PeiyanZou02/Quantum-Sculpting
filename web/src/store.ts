@@ -75,7 +75,7 @@ export interface Hud {
   nav: boolean         // navigation buttons under the gizmo
   tools: boolean       // tool shelf
 }
-export const HUD_DEFAULT: Hud = { bounds: true, floor: true, slice: false, probe: true, axes: true, dims: false, camera: true, frame: true, legend: true, caption: true, nav: true, tools: true }
+export const HUD_DEFAULT: Hud = { bounds: true, floor: true, slice: true, probe: true, axes: false, dims: false, camera: true, frame: false, legend: false, caption: false, nav: false, tools: true }
 
 export type Tool = 'navigate' | 'probe' | 'annotate' | 'measure' | 'slice'
 export type Shading = 'wire' | 'solid' | 'value' | 'entangle'

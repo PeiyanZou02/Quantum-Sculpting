@@ -10,7 +10,7 @@ export function HomeDialog() {
   const setTab = useShell((s) => s.setTab)
   const [busy, setBusy] = useState(false)
   const close = () => setAsk(false)
-  const go = () => { st.goHome(); setTab('lab'); setAsk(false) }
+  const go = () => { st.goHome(); setTab('lab'); useShell.getState().setHome(true); setAsk(false) }
   const exportThenGo = async () => {
     setBusy(true)
     try {

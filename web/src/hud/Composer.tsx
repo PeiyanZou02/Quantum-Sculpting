@@ -53,11 +53,13 @@ const SIZE_MIN = 0.5, SIZE_MAX = 3
 interface PieceProps {
   k: string; label: string; ctx: HudCtx; pos?: Placement; arrange: boolean; edit?: Edit; live?: boolean
   look?: Look; dim?: boolean; ghost?: boolean; onMove?: (k: string, p: Placement | null) => void; children: ReactNode
+  /** Scale for pieces placed by hand: they shrink with the view (panels opening) as the layout's own do. */
+  fit?: number
 }
 /** A piece in a slot or at a dragged position. In Lab's arrange mode every piece shows its handle. In
  *  compose mode a piece is selected by a click, dragged by its body or handle, saved as a PNG, deleted
  *  with ×, or dragged onto the compose panel to take it off. */
-function Piece({ k, label, ctx, pos, arrange, edit, live, look, dim, ghost, onMove, children }: PieceProps) {
+function Piece({ k, label, ctx, pos, arrange, edit, live, look, dim, ghost, onMove, children, fit = 1 }: PieceProps) {
   const body = useRef<HTMLDivElement>(null)
   useStrokes(body, look)
   const start = (e: React.PointerEvent<HTMLElement>) => {
@@ -104,7 +106,7 @@ function Piece({ k, label, ctx, pos, arrange, edit, live, look, dim, ghost, onMo
     const el = body.current
     if (!el) return
     const r = el.getBoundingClientRect(), x0 = e.clientX, y0 = e.clientY
-    const s0 = look?.size ?? 1, auto = pos?.z ?? 1
+    const s0 = look?.size ?? 1, auto = (pos?.z ?? 1) * (pos && (!pos.auto || pos.anchor) ? fit : 1)
     const pct = (e.currentTarget as HTMLElement).querySelector<HTMLElement>('.hud-piece__pct')
     let size = s0
     const move = (ev: PointerEvent) => {
@@ -126,7 +128,7 @@ function Piece({ k, label, ctx, pos, arrange, edit, live, look, dim, ghost, onMo
   const sel = edit?.sel === k
   const cls = 'hud-piece' + (live ? ' hud-mod--live' : '') + (arrange ? ' hud-piece--arrange' : '') + (edit ? ' hud-piece--edit' : '') + (sel ? ' hud-piece--sel' : '') + (pos ? ' hud-piece--placed' : '') + (ghost ? ' hud-piece--ghost' : '')
   const place = pos ? { left: pos.x * ctx.w, top: pos.y * ctx.h, transform: pos.c ? 'translate(-50%, -50%)' : undefined } : undefined
-  const zoom = (look?.size ?? 1) * (pos?.z ?? 1)
+  const zoom = (look?.size ?? 1) * (pos?.z ?? 1) * (pos && (!pos.auto || pos.anchor) ? fit : 1)
   return (
     <div className={cls} data-hud={k} data-out={pos?.out ? '' : undefined} style={pos?.out ? { ...place, visibility: 'hidden' } : place} onPointerDown={edit && !live ? start : undefined}>
       {(arrange || edit) && (
@@ -219,8 +221,10 @@ function padOf(chosen: HudModule[]): Pad {
 }
 
 /** Draws the chosen modules over the view. `chrome` lets the host put its own controls into slots. */
-export function HudLayer({ ctx, compose, chrome, positions = {}, arrange = false, edit, looks = {}, hl = null, ghost = null, texts = [], autoArrange = false, onCrowded, onLeftOut, tidyKey = 0, reserve = 0, inset, onHero, onMove, onText }: {
+export function HudLayer({ ctx, compose, chrome, positions = {}, fit = 1, arrange = false, edit, looks = {}, hl = null, ghost = null, texts = [], autoArrange = false, onCrowded, onLeftOut, tidyKey = 0, reserve = 0, inset, onHero, onMove, onText }: {
   ctx: HudCtx; compose: Composition; chrome?: Partial<Record<(typeof SLOTS)[number], ReactNode>>
+  /** Scale of pieces placed by hand (see Piece). */
+  fit?: number
   positions?: Record<string, Placement>; arrange?: boolean; edit?: Edit; looks?: Record<string, Look>; hl?: string | null
   /** The piece being previewed from the library (outlined, the rest dimmed). */
   ghost?: string | null
@@ -248,7 +252,7 @@ export function HudLayer({ ctx, compose, chrome, positions = {}, arrange = false
   const slotted = (s: string) => chosen.filter((m) => m.slot === s && !positions[key(m)])
   const dim = (k: string) => !!hl && hl !== k
   const piece = (m: HudModule, pos?: Placement) => (
-    <Piece key={key(m)} k={key(m)} label={m.label} ctx={ctx} pos={pos} arrange={arrange} edit={edit} onMove={onMove} live={m.interactive} look={looks[key(m)]} dim={dim(key(m))} ghost={ghost === key(m)}>{m.render(ctx)}</Piece>
+    <Piece key={key(m)} k={key(m)} label={m.label} ctx={ctx} pos={pos} arrange={arrange} edit={edit} onMove={onMove} live={m.interactive} look={looks[key(m)]} dim={dim(key(m))} ghost={ghost === key(m)} fit={fit}>{m.render(ctx)}</Piece>
   )
   const chromeAt = (s: (typeof SLOTS)[number]) => (chrome?.[s] && !positions[`chrome:${s}`] ? (
     <Piece k={`chrome:${s}`} label="controls" ctx={ctx} arrange={arrange} onMove={onMove} live>{chrome[s]}</Piece>
@@ -257,6 +261,8 @@ export function HudLayer({ ctx, compose, chrome, positions = {}, arrange = false
   // whenever pieces come or go, settle them (a piece only previewed does not count); slot stacks shift
   // as pieces move out of them, so settle again until nothing moves (a few passes at most)
   const sig = chosen.map(key).filter((k) => k !== ghost).join() + '|' + texts.map((t) => t.id).join()
+    // anchored pieces settle again when they are put back or the view's scale changes
+    + '|' + Object.entries(positions).filter(([, v]) => v.anchor).map(([k, v]) => `${k}${v.x.toFixed(3)},${v.y.toFixed(3)}`).join() + '|' + fit.toFixed(2)
   const settledSig = useRef('')
   const tidied = useRef(tidyKey)
   useLayoutEffect(() => {
@@ -290,7 +296,7 @@ export function HudLayer({ ctx, compose, chrome, positions = {}, arrange = false
     let pass = 0
     const run = () => {
       if (!root.current) return
-      const { moved, stuck } = settle(root.current, ctx.rect, onMove, fixed, (k) => positions[k]?.z ?? 1, ghost)
+      const { moved, stuck } = settle(root.current, ctx.rect, onMove, fixed, (k) => (positions[k]?.z ?? 1) * (positions[k]?.anchor ? fit : 1), ghost, (k) => !!positions[k]?.anchor)
       if (moved && ++pass < 4) setTimeout(run, 60)
       else onCrowded?.(stuck)
     }

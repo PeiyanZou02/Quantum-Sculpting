@@ -20,7 +20,7 @@ export const countOn = (compose: Record<string, string>, fams: readonly string[]
 
 /** Where a piece was put, as fractions of the view: top-left, or its centre when `c`. `auto`: placed by the
  *  view to keep pieces apart (it may move it again); without it, the user put it there. */
-export interface Placement { x: number; y: number; c?: boolean; auto?: boolean; /** auto only: the layout's scale */ z?: number; /** auto only: left out of this frame for want of room */ out?: boolean }
+export interface Placement { x: number; y: number; c?: boolean; auto?: boolean; /** auto only: the layout's scale */ z?: number; /** auto only: left out of this frame for want of room */ out?: boolean; /** laid out by hand, but the view may move it out of another's way */ anchor?: boolean }
 export const TIER_OPACITY = { 1: 1, 2: 0.58, 3: 0.3 } as const
 
 export const keyOf = (m: HudModule) => `${m.family}:${m.id}`
@@ -60,7 +60,7 @@ const fixedBlockers = () => [...document.querySelectorAll('.present-bar')].map((
  *  own controls) stay put and go first; the rest, in reading order, keep their place if it is free or
  *  move to the nearest free spot. Moves are marked `auto` so a later pass may move them again. Returns
  *  how many moved. */
-export function settle(root: HTMLElement, model: Rect | null, onMove: (k: string, p: Placement) => void, fixed: (k: string) => boolean, scaleOf: (k: string) => number = () => 1, skip: string | null = null) {
+export function settle(root: HTMLElement, model: Rect | null, onMove: (k: string, p: Placement) => void, fixed: (k: string) => boolean, scaleOf: (k: string) => number = () => 1, skip: string | null = null, anchored: (k: string) => boolean = () => false) {
   const view = root.getBoundingClientRect()
   const pieces = [...root.querySelectorAll<HTMLElement>('.hud-piece[data-hud]')]
     .filter((p) => !p.parentElement?.closest('.hud-piece') && p.dataset.out == null)
@@ -69,18 +69,26 @@ export function settle(root: HTMLElement, model: Rect | null, onMove: (k: string
   const stays = (k: string) => k.startsWith('chrome:') || fixed(k)
   const order = [...pieces.filter((p) => stays(p.k)), ...pieces.filter((p) => !stays(p.k)).sort((a, b) => a.r.top - b.r.top || a.r.left - b.r.left)]
   const settled: DOMRect[] = fixedBlockers()
+  const handset = new Set<DOMRect>()
   let moved = 0, stuck = 0
   for (const p of order) {
     // a piece that runs off the view (a tall corner stack) needs a place as much as one on top of another
     const outside = p.r.left < view.left - 1 || p.r.top < view.top - 1 || p.r.right > view.right + 1 || p.r.bottom > view.bottom + 1
-    if (stays(p.k) || (!outside && !settled.some((r) => hits(p.r.left, p.r.top, p.r.width, p.r.height, r)))) { settled.push(p.r); continue }
+    // a piece laid out by hand may touch its neighbours; it moves only when it covers a fifth of one
+    const covers = (r: DOMRect) => {
+      const ox = Math.max(0, Math.min(p.r.right, r.right) - Math.max(p.r.left, r.left)), oy = Math.max(0, Math.min(p.r.bottom, r.bottom) - Math.max(p.r.top, r.top))
+      return (ox * oy) / Math.max(1, Math.min(p.r.width * p.r.height, r.width * r.height)) > 0.2
+    }
+    // pieces laid out together by hand may overlap on purpose: they never push each other
+    const clash = anchored(p.k) ? settled.some((r) => !handset.has(r) && covers(r)) : settled.some((r) => hits(p.r.left, p.r.top, p.r.width, p.r.height, r))
+    if (stays(p.k) || (!outside && !clash) || (anchored(p.k) && !clash)) { settled.push(p.r); if (anchored(p.k)) handset.add(p.r); continue }
     // full size first; when the view is full, smaller (85, 70, 55 %) rather than on top of another piece
     const s0 = scaleOf(p.k), w = p.r.width / s0, h = p.r.height / s0
     let done = false
     for (const z of [1, 0.85, 0.7, 0.55]) {
       const spot = freeSpot(view, new DOMRect(p.r.left, p.r.top, w * z, h * z), settled, model)
       if (!spot) continue
-      onMove(p.k, { ...spot, auto: true, z: z < 1 ? z : undefined })
+      onMove(p.k, { ...spot, auto: true, anchor: anchored(p.k) || undefined, z: z < 1 ? z : undefined })
       settled.push(new DOMRect(view.left + spot.x * view.width, view.top + spot.y * view.height, w * z, h * z))
       moved++
       done = true

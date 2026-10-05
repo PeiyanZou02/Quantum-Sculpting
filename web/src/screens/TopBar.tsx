@@ -57,7 +57,7 @@ export function TopBar() {
   const setTab = useShell((s) => s.setTab)
   return (
     <header className="top">
-      <button className="top__brand" onClick={() => (useStore.getState().model ? setHomeAsk(true) : setTab('lab'))}
+      <button className="top__brand" onClick={() => { if (useStore.getState().model) setHomeAsk(true); else { setTab('lab'); useShell.getState().setHome(true) } }}
         data-tip="Back to the start" data-tip-desc="The start page: what Quantum Sculptor is, and the ways in.">
         <Mark size={18} />
         <span className="top__name">Quantum Sculptor</span>

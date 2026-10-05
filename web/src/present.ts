@@ -6,10 +6,11 @@ import { create } from 'zustand'
 import type { FrameId } from './frames'
 import { CURATED, presetCompose, toRemove, type TidyLevel } from './hud/tidy'
 import { useStore } from './store'
+import { DEFAULT_COMPOSITION, DEFAULT_ID } from './hud/defaultComposition'
 
 export interface Shot { az: number; el: number; dist: number }
 /** Fractions of the view: the piece's top-left, or its centre when `c` (where a dragged component was dropped). */
-export interface Pos { x: number; y: number; c?: boolean; auto?: boolean; z?: number; out?: boolean }
+export interface Pos { x: number; y: number; c?: boolean; auto?: boolean; z?: number; out?: boolean; anchor?: boolean }
 /** How one component is drawn: emphasis tier (1 primary, 2 secondary, 3 tertiary), line weight and dash
  *  spacing as multiples of its own, size (corner and edge pieces), and whether it is hidden. */
 export interface Look { tier?: 1 | 2 | 3; weight?: number; dash?: number; size?: number; hidden?: boolean }
@@ -74,6 +75,8 @@ interface P {
   tidyUp: () => void
   /** Tidy at a degree: arrange everything, drop repeats, or keep only the quantum essentials. */
   tidy: (level: TidyLevel) => void
+  /** Put the default composition back, pieces where they were laid out by hand. */
+  applyDefault: () => void
   /** Put a curated preset on the view (replacing the pieces, keeping notes) and lay it out. */
   applyCurated: (id: string) => void
   /** The artboard's shape (frames.ts) and the export size picked for it (index into its sizes). */
@@ -162,6 +165,9 @@ const KEY = 'qs-present'
 const VERSION = 2   // v2: compositions start clean and are saved by name; the old presets are gone
 const read = (): Partial<P> & { v?: number } => { try { return JSON.parse(localStorage.getItem(KEY) ?? '{}') } catch { return {} } }
 const raw = read()
+// a first visit opens on the default composition (Lab's layout as laid out by hand)
+const fresh = !Object.keys(raw).length
+const firstPos = Object.fromEntries(Object.entries(DEFAULT_COMPOSITION.pos).map(([k, v]) => [`present|${k}`, v]))
 const saved: Partial<P> = raw.v === VERSION ? raw : {
   shots: raw.shots, spin: raw.spin, reelSec: raw.reelSec, spinSpeed: raw.spinSpeed,
   cycleSec: raw.cycleSec, drawer: raw.drawer, pngInk: raw.pngInk, spinDir: raw.spinDir,
@@ -192,9 +198,9 @@ export const usePresent = create<P>()((set, get) => {
     return { compose: { ...s.compose }, pos: strip(s.pos), looks: { ...s.looks }, texts: [...s.texts], guides: { ...s.guides } }
   }
   return {
-      compose: saved.compose ?? {},
+      compose: saved.compose ?? (fresh ? { ...DEFAULT_COMPOSITION.compose } : {}),
     setCompose: (c) => up({ compose: { ...get().compose, ...c } }),
-    pos: saved.pos ?? {},
+    pos: saved.pos ?? (fresh ? firstPos : {}),
     setPos: (key, p) => {
       const pos = { ...get().pos }
       if (p) pos[key] = p
@@ -229,6 +235,12 @@ export const usePresent = create<P>()((set, get) => {
       // every piece is laid out afresh: forget where they were put
       up({ compose, pos: withOthers(s.pos, Object.fromEntries(Object.entries(strip(s.pos)).filter(([k]) => k.startsWith('text:')))), sel: null })
       set({ tidyKey: get().tidyKey + 1, aim: get().aim + 1 })
+    },
+    applyDefault: () => {
+      const s = get(), d = DEFAULT_COMPOSITION
+      const pos = Object.fromEntries(Object.entries(d.pos).map(([k, v]) => [`present|${k}`, v]))
+      up({ compose: { ...d.compose }, pos: { ...Object.fromEntries(Object.entries(s.pos).filter(([k]) => !k.startsWith('present|'))), ...pos }, looks: {}, guides: { ...s.guides, ...d.guides }, current: s.saved.some((x) => x.id === DEFAULT_ID) ? DEFAULT_ID : null, sel: null })
+      set({ aim: get().aim + 1 })
     },
     applyCurated: (id) => {
       const c = CURATED.find((x) => x.id === id)
@@ -323,7 +335,7 @@ export const usePresent = create<P>()((set, get) => {
         up({ texts: get().texts.filter((t) => t.id !== id), pos })
       } else up({ texts: get().texts.map((t) => (t.id === id ? { ...t, text } : t)) })
     },
-    guides: { box: true, floor: true, div: 4, ...saved.guides },
+    guides: { box: true, floor: true, div: 4, ...(fresh ? DEFAULT_COMPOSITION.guides : null), ...saved.guides },
     setGuides: (g) => up({ guides: { ...get().guides, ...g } }),
     pngInk: saved.pngInk ?? 'auto',
     setPngInk: (i) => up({ pngInk: i }),
@@ -338,8 +350,8 @@ export const usePresent = create<P>()((set, get) => {
     playing: false,
     playFrom: 0,
     setPlaying: (v) => set({ playing: v, playFrom: Date.now() }),
-    saved: saved.saved ?? [],
-    current: saved.current ?? null,
+    saved: saved.saved ?? (fresh ? [DEFAULT_COMPOSITION] : []),
+    current: saved.current ?? (fresh ? DEFAULT_ID : null),
     save: (name) => {
       const s = get()
       const cur = s.saved.find((x) => x.id === s.current)

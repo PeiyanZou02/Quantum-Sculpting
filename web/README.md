@@ -17,8 +17,10 @@ It is laid out as an app with two tabs:
   the whole window.
 - **Research** holds the research behind the project (a placeholder, being written by Peiyan).
 
-With no model open, Lab is the start page: what Quantum Sculptor is, how a model goes through it,
-and the ways in. The title in the top bar brings it back (it asks first, and offers to export the mesh).
+Lab opens on its default layout (Properties · Compose · Presets · Default): readouts down the sides,
+the steps on top, the run underneath; the pieces scale with the room the panels leave. The title in
+the top bar opens the start page: what Quantum Sculptor is, how a model goes through it, and the ways
+in (with a model open it asks first, and offers to export the mesh).
 Start from a built-in shape (the test cup, a sphere, cube, pyramid, cylinder, cone or torus) or
 import your own model. Each step's action sits at the foot of Parameters: Voxelise, Run (Run on Atlas
 with a key, Set API key otherwise; Run Evolve and Play turns), Build the mesh. The built-in shapes run

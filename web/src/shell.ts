@@ -30,6 +30,9 @@ interface Shell {
   /** Asking whether to leave the model for the start page. */
   homeAsk: boolean
   setHomeAsk: (v: boolean) => void
+  /** The start page is open (from the title); it closes when a model opens. */
+  home: boolean
+  setHome: (v: boolean) => void
 }
 
 const KEY = 'qs-shell'
@@ -61,5 +64,7 @@ export const useShell = create<Shell>()((set, get) => {
     setLayout: (p) => up(p),
     homeAsk: false,
     setHomeAsk: (v) => set({ homeAsk: v }),
+    home: false,
+    setHome: (v) => set({ home: v }),
   }
 })
