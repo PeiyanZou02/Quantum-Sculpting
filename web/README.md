@@ -6,15 +6,21 @@ the Flask service in `../app/`. The research pipeline (voxelising, Quantum Blur 
 Evolve) lives in `../app/` and is documented in the top-level `README.md`; this folder only talks to
 it through `/api`.
 
-It is laid out as an app with three tabs over one workspace (the 3D view stays loaded between them):
+It is laid out as an app with two tabs:
 
-- **Lab** makes the geometry and looks into it: Parameters (inputs) in one column, the view, Properties
-  (outputs, including the circuit explorer and Evolve's nations) in the other, and the drawer
-  (runtime, Evolve log, Atlas jobs) with the workspace's status on its row. Columns fold and swap
-  sides; the drawer folds and docks under the view or along the whole window.
-- **Compose** composes the display and its output (Present mode): presets, layers, library and
-  annotation in one column; frame, export, view and motion in the other.
-- **Notes** holds the research behind the project (a placeholder, being written by Peiyan).
+- **Lab** is the one workspace. Parameters (inputs) in one column, the view in the middle, Properties
+  in the other column, and the drawer (runtime, Evolve log, Atlas jobs) with the workspace's status
+  on its row. Properties has six groups on its rail: one per step (Model, Grid, Quantum or Evolve,
+  Mesh), then **Compose** (presets, what the view's own controls show, the component library,
+  annotations, saved compositions) and **Output** (frame, image, video, 3D, motion). Columns fold,
+  swap sides and resize from their inner edge; the drawer folds and docks under the view or along
+  the whole window.
+- **Research** holds the research behind the project (a placeholder, being written by Peiyan).
+
+Start from a built-in shape (the test cup, a sphere, cube, pyramid, cylinder, cone or torus) or
+import your own model. The quantum step's action sits at the foot of Parameters: Run (local modes
+also run as their dials turn), Run on Atlas (with a key; Set API key otherwise), or Run Evolve and
+Play turns.
 
 Every tab uses one control language (`src/ui/`), after Blender's properties editor: panels with a
 header bar that fold, property rows (label | control), number fields that fill to their value
@@ -97,7 +103,7 @@ what is shown meanwhile. The side panels are resizable and the drawer folds; bot
 browser. A new tab starts empty, on the landing guide; a reload during work picks up the model the
 service holds.
 
-Viewport tools (also in Present):
+Viewport tools (the tool shelf on the left of the view):
 
 | Key | Tool | What it does |
 | --- | --- | --- |
@@ -117,34 +123,29 @@ Shading:
   by Moth's Entanglement Shader (`app/shaders.py`, routes under `/api/shader/`). Under Evolve,
   nations keep their own colours and value shading.
 
-## Present
+## Compose and Output
 
-Present starts clean. Nothing is placed on the view until you put it there, and nothing on the view
-moves unless you are arranging.
+The view carries a composition: pieces from the Quicksilver library laid out around the object, which
+always stays in the centre. **Properties · Compose** holds it:
 
-The **compose panel** (layers button in the bar) has six sections, reached from the nav at its
-bottom:
-
-1. **View** — which stage is shown (model, voxels, quantum, mesh, scan) and its shading.
-2. **Layers and saved compositions** — everything on the view, with show/hide and remove; for the
-   selected piece its emphasis, line weight, dash spacing, size, back to its place, and save as
-   PNG. Compositions are saved by name and cycled with `[` `]` or 1–9.
-3. **Library** — the full Quicksilver library (115 variants), by category, family and variant, with
-   a count of what is on at each level: marks, navigation, quantum glyphs, data and runtime,
-   controls as readouts, plus the scene's own guides (bounding box, print grid with its cell size in
-   mm) and free text. Hover a row to preview it on the view with everything else dimmed; click to
-   turn it on, click again to turn it off; drag it onto the view to place it exactly where you drop
-   it. Every piece reads the app's live state and makes no requests of its own.
+1. **Presets** — Clean, Lab, Quantum, Evolve, Measure, Camera, Specimen, Atlas, Plate, one per row. A
+   preset lays its pieces out on a grid around the object at a small, even scale; in a small view
+   the whole plate scales down rather than lose pieces. *Lay out again* re-runs the layout for the
+   frame (all pieces, without repeats, or only the essentials); *Arrange* (C) lets you drag, resize by
+   the corner, select and remove pieces on the view.
+2. **On the view** — the view's own controls (tool shelf, navigation, axis gizmo, camera, info, value
+   scale, corners) and the scene guides (grid box, print grid with its cell size, cutting plane).
+3. **Library** — the full Quicksilver library, by category, family and variant. Hover a row to
+   preview it on the view; click to turn it on or off; drag it onto the view to place it there.
 4. **Annotate** — notes and measurements pinned to the geometry.
-5. **Motion** — shots (saved cameras) and the reel that flies through them, the turntable, and the
-   slice sweep: plane position, range, step, seconds per pass and direction, applied while it runs.
-6. **Capture** — screenshot, WebM recording of the view with its motion, a render of the geometry
-   alone, and the HUD alone as a transparent PNG with dark or light ink.
+5. **Saved compositions** — saved by name and cycled with `[` `]` or 1–9.
 
-Pieces keep clear of each other and of the top and bottom strips; corner pieces lean away and shrink
-on smaller windows (checked at 1280, 1440 and 1920 wide).
+**Properties · Output** holds the frame (window, 16:9, 21:9, 1.91:1, 1:1, 4:5, 9:16, 1:2, A-series)
+and its export size, images (the frame as PNG, a screen grab, the geometry alone, the pieces alone),
+video (a WebM of the view, cropped to the frame where the browser can) with *Hide controls* (H) for
+clean takes, 3D (STL, GLB), and motion: shots and their reel, the turntable, the slice sweep.
 
-| Key | In Present |
+| Key | Anywhere in Lab (not while typing) |
 | --- | --- |
 | C | Arrange on/off: drag, select (click) and remove pieces |
 | Backspace / Delete | Remove the selected piece (while arranging) |
@@ -179,13 +180,14 @@ src/hud/         HUD pieces (frame, orbit, camera, dial, bounds, focus, callouts
 src/view/        three.js engine (grid coordinates, controlled camera, picking), entanglement
                  shading (entangle.ts, hdr.ts), nation colours for Evolve
 src/ui/          the control language: Panel, Row, Fact, Button, Checkbox (ui.css)
-src/screens/     TopBar, Shell (drawer, resizers, Notes), InputPane, Stage (display + HUD),
-                 OutputPane, QuantumPanel, EvolvePanel, Terminal, EvolveLog, KeyDialog,
-                 PresentBar, PresentPanel (Compose left and right), MarkLibrary, capture
+src/screens/     TopBar, Shell (drawer, resizers, Research), InputPane, Stage (display + HUD),
+                 OutputPane, QuantumPanel, EvolvePanel, PresentPanel (Compose and Output),
+                 RunBar, Shapes, Terminal, EvolveLog, KeyDialog, MarkLibrary, capture
 src/shell.ts     the open tab, panel sizes and the drawer
 src/api.ts       typed client for every route in app/server.py
 src/store.ts     pipeline state (zustand), mirroring the handoff's "State" section
-src/present.ts   Present state: compositions, pieces, shots, motion, capture
+src/present.ts   the composition: pieces, presets, shots, motion, capture
+src/primitives.ts  the built-in shapes, made as STL in the browser
 ```
 
 ## What this folder changes outside `web/`

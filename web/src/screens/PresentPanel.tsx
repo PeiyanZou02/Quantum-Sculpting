@@ -1,41 +1,27 @@
-// Present mode's compose panel, docked at the side so the view stays visible. Present is where you
-// photograph and diagram the lab result. It starts clean. The icons at the bottom switch pages: View
-// (what the view shows), Layers (what is on it, and saved compositions), Library (the Quicksilver
-// library by category: scene, marks, navigation, quantum glyphs, data and runtime, controls; each
-// category's families open to their variants), Annotate, Motion, Capture.
+// Lab · Properties · Compose and Output: the HUD composed over the view, and everything that leaves the
+// app. Compose: presets (one list), what the view's own controls show, the component library by
+// category, annotations and saved compositions. Output: the frame and its export (image, video, 3D)
+// and motion (shots, turntable, slice sweep).
 import { useState, type ReactNode } from 'react'
-import { useStore, type Layer, type Shading, type Stage as FocusStage, type Tool, type View } from '../store'
+import { useStore, type Tool } from '../store'
 import { isDirty, usePresent, type Sweep } from '../present'
 import { CATEGORIES } from '../hud/registry'
-import { countOn, savePng } from '../hud/compose'
+import { countOn, sameComposition, savePng } from '../hud/compose'
 import { Icon, IconButton } from '../qs/Icon'
 import { Segmented } from '../qs/Segmented'
-import { Panel, Button, Buttons } from '../ui/Panel'
+import { Panel, Button, Buttons, Checkbox, Note } from '../ui/Panel'
 import { Slider } from '../qs/Slider'
 import { Check } from '../qs/Popover'
-import { ScrollArea } from '../qs/ScrollArea'
 import { useLive } from '../live'
 import { exportFrame, exportGlb, renderStill, screenshot, toggleRecording } from './capture'
 import { FRAMES, frameOf, type FrameId } from '../frames'
 import { CURATED, TIDY_LEVELS } from '../hud/tidy'
-import { FloorSize, LayerList, LibRow, MarkLibrary } from './MarkLibrary'
+import { FloorSize, LibRow, MarkLibrary } from './MarkLibrary'
 import { PRESENT_TOOLS } from './presentTools'
 
-const VIEWS: { id: View; t: string }[] = [
-  { id: 'model', t: 'Model' }, { id: 'voxels', t: 'Voxels' }, { id: 'processed', t: 'Quantum' }, { id: 'result', t: 'Mesh' }, { id: 'scan', t: 'Scan' },
-]
-/** Present picks what to show on purpose: each view is the focus of a stage. */
-const STAGE_OF: Record<View, (mode: string) => FocusStage> = {
-  model: () => 'model', voxels: () => 'voxels', processed: (m) => (m === 'nations' ? 'evolve' : 'quantum'), result: () => 'mesh', scan: () => 'scan',
-}
-const SHADES: { id: Shading; t: string }[] = [{ id: 'wire', t: 'Wire' }, { id: 'solid', t: 'Solid' }, { id: 'value', t: 'Value' }, { id: 'entangle', t: 'Entangle' }]
-const LIGHTS = [{ id: 'studio', t: 'Key' }, { id: 'soft', t: 'Soft' }, { id: 'flat', t: 'Flat' }, { id: 'rim', t: 'Rim' }] as const
-const BACKDROPS = [{ id: 'plain', t: 'Plain' }, { id: 'dots', t: 'Dots' }, { id: 'lines', t: 'Grid' }, { id: 'gradient', t: 'Vignette' }, { id: 'studio', t: 'Studio' }] as const
-const GHOSTS: { id: Layer; t: string }[] = [
-  { id: 'model', t: 'Original mesh' }, { id: 'voxels', t: 'Input voxels' }, { id: 'processed', t: 'Quantum result' }, { id: 'result', t: 'Surface' },
-]
 /** The library's categories as tabs: the scene's own guides and text first, then the Quicksilver sheets. */
-const CATS = [{ id: 'scene', short: 'Scene' }, ...CATEGORIES.map((c) => ({ id: c.id, short: c.id === 'glyphs' ? 'Glyphs' : c.id === 'data' ? 'Data' : c.title }))]
+// built on first use: the registry imports Properties' cards, which import this file
+const cats = () => [{ id: 'scene', short: 'Scene' }, ...CATEGORIES.map((c) => ({ id: c.id, short: c.id === 'glyphs' ? 'Glyphs' : c.id === 'data' ? 'Data' : c.title }))]
 
 /** A group within a page: a small heading and its controls. */
 function Group({ label, children }: { label?: string; children: ReactNode }) {
@@ -110,54 +96,12 @@ function Compositions() {
   )
 }
 
-function ViewPage() {
-  const st = useStore()
-  const avail: Record<View, boolean> = { model: !!st.modelMesh, voxels: !!st.gridData, processed: !!st.procData, result: !!st.resultMesh, scan: !!st.procData && !!st.gridData }
-  return (
-    <>
-      <Group label="Display">
-        <Pills<View> value={st.view} onChange={(v) => st.setFocus(STAGE_OF[v](st.proc?.mode ?? st.q.mode), `Showing the ${VIEWS.find((x) => x.id === v)!.t.toLowerCase()}`)} options={VIEWS.map((v) => ({ id: v.id, t: v.t, off: !avail[v.id] }))} />
-        <div className="pd-group">
-          {GHOSTS.map((g) => {
-            const main = g.id === (st.view === 'scan' ? 'processed' : st.view)
-            return <Check key={g.id} label={g.t} checked={main || st.layers[g.id].visible} disabled={main || !avail[g.id as View]} onChange={(v) => st.setLayer(g.id, { visible: v })} />
-          })}
-        </div>
-      </Group>
-      <Group label="Render">
-        <Pills<Shading> label="Shading" value={st.shading} onChange={(v) => st.setShading(v)} options={SHADES.map((s) => ({ id: s.id, t: s.t }))} />
-        <Pills label="Light" value={st.shade.light} onChange={(v) => st.setShading(st.shading, { light: v })} options={LIGHTS.map((l) => ({ id: l.id, t: l.t }))} />
-        <Pills label="Backdrop" value={st.shade.backdrop} onChange={(v) => st.setShading(st.shading, { backdrop: v })} options={BACKDROPS.map((b) => ({ id: b.id, t: b.t }))} />
-      </Group>
-    </>
-  )
-}
-
-function LayersPage() {
-  const p = usePresent()
-  const [sub, setSub] = useState<'on' | 'saved'>('on')
-  const on = Object.values(p.compose).filter((v) => v && v !== 'off').reduce((n, v) => n + v.split(',').length, 0) + p.texts.length + +p.guides.box + +p.guides.floor
-  return (
-    <>
-      <SubTabs label="Layers" value={sub} onChange={setSub} options={[{ id: 'on', t: 'On the view', n: on }, { id: 'saved', t: 'Saved', n: p.saved.length }]} />
-      {sub === 'on' ? (
-        <Group>
-          <LayerList />
-          {p.crowded > 0 && <p className="pd-warn">{p.crowded === 1 ? 'One piece has' : `${p.crowded} pieces have`} no free room left and overlap others. Remove some, or make them smaller.</p>}
-          {p.leftOut > 0 && <p className="pd-warn">{p.leftOut === 1 ? 'One piece is' : `${p.leftOut} pieces are`} left out of this frame: there is no room for {p.leftOut === 1 ? 'it' : 'them'} at a readable size. A larger frame shows {p.leftOut === 1 ? 'it' : 'them'}.</p>}
-          {on > 0 && <TidyRow />}
-        </Group>
-      ) : <Compositions />}
-    </>
-  )
-}
-
-/** Auto-compose: lay everything out for the frame, at three degrees of keeping. */
+/** Lay the pieces out again for the frame, at three degrees of keeping. */
 function TidyRow() {
   const p = usePresent()
   return (
     <div className="pd-tidy">
-      <span className="pd-tidy__k">Auto-compose for {frameOf(p.frame).t}</span>
+      <span className="pd-tidy__k">Lay out again for {frameOf(p.frame).t.toLowerCase()}</span>
       <Buttons>
         {TIDY_LEVELS.map((l) => <Button key={l.id} onClick={() => p.tidy(l.id)} tip={l.t} desc={l.d}>{l.t}</Button>)}
       </Buttons>
@@ -165,26 +109,71 @@ function TidyRow() {
   )
 }
 
-/** Curated compositions, laid out for the frame as soon as they are put on. */
+/** The presets, one per row: put one on and it lays itself out around the object, which stays in the centre. */
 function Presets() {
   const p = usePresent()
-  const mode = useStore((s) => s.q.mode)
-  const evolve = mode === 'nations'
+  const evolve = useStore((s) => s.q.mode === 'nations')
+  const hasGrid = useStore((s) => !!s.grid)
+  const setQ = useStore((s) => s.setQ)
   return (
-    <Group>
-      <TidyRow />
-      <div className="pd-presets">
+    <>
+      <div className="pd-plist" role="radiogroup" aria-label="Presets">
         {CURATED.map((c) => {
+          const on = sameComposition(p.compose, c.compose)
           const off = c.mode === 'nations' ? !evolve : c.mode === 'blur' ? evolve : false
           return (
-            <button key={c.id} className="pd-preset" onClick={() => p.applyCurated(c.id)}>
-              <span className="pd-preset__t">{c.title}{off && <em>{c.mode === 'nations' ? ' · needs Evolve' : ' · for blur modes'}</em>}</span>
-              <span className="pd-preset__d">{c.desc}</span>
+            <button key={c.id} role="radio" aria-checked={on} className={'pd-prow' + (on ? ' pd-prow--on' : '')} onClick={() => p.applyCurated(c.id)}>
+              <span className="pd-prow__t">{c.title}{off && <span className="pd-prow__k">{c.mode === 'nations' ? 'Evolve runs' : 'blur runs'}</span>}</span>
+              <span className="pd-prow__d">{c.desc}</span>
             </button>
           )
         })}
       </div>
-    </Group>
+      {!evolve && sameComposition(p.compose, CURATED.find((c) => c.id === 'evolve')!.compose) && (
+        <div className="pd-need">
+          <Note>These pieces read an Evolve run. The quantum step is set to another engine.</Note>
+          <Buttons><Button kind="primary" disabled={!hasGrid} onClick={() => setQ({ mode: 'nations' })} tip="Run Evolve" desc="Switch the quantum step to Evolve; it runs on the voxel grid straight away.">Run Evolve</Button></Buttons>
+        </div>
+      )}
+      {p.crowded > 0 && <Note warn>{p.crowded === 1 ? 'One piece has' : `${p.crowded} pieces have`} no free room left and overlap others. Remove some, or make them smaller.</Note>}
+      {p.leftOut > 0 && <Note warn>{p.leftOut === 1 ? 'One piece is' : `${p.leftOut} pieces are`} left out of this frame for want of room. A larger frame shows {p.leftOut === 1 ? 'it' : 'them'}.</Note>}
+      <TidyRow />
+      <Buttons>
+        <Button active={p.composing} onClick={() => p.setComposing(!p.composing)} tip={p.composing ? 'Done arranging' : 'Arrange on the view'}
+          desc="Drag pieces around the view, resize them by the corner, select and remove them. Key: C">{p.composing ? 'Done' : 'Arrange'}</Button>
+        <Button onClick={p.clear} tip="Start clean" desc="Take every piece off the view (notes too).">Clear</Button>
+      </Buttons>
+    </>
+  )
+}
+
+/** The view's own controls and the scene guides: what is drawn besides the composed pieces. */
+function OnTheView() {
+  const hud = useStore((s) => s.hud)
+  const setHud = useStore((s) => s.setHud)
+  const p = usePresent()
+  return (
+    <>
+      <Panel id="cmp-controls" title="Controls" sub>
+        <div className="pd-checks">
+          <Checkbox label="Tool shelf" tip="Navigate, probe, annotate, measure and slice, on the left of the view." checked={hud.tools} onChange={(v) => setHud({ tools: v })} />
+          <Checkbox label="Navigation" tip="Zoom, pan, orbit and reset, on the right of the view." checked={hud.nav} onChange={(v) => setHud({ nav: v })} />
+          <Checkbox label="Axis gizmo" tip="Click an axis to look along it." checked={hud.axes} onChange={(v) => setHud({ axes: v })} />
+          <Checkbox label="Camera" tip="Azimuth and elevation under the gizmo." checked={hud.camera} onChange={(v) => setHud({ camera: v })} />
+          <Checkbox label="Info" tip="What the view shows, top left." checked={hud.caption} onChange={(v) => setHud({ caption: v })} />
+          <Checkbox label="Value scale" tip="In the shaded views, bottom right." checked={hud.legend} onChange={(v) => setHud({ legend: v })} />
+          <Checkbox label="Corners" tip="The view's corner marks, when no frame piece is on." checked={hud.frame} onChange={(v) => setHud({ frame: v })} />
+        </div>
+      </Panel>
+      <Panel id="cmp-guides" title="Guides" sub>
+        <div className="pd-checks">
+          <Checkbox label="Grid box" tip="The dashed n³ outline of the grid." checked={p.guides.box} onChange={(v) => p.setGuides({ box: v })} />
+          <Checkbox label="Print grid" tip="Lines on the floor under the model." checked={p.guides.floor} onChange={(v) => p.setGuides({ floor: v })} />
+          <Checkbox label="Cutting plane" tip="The slice through the grid." checked={hud.slice} onChange={(v) => setHud({ slice: v })} />
+        </div>
+        {p.guides.floor && <FloorSize />}
+      </Panel>
+    </>
   )
 }
 
@@ -192,6 +181,7 @@ function LibraryPage({ hover }: { hover: (k: string | null, on: boolean) => void
   const p = usePresent()
   const counts: Record<string, number> = { scene: p.texts.length + +p.guides.box + +p.guides.floor }
   for (const c of CATEGORIES) counts[c.id] = countOn(p.compose, c.fams)
+  const CATS = cats()
   const cat = CATS.some((c) => c.id === p.libCat) ? p.libCat : 'marks'
   const guide = (g: 'box' | 'floor', name: string) => (
     <LibRow on={p.guides[g]} name={name}
@@ -201,7 +191,7 @@ function LibraryPage({ hover }: { hover: (k: string | null, on: boolean) => void
   return (
     <>
       <SubTabs label="Library categories" value={cat} onChange={p.setLibCat} options={CATS.map((c) => ({ id: c.id, t: c.short, n: counts[c.id] }))} />
-      {cat === 'presets' ? <Presets /> : cat === 'scene' ? (
+      {cat === 'scene' ? (
         <Group>
           <div className="mk">
             <div className="mk-fam mk-fam--open">
@@ -322,8 +312,31 @@ function FrameGlyph({ ratio }: { ratio: number | null }) {
   return <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden><rect x={10 - w / 2} y={10 - h / 2} width={w} height={h} fill="none" stroke="currentColor" strokeDasharray={ratio ? undefined : '2 2'} /></svg>
 }
 
-/** Everything that leaves the app: the frame and its size, images, video and 3D. */
-function OutputPage() {
+/** Output · the frame: the artboard's shape and the export size. */
+function FramePick() {
+  const p = usePresent()
+  const fr = frameOf(p.frame)
+  return (
+    <>
+      <div className="pd-frames" role="radiogroup" aria-label="Frame">
+        {FRAMES.map((f) => (
+          <button key={f.id} role="radio" aria-checked={p.frame === f.id} className={'pd-frame' + (p.frame === f.id ? ' pd-frame--on' : '')}
+            onClick={() => p.setFrame(f.id as FrameId)} data-tip={f.t} data-tip-desc={f.use}>
+            <FrameGlyph ratio={f.ratio} /><span>{f.t}</span>
+          </button>
+        ))}
+      </div>
+      <Note>{fr.use}.</Note>
+      {fr.sizes.length > 0 && (
+        <Pills<string> label="Size" value={String(Math.min(p.outSize, fr.sizes.length - 1))} onChange={(v) => p.setOutSize(+v)}
+          options={fr.sizes.map(([w, h], i) => ({ id: String(i), t: `${w} × ${h}` }))} />
+      )}
+    </>
+  )
+}
+
+/** Output · images, video and 3D. */
+function Exports() {
   const p = usePresent()
   const st = useStore()
   const lv = useLive()
@@ -343,87 +356,63 @@ function OutputPage() {
   }
   return (
     <>
-      <Group label="Frame">
-        <div className="pd-frames" role="radiogroup" aria-label="Frame">
-          {FRAMES.map((f) => (
-            <button key={f.id} role="radio" aria-checked={p.frame === f.id} className={'pd-frame' + (p.frame === f.id ? ' pd-frame--on' : '')}
-              onClick={() => p.setFrame(f.id as FrameId)} data-tip={f.t} data-tip-desc={f.use}>
-              <FrameGlyph ratio={f.ratio} /><span>{f.t}</span>
-            </button>
-          ))}
-        </div>
-        <p className="pd-hint">{fr.use}. The view takes this shape and the HUD lays itself out for it.</p>
-        {fr.sizes.length > 0 && (
-          <Pills<string> label="Size" value={String(Math.min(p.outSize, fr.sizes.length - 1))} onChange={(v) => p.setOutSize(+v)}
-            options={fr.sizes.map(([w, h], i) => ({ id: String(i), t: `${w} × ${h}` }))} />
-        )}
-      </Group>
-      <Group label="Image">
+      <Panel id="out-image" title="Image" sub>
         <div className="pd-grid2">
-          <button className="pd-chip pd-chip--ink" disabled={!size || !!busy} onClick={() => size && run('png', () => exportFrame(lv.engine, size[0], size[1], fr.id))}
-            data-tip="Save the frame" data-tip-desc="Backdrop, geometry, HUD, pins and notes as one PNG at the size above.">
-            <Icon name="export" size={14} />{busy === 'png' ? 'Saving…' : size ? `PNG ${size[0]}×${size[1]}` : 'Pick a frame'}
+          <button className="pd-chip pd-chip--ink" disabled={!!busy || !lv.engine} onClick={() => run('png', () => size ? exportFrame(lv.engine, size[0], size[1], fr.id) : screenshot())}
+            data-tip={size ? 'Save the frame' : 'Save the view'} data-tip-desc={size ? 'Backdrop, geometry, pieces, pins and notes as one PNG at the size above.' : 'Pick a frame for an exact size; without one this saves the view as it is.'}>
+            <Icon name="export" size={14} />{busy === 'png' ? 'Saving…' : size ? `PNG ${size[0]}×${size[1]}` : 'Save PNG'}
           </button>
           <button className="pd-chip" onClick={() => run('shot', screenshot)} data-tip="Screen grab" data-tip-desc="Exactly what the window shows, via the browser's tab capture."><Icon name="frame" size={14} />Screen grab</button>
           <button className="pd-chip" onClick={() => run('geo', () => renderStill(lv.engine, 3))} data-tip="Geometry only" data-tip-desc="The geometry alone at 3×, on a transparent background."><Icon name="model" size={14} />Geometry</button>
-          <button className="pd-chip" onClick={() => run('hud', hudPng)} data-tip="HUD only" data-tip-desc="Every piece, pin and note without the geometry, transparent, at 2×."><Icon name="layers" size={14} />HUD only</button>
+          <button className="pd-chip" onClick={() => run('hud', hudPng)} data-tip="Pieces only" data-tip-desc="Every piece, pin and note without the geometry, transparent, at 2×."><Icon name="layers" size={14} />Pieces only</button>
         </div>
         <Pills<'auto' | 'dark' | 'light'> label="Ink of transparent PNGs" value={p.pngInk} onChange={p.setPngInk} options={[{ id: 'auto', t: 'As shown' }, { id: 'dark', t: 'Dark' }, { id: 'light', t: 'Light' }]} />
-      </Group>
-      <Group label="Video">
+      </Panel>
+      <Panel id="out-video" title="Video" sub>
         <div className="pd-grid2">
           <button className={'pd-chip' + (p.recording ? ' pd-chip--on' : '')} onClick={() => toggleRecording().catch(() => {})}
             data-tip={p.recording ? 'Stop recording' : 'Record'} data-tip-desc={p.frame === 'window' ? 'A WebM of the window with its motion.' : 'A WebM of the frame only, where the browser can crop the capture (Chrome); otherwise the window.'}>
             <span className="pd-rec" />{p.recording ? 'Stop' : 'Record'}
           </button>
-          <button className="pd-chip" onClick={() => p.setTab('motion')} data-tip="Motion" data-tip-desc="Turntable, shot reel, slice sweep and cycling compositions: set them up, then record.">Set up motion →</button>
+          <button className="pd-chip" onClick={() => p.setBare(true)} data-tip="Hide controls" data-tip-key="H" data-tip-desc="Only the view and its pieces, for clean frames and recordings. H or Esc brings the controls back.">Hide controls</button>
         </div>
-      </Group>
-      <Group label="3D">
+      </Panel>
+      <Panel id="out-3d" title="3D" sub>
         <div className="pd-grid2">
           <button className="pd-chip" disabled={!st.report || !!busy} onClick={() => run('stl', stl)} data-tip="STL" data-tip-desc="The printable surface, with a .json of every setting, written to output/ and downloaded."><Icon name="print" size={14} />STL</button>
           <button className="pd-chip" disabled={!st.model || !!busy} onClick={() => run('glb', () => exportGlb(lv.engine))} data-tip="glTF" data-tip-desc="What the view shows (mesh or voxels, with colours) as .glb for Blender, Rhino or the web."><Icon name="model" size={14} />GLB</button>
         </div>
-      </Group>
+      </Panel>
     </>
   )
 }
 
-/** Compose · left: what goes on the view. Presets and auto-compose, the layers on it, the library, notes. */
-export function ComposeLeft() {
+/** Properties · 05 Compose: what goes on the view. */
+export function ComposeSections() {
   const p = usePresent()
   // hovering a library row: it shows on the view and everything else dims
   const hover = (k: string | null, on: boolean) => { p.setPreview(k && !on ? k : null); p.setHl(k) }
-  const on = Object.values(p.compose).filter((v) => v && v !== 'off').reduce((n, v) => n + v.split(',').length, 0) + p.texts.length + +p.guides.box + +p.guides.floor
+  const preset = CURATED.find((c) => sameComposition(p.compose, c.compose))
+  const on = countOn(p.compose, CATEGORIES.flatMap((c) => c.fams)) + p.texts.length
   return (
-    <div className={'side-page pd' + (p.composing ? ' pd--composing' : '')} aria-label="Compose" onPointerLeave={() => { p.setHl(null); p.setPreview(null) }}>
-      <header className="side-page__head">
-        <span className="side-page__t">Compose</span>
-        <Button active={p.composing} onClick={() => p.setComposing(!p.composing)} tip={p.composing ? 'Done arranging' : 'Arrange'}
-          desc="Drag pieces around the view, resize them by the corner, select and remove them. Key: C">{p.composing ? 'Done' : 'Arrange'}</Button>
-      </header>
-      <ScrollArea className="side-page__scroll" bar={false}>
-        <Panel id="cmp-presets" title="Presets"><Presets /></Panel>
-        <Panel id="cmp-layers" title="Layers" aside={on || undefined}><LayersPage /></Panel>
-        <Panel id="cmp-library" title="Library" flush><LibraryPage hover={hover} /></Panel>
-        <Panel id="cmp-annotate" title="Annotate" defaultOpen={false}><NotesPage /></Panel>
-        <div style={{ height: 24 }} />
-      </ScrollArea>
+    <div className={'pd pd--props' + (p.composing ? ' pd--composing' : '')} onPointerLeave={() => { p.setHl(null); p.setPreview(null) }}>
+      <Panel id="cmp-presets" title="Presets" aside={preset ? preset.title : on ? 'custom' : 'none'}><Presets /></Panel>
+      <Panel id="cmp-view" title="On the view"><OnTheView /></Panel>
+      <Panel id="cmp-library" title="Library" aside={on ? `${on} on` : undefined} flush><LibraryPage hover={hover} /></Panel>
+      <Panel id="cmp-annotate" title="Annotate" defaultOpen={false}><NotesPage /></Panel>
+      <Panel id="cmp-saved" title="Saved compositions" aside={p.saved.length || undefined} defaultOpen={false}><Compositions /></Panel>
     </div>
   )
 }
 
-/** Compose · right: how it leaves. The frame and its export, the view, and motion. */
-export function ComposeRight() {
+/** Properties · 06 Output: the frame, images, video, 3D and motion. */
+export function OutputSections() {
+  const frame = usePresent((p) => frameOf(p.frame).t)
   return (
-    <div className="side-page pd" aria-label="Output">
-      <header className="side-page__head"><span className="side-page__t">Output</span></header>
-      <ScrollArea className="side-page__scroll" bar={false}>
-        <Panel id="cmp-output" title="Frame and export"><OutputPage /></Panel>
-        <Panel id="cmp-view" title="View"><ViewPage /></Panel>
-        <Panel id="cmp-motion" title="Motion" defaultOpen={false}><MotionPage /></Panel>
-        <div style={{ height: 24 }} />
-      </ScrollArea>
+    <div className="pd pd--props">
+      <Panel id="out-frame" title="Frame" aside={frame}><FramePick /></Panel>
+      <Panel id="out-export" title="Export"><Exports /></Panel>
+      <Panel id="out-motion" title="Motion" defaultOpen={false}><MotionPage /></Panel>
     </div>
   )
 }

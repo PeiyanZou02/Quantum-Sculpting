@@ -13,6 +13,8 @@ import { Panel, Row, Note, Button, Buttons } from '../ui/Panel'
 import { Spinner } from './parts'
 import { fmt } from './fmt'
 import { MODEL_EXT } from './modelExt'
+import { RunBar } from './RunBar'
+import { ShapePicker } from './Shapes'
 
 type Step = 'model' | 'voxels' | 'quantum' | 'mesh'
 const stepOf = (s: StageName): Step => (s === 'evolve' || s === 'scan' ? 'quantum' : s)
@@ -62,6 +64,7 @@ export function InputPane({ only }: { only?: Step }) {
           {step === 'mesh' && <MeshIn />}
           <div style={{ height: 24 }} />
         </ScrollArea>
+        {step === 'quantum' && <RunBar />}
       </div>
     </div>
   )
@@ -87,8 +90,8 @@ function ModelIn() {
         }} />
         <Buttons>
           <Button kind="primary" onClick={() => file.current?.click()} tip="Open a mesh" desc={MODEL_EXT.join(' ')}>Open file…</Button>
-          <Button onClick={st.useTestCup} tip="Test cup" desc="80 × 80 × 90 mm, ready in a second">Test cup</Button>
         </Buttons>
+        <Row label="Or start from a shape"><ShapePicker /></Row>
         {st.recent.length > 0 && (
           <Select label="Recent" value={model?.file ?? ''}
             options={[{ value: '', label: model ? '—' : 'Choose…' }, ...st.recent.map((r) => ({ value: r.name, label: `${r.name} · ${r.mb} MB` }))]}
@@ -161,7 +164,7 @@ const MODE_HELP = {
 
 export function QuantumIn() {
   const st = useStore()
-  const { q, grid, job, key, proc } = st
+  const { q, grid, job } = st
   const running = job?.status === 'running'
   return (
     <>
@@ -203,14 +206,6 @@ export function QuantumIn() {
       <Panel id="in-q-run" title="Run" aside={q.run}>
         <Input label="Name" value={q.run} onChange={(v) => st.setQ({ run: v.replace(/[^\w-]/g, '_').slice(0, 40) })}
           help={q.mode === 'nations' ? 'The run name seeds the measurements: the same name gives the same history.' : 'Results are filed under this name.'} />
-        {q.mode === 'atlas' && (
-          <Buttons>
-            <Button kind="primary" disabled={!key?.set || running} onClick={() => st.process({ submit: true })}>
-              {running ? 'Running on Atlas…' : proc?.mode === 'atlas' && proc.cached ? 'Cached · submit again' : 'Submit to Atlas'}
-            </Button>
-            {!key?.set && <Button onClick={() => st.set({ keyOpen: true })}>Set API key</Button>}
-          </Buttons>
-        )}
       </Panel>
     </>
   )

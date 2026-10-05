@@ -67,14 +67,13 @@ export function PopSection({ label, children }: { label?: string; children: Reac
   )
 }
 
-/** A checkbox row: square ink box, label, optional note. */
+/** A checkbox row: square ink box and label. A note, if any, is the row's tooltip, not more text beside it. */
 export function Check({ label, note, checked, onChange, disabled }: { label: string; note?: string; checked: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
   return (
-    <label className={'qs-check' + (disabled ? ' qs-check--off' : '')}>
+    <label className={'qs-check' + (disabled ? ' qs-check--off' : '')} data-tip={note ? label : undefined} data-tip-desc={note}>
       <input type="checkbox" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} />
       <span className="qs-check__box" />
       <span className="qs-check__t">{label}</span>
-      {note && <span className="qs-check__n">{note}</span>}
     </label>
   )
 }

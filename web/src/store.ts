@@ -181,7 +181,8 @@ interface S {
   refreshRecent: () => Promise<void>
   useTestCup: () => Promise<void>
   openRecent: (name: string) => Promise<void>
-  upload: (f: File) => Promise<void>
+  /** Open a mesh file; `up` overrides the up axis (the built-in shapes are made with +Z up). */
+  upload: (f: File, up?: UpAxis) => Promise<void>
   setUp: (up: UpAxis) => Promise<void>
 
   setVox: (p: Partial<S['vox']>) => void
@@ -563,8 +564,9 @@ export const useStore = create<S>()((set, get) => {
     },
     useTestCup: () => run('model', async () => adoptModel(await api.testCup())),
     openRecent: (name) => run('model', async () => adoptModel(await api.openModel(name, get().up))),
-    upload: (f) => run('model', async () => {
-      await adoptModel(await api.upload(f, get().up))
+    upload: (f, up) => run('model', async () => {
+      if (up) set({ up })
+      await adoptModel(await api.upload(f, up ?? get().up))
       get().refreshRecent()
     }),
     setUp: (up) => run('model', async () => {

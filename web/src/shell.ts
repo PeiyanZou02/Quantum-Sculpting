@@ -1,14 +1,12 @@
-// The app shell: which tab is open (Lab, Explore, Compose, Notes), the side panel widths and the
-// drawer under the view. Compose is Present mode: the HUD composer and the output frame.
+// The app shell: which tab is open (Lab, Research), the side panel widths and the drawer under the
+// view. Lab is one workspace: it makes the geometry, composes the view over it and sends it out.
 import { create } from 'zustand'
-import { usePresent } from './present'
 
-export type Tab = 'lab' | 'compose' | 'notes'
+export type Tab = 'lab' | 'research'
 export type DrawerTab = 'runtime' | 'evlog' | 'atlas'
 export const TABS: { id: Tab; t: string; d: string; key: string }[] = [
-  { id: 'lab', t: 'Lab', d: 'Make the geometry and look into it: model, voxels, quantum or Evolve, mesh.', key: '1' },
-  { id: 'compose', t: 'Compose', d: 'Compose the display: HUD, frames, images, video and 3D out.', key: '2' },
-  { id: 'notes', t: 'Notes', d: 'The research behind the project.', key: '3' },
+  { id: 'lab', t: 'Lab', d: 'Make the geometry, compose the view over it and export: model, voxels, quantum or Evolve, mesh, compose, output.', key: '1' },
+  { id: 'research', t: 'Research', d: 'The research behind the project.', key: '2' },
 ]
 
 interface Shell {
@@ -39,16 +37,12 @@ const keep = (s: Shell) => {
 
 export const useShell = create<Shell>()((set, get) => {
   const up = (p: Partial<Shell>) => { set(p); keep(get()) }
-  // 'explore' was a tab of its own; it is part of Lab now
+  // Explore and Compose were tabs of their own; both are part of Lab now. Notes is Research.
   const was = saved.tab as string | undefined
-  const first: Tab = was === 'explore' ? 'lab' : (saved.tab ?? (usePresent.getState().mode === 'present' ? 'compose' : 'lab'))
-  usePresent.getState().setMode(first === 'compose' ? 'present' : 'lab')
+  const first: Tab = was === 'notes' || was === 'research' ? 'research' : 'lab'
   return {
     tab: first,
-    setTab: (t) => {
-      usePresent.getState().setMode(t === 'compose' ? 'present' : 'lab')
-      up({ tab: t })
-    },
+    setTab: (t) => up({ tab: t }),
     left: saved.left ?? 288,
     right: saved.right ?? 312,
     bottom: saved.bottom ?? 168,
@@ -63,12 +57,4 @@ export const useShell = create<Shell>()((set, get) => {
     dock: saved.dock ?? 'view',
     setLayout: (p) => up(p),
   }
-})
-
-// Present's own way back (its bar's "← Lab", Esc) changes the mode: the tab follows
-usePresent.subscribe((p, prev) => {
-  if (p.mode === prev.mode) return
-  const tab = useShell.getState().tab
-  if (p.mode === 'lab' && tab === 'compose') useShell.setState({ tab: 'lab' })
-  if (p.mode === 'present' && tab !== 'compose') useShell.setState({ tab: 'compose' })
 })

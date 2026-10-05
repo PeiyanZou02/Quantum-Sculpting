@@ -1,13 +1,12 @@
-// Lab / Present. Lab is the research workspace (parameters, algorithms, panels). Present is the
-// display: the geometry full-window inside a HUD you compose yourself, for screenshots, recordings and
-// diagrams. It starts clean. In compose mode you drag components from the library onto the view, move
-// them, tune them and drag them off again; compositions you like are saved by name.
+// The composition over the view: the HUD you compose yourself around the geometry, for work,
+// screenshots, recordings and diagrams. It lives in Lab (Properties · Compose and Output). Presets lay
+// out a set of pieces at once; in arrange mode you drag pieces around, resize, select and remove them;
+// compositions you like are saved by name.
 import { create } from 'zustand'
 import type { FrameId } from './frames'
 import { CURATED, toRemove, type TidyLevel } from './hud/tidy'
 import { useStore } from './store'
 
-export type Mode = 'lab' | 'present'
 export interface Shot { az: number; el: number; dist: number }
 /** Fractions of the view: the piece's top-left, or its centre when `c` (where a dragged component was dropped). */
 export interface Pos { x: number; y: number; c?: boolean; auto?: boolean; z?: number; out?: boolean }
@@ -26,8 +25,6 @@ export type PanelTab = 'view' | 'layers' | 'library' | 'notes' | 'motion' | 'out
 export interface Saved { id: string; name: string; compose: Record<string, string>; pos: Record<string, Pos>; looks: Record<string, Look>; texts: TextNote[]; guides?: Guides }
 
 interface P {
-  mode: Mode
-  setMode: (m: Mode) => void
   /** Present composition: family → variant ids, comma-separated, or 'off'. Empty is clean. */
   compose: Record<string, string>
   setCompose: (c: Record<string, string>) => void
@@ -64,6 +61,9 @@ interface P {
   setLeftOut: (n: number) => void
   /** Bumped by a tidy: the view lays every piece out again for the frame (see hud/tidy.ts). */
   tidyKey: number
+  /** Bumped when a layout was asked for (a preset, a tidy, a frame): the object is framed again in the
+   *  centre of the room the pieces leave. A layout after a resize keeps the camera where it is. */
+  aim: number
   tidyUp: () => void
   /** Tidy at a degree: arrange everything, drop repeats, or keep only the quantum essentials. */
   tidy: (level: TidyLevel) => void
@@ -143,13 +143,13 @@ const VERSION = 2   // v2: compositions start clean and are saved by name; the o
 const read = (): Partial<P> & { v?: number } => { try { return JSON.parse(localStorage.getItem(KEY) ?? '{}') } catch { return {} } }
 const raw = read()
 const saved: Partial<P> = raw.v === VERSION ? raw : {
-  mode: raw.mode, shots: raw.shots, spin: raw.spin, reelSec: raw.reelSec, spinSpeed: raw.spinSpeed,
+  shots: raw.shots, spin: raw.spin, reelSec: raw.reelSec, spinSpeed: raw.spinSpeed,
   cycleSec: raw.cycleSec, drawer: raw.drawer, pngInk: raw.pngInk, spinDir: raw.spinDir,
 }
 const keep = (s: P) => {
   try {
     localStorage.setItem(KEY, JSON.stringify({
-      v: VERSION, mode: s.mode, compose: s.compose, pos: s.pos, shots: s.shots, spin: s.spin, reelSec: s.reelSec, spinSpeed: s.spinSpeed,
+      v: VERSION, compose: s.compose, pos: s.pos, shots: s.shots, spin: s.spin, reelSec: s.reelSec, spinSpeed: s.spinSpeed,
       cycleSec: s.cycleSec, drawer: s.drawer, looks: s.looks, frame: s.frame, outSize: s.outSize, spinDir: s.spinDir, texts: s.texts, pngInk: s.pngInk, saved: s.saved, current: s.current, guides: s.guides, sweepCfg: s.sweepCfg, tab: s.tab, libCat: s.libCat, opened: s.opened,
     }))
   } catch { /* per-viewer only */ }
@@ -172,9 +172,7 @@ export const usePresent = create<P>()((set, get) => {
     return { compose: { ...s.compose }, pos: strip(s.pos), looks: { ...s.looks }, texts: [...s.texts], guides: { ...s.guides } }
   }
   return {
-    mode: (saved.mode as Mode) ?? 'lab',
-    setMode: (m) => up({ mode: m, arrange: false, bare: false, composing: false, sel: null, preview: null, hl: null }),
-    compose: saved.compose ?? {},
+      compose: saved.compose ?? {},
     setCompose: (c) => up({ compose: { ...get().compose, ...c } }),
     pos: saved.pos ?? {},
     setPos: (key, p) => {
@@ -196,6 +194,7 @@ export const usePresent = create<P>()((set, get) => {
     leftOut: 0,
     setLeftOut: (n) => { if (n !== get().leftOut) set({ leftOut: n }) },
     tidyKey: 0,
+    aim: 0,
     tidyUp: () => set({ tidyKey: get().tidyKey + 1 }),
     tidy: (level) => {
       const s = get()
@@ -209,17 +208,17 @@ export const usePresent = create<P>()((set, get) => {
       }
       // every piece is laid out afresh: forget where they were put
       up({ compose, pos: withOthers(s.pos, Object.fromEntries(Object.entries(strip(s.pos)).filter(([k]) => k.startsWith('text:')))), sel: null })
-      set({ tidyKey: get().tidyKey + 1 })
+      set({ tidyKey: get().tidyKey + 1, aim: get().aim + 1 })
     },
     applyCurated: (id) => {
       const c = CURATED.find((x) => x.id === id)
       if (!c) return
       const s = get()
       up({ compose: { ...c.compose }, pos: withOthers(s.pos, {}), looks: {}, current: null, sel: null })
-      set({ tidyKey: get().tidyKey + 1 })
+      set({ tidyKey: get().tidyKey + 1, aim: get().aim + 1 })
     },
     frame: saved.frame ?? 'window',
-    setFrame: (f) => { up({ frame: f, outSize: 0 }); setTimeout(() => set({ tidyKey: get().tidyKey + 1 }), 80) },
+    setFrame: (f) => { up({ frame: f, outSize: 0 }); setTimeout(() => set({ tidyKey: get().tidyKey + 1, aim: get().aim + 1 }), 80) },
     outSize: saved.outSize ?? 0,
     setOutSize: (i) => up({ outSize: i }),
     composing: false,
@@ -303,7 +302,7 @@ export const usePresent = create<P>()((set, get) => {
         up({ texts: get().texts.filter((t) => t.id !== id), pos })
       } else up({ texts: get().texts.map((t) => (t.id === id ? { ...t, text } : t)) })
     },
-    guides: { box: false, floor: false, div: 4, ...saved.guides },
+    guides: { box: true, floor: true, div: 4, ...saved.guides },
     setGuides: (g) => up({ guides: { ...get().guides, ...g } }),
     pngInk: saved.pngInk ?? 'auto',
     setPngInk: (i) => up({ pngInk: i }),

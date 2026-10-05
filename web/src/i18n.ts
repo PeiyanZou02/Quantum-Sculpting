@@ -44,7 +44,7 @@ const RULES: [RegExp, string | ((...m: string[]) => string)][] = [
   // API key and Atlas
   [/^先粘贴 API key/, 'Paste an API key first.'],
   [/^API key 里不应该有空格或换行/, 'The API key should not contain spaces or line breaks.'],
-  [/^还没有设置 Atlas API key/, 'No Atlas API key set. Use the Atlas button at the top right.'],
+  [/^还没有设置 Atlas API key/, 'No Atlas API key set. Use Set API key under Quantum, or Atlas at the top right.'],
   [/^「(.+)」还在 Atlas 上运行/, (_, r) => `${r} is still running on Atlas. Wait for it to finish before submitting.`],
   [/^这次计算被更新的请求取代了/, 'Superseded by a newer request.'],
   [/^连不上 Atlas（(.+)）/, (_, e) => `Cannot reach Atlas (${e}). Check the network and try again.`],

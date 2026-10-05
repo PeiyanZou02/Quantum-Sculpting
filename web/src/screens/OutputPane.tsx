@@ -15,6 +15,8 @@ import { histogram, solidPerLayer, type Axis } from '../qs/grid'
 import { SectionMap } from './SectionMap'
 import { fmt } from './fmt'
 import { PresentStyle } from './presentStyle'
+import { ComposeSections, OutputSections } from './PresentPanel'
+import { RunBar } from './RunBar'
 
 
 /** A block: a folding panel in Lab; plain (title and content) when drawn as a HUD card. */
@@ -65,24 +67,32 @@ function Figures({ items }: { items: Fig[] }) {
 
 const Empty = ({ children }: { children: ReactNode }) => <p className="qs-help ux-note">{children}</p>
 
-/** The four groups of Properties, one per step, so the rail matches the Parameters rail. */
-const GROUPS: { id: StepId; icon: string; t: string }[] = [
+/** The groups of Properties: one per step, so the rail matches the Parameters rail, then what goes on
+ *  the view (Compose) and what leaves the app (Output). */
+const GROUPS: { id: GroupId; icon: string; t: string }[] = [
   { id: 'model', icon: 'model', t: 'Model' },
   { id: 'voxels', icon: 'grid', t: 'Grid' },
   { id: 'quantum', icon: 'quantum', t: 'Quantum' },
   { id: 'mesh', icon: 'print', t: 'Mesh' },
+  { id: 'compose', icon: 'layers', t: 'Compose' },
+  { id: 'output', icon: 'export', t: 'Output' },
 ]
-type StepId = 'model' | 'voxels' | 'quantum' | 'mesh'
-const groupOf = (s: string): StepId => (s === 'evolve' || s === 'scan' ? 'quantum' : s as StepId)
+type GroupId = 'model' | 'voxels' | 'quantum' | 'mesh' | 'compose' | 'output'
+const groupOf = (s: string): GroupId => (s === 'evolve' || s === 'scan' ? 'quantum' : s as GroupId)
+/** Compose and Output are not steps: once opened they stay open while the steps run on. */
+const STAYS = new Set<GroupId>(['compose', 'output'])
 
-/** Lab · outputs, one stage at a time: what the open step produced. The rail follows the step you
- *  open on the left; click it to look at another stage's results without changing the view. */
+/** Lab · properties, one group at a time: what the open step produced, or the composition and the
+ *  output. The rail follows the step you open on the left; click it to look at another stage's results
+ *  without changing the view, or to compose and export. */
 export function OutputPane() {
   const evolve = useStore((s) => s.q.mode === 'nations')
   const stage = useStore((s) => s.focus.stage)
-  const [picked, setPicked] = useState<{ g: StepId; at: string } | null>(null)
-  // a pick lasts until the focus moves to another step
-  const g: StepId = picked && picked.at === stage ? picked.g : groupOf(stage)
+  // nothing computed yet for this mode: the run sits on top of the quantum group
+  const ran = useStore((s) => (s.q.mode === 'nations' ? !!s.evolve.history : !!s.proc && s.proc.mode !== 'nations'))
+  const [picked, setPicked] = useState<{ g: GroupId; at: string } | null>(null)
+  // a pick lasts until the focus moves to another step (Compose and Output stay until you leave them)
+  const g: GroupId = picked && (picked.at === stage || STAYS.has(picked.g)) ? picked.g : groupOf(stage)
   return (
     <div className="lab-in lab-in--right">
       <div className="lab-in__page">
@@ -93,14 +103,16 @@ export function OutputPane() {
         <div className="lab-props" key={g}>
           {g === 'model' && <ModelOut />}
           {g === 'voxels' && <><GridOut /><SliceOut /></>}
-          {g === 'quantum' && <><QuantumOut />{evolve ? <EvolveSections /> : <QuantumSections />}</>}
+          {g === 'quantum' && <>{!ran && <RunBar inline />}<QuantumOut />{evolve ? <EvolveSections /> : <QuantumSections />}</>}
           {g === 'mesh' && <><PrintOut /><ExportOut /></>}
+          {g === 'compose' && <ComposeSections />}
+          {g === 'output' && <OutputSections />}
           <div style={{ height: 24 }} />
         </div>
       </div>
       <nav className="lab-rail lab-rail--right" aria-label="Properties by stage">
         {GROUPS.map((x, k) => (
-          <button key={x.id} className={'lab-rail__b' + (g === x.id ? ' lab-rail__b--on' : '')} onClick={() => setPicked({ g: x.id, at: stage })}
+          <button key={x.id} className={'lab-rail__b' + (g === x.id ? ' lab-rail__b--on' : '') + (x.id === 'compose' ? ' lab-rail__b--sep' : '')} onClick={() => setPicked({ g: x.id, at: stage })}
             aria-current={g === x.id ? 'page' : undefined} data-tip={`${String(k + 1).padStart(2, '0')} ${x.id === 'quantum' && evolve ? 'Evolve' : x.t}`} data-tip-side="left">
             <Icon name={x.id === 'quantum' && evolve ? 'entangle' : x.icon} size={16} />
           </button>

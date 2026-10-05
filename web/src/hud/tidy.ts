@@ -10,7 +10,7 @@ import type { Rect } from './types'
 
 export type TidyLevel = 'arrange' | 'dedupe' | 'essential'
 export const TIDY_LEVELS: { id: TidyLevel; t: string; d: string }[] = [
-  { id: 'arrange', t: 'Arrange', d: 'Keep every piece; put them on a grid around the object for this frame.' },
+  { id: 'arrange', t: 'All pieces', d: 'Keep every piece; lay them out again on a grid around the object for this frame.' },
   { id: 'dedupe', t: 'No repeats', d: 'Where pieces show the same data in different forms, keep the most expressive one, then arrange.' },
   { id: 'essential', t: 'Essentials', d: 'Keep only what explains the quantum step (Evolve in Evolve mode), without repeats, then arrange.' },
 ]
@@ -73,29 +73,41 @@ export function toRemove(keys: string[], level: TidyLevel, mode: string): string
   return [...out]
 }
 
-// ── curated presets ──────────────────────────────────────────────────────────────────────────────
+// ── presets ──────────────────────────────────────────────────────────────────────────────────────
+// One list for the whole app. Each lays out several small pieces around the object, which stays in the
+// centre. Titles are one word; the description is one short line.
 export interface Curated { id: string; title: string; desc: string; mode?: 'nations' | 'blur'; compose: Record<string, string> }
 export const CURATED: Curated[] = [
+  { id: 'clean', title: 'Clean', desc: 'Corner brackets only; nothing over the object.', compose: { frame: 'v2' } },
   {
-    id: 'evolve', title: 'Evolve · nations', mode: 'nations',
-    desc: 'Nations as qubits, turn by turn: the title, the record, this turn’s roster, territory over the whole history with its wars, annexations and splits, the chronicle and the relations.',
-    compose: { frame: 'v3', meta: 'v5', evolve: 'v5,v1,v2,v3,v4' },
+    id: 'lab', title: 'Lab', desc: 'Steps, readouts, the probed cell and the result card.',
+    compose: { frame: 'v1', steps: 'v2', meta: 'v3', bounds: 'v1', selection: 'v3', callout: 'v2', cards: 'v1', captures: 'v1' },
   },
   {
-    id: 'circuit', title: 'Quantum · circuit', mode: 'blur',
-    desc: 'The blur as a circuit: the gates on each axis’s qubits, their weights and angles, how one qubit pairs cells, the register of a cell and the result.',
-    compose: { frame: 'v2', meta: 'v5', pulse: 'v2', blur: 'v2,v3', register: 'v1', cards: 'v1' },
+    id: 'quantum', title: 'Quantum', mode: 'blur', desc: 'Qubits, the register, pulses and the result.',
+    compose: { frame: 'v2', meta: 'v5', blur: 'v2', register: 'v1', pulse: 'v2', cards: 'v1' },
   },
   {
-    id: 'specimen', title: 'Specimen · print sheet',
-    desc: 'The object as a printed specimen: extents, provenance, the four stages, level against kept volume and the print check.',
-    compose: { frame: 'v2', meta: 'v3', bounds: 'v2', cards: 'v2', figures: 'v4', stages: 'v1' },
+    id: 'evolve', title: 'Evolve', mode: 'nations', desc: 'Record, roster, territory, chronicle and relations.',
+    compose: { frame: 'v3', meta: 'v5', bounds: 'v1', evolve: 'v5,v1,v2,v3,v4' },
   },
   {
-    id: 'plate', title: 'Plate · object only',
-    desc: 'A plate for a poster: the object, its extents and a title with one line of provenance. Nothing else.',
-    compose: { frame: 'v3', meta: 'v5', bounds: 'v2' },
+    id: 'measure', title: 'Measure', desc: 'Extents, numbered callouts, kept volume and the print check.',
+    compose: { frame: 'v2', meta: 'v1', bounds: 'v2', callout: 'v3', figures: 'v2', cards: 'v2' },
   },
+  {
+    id: 'camera', title: 'Camera', desc: 'Stations, the az/el chart, a tick ring and the plan.',
+    compose: { frame: 'v2', meta: 'v2', orbit: 'v3', camera: 'c4', dial: 'o1', viewcam: 'v2' },
+  },
+  {
+    id: 'specimen', title: 'Specimen', desc: 'Provenance, extents, four stages and the print check.',
+    compose: { frame: 'v2', meta: 'v3', bounds: 'v2', stages: 'v1', figures: 'v4', cards: 'v2' },
+  },
+  {
+    id: 'atlas', title: 'Atlas', desc: 'Engine, backend path, tiles, timeline and usage.',
+    compose: { frame: 'v2', meta: 'v4', processing: 'v1', backend: 'v1', tiles: 'v1', timeline: 'v2', usage: 'v1' },
+  },
+  { id: 'plate', title: 'Plate', desc: 'A title, the extents and one line of provenance.', compose: { frame: 'v3', meta: 'v5', bounds: 'v2' } },
 ]
 
 // ── layout ───────────────────────────────────────────────────────────────────────────────────────
@@ -115,9 +127,9 @@ export interface Placed { k: string; x: number; y: number; z: number; out?: bool
 /** Room the object's own marks need around it (extents and their labels), view px. */
 export interface Pad { l: number; r: number; t: number; b: number }
 
-const MIN_Z = 0.7   // below this 11px text stops being readable
-const MAX_Z = 1.6
-const REF = 900     // √(frame area) at which pieces sit at their natural size
+const MIN_Z = 0.5   // the smallest a piece is drawn: in a small view the whole plate scales down rather than lose pieces
+const MAX_Z = 1     // pieces never grow past their own size
+const REF = 1150     // √(frame area) at which pieces sit at their natural size
 /** Where the frame marks are drawn (frame.tsx): the margin starts a gutter inside them. */
 export const FRAME_INSET = 28
 
@@ -139,17 +151,19 @@ const ROUTE: Record<Shape, Record<Slot, Reg[]>> = {
     tl: ['L', 'R', 'T', 'B'], left: ['L', 'R', 'B'], bl: ['L', 'R', 'B'], top: ['T', 'B', 'L', 'R'],
     tr: ['R', 'L', 'T', 'B'], right: ['R', 'L', 'B'], br: ['R', 'L', 'B'], bottom: ['B', 'T', 'L', 'R'],
   },
+  // the object keeps the centre, so the room a column takes on one side is kept on the other anyway:
+  // square and tall frames use both columns after their bands
   square: {
-    tl: ['T', 'B', 'R'], left: ['T', 'B', 'R'], top: ['T', 'B', 'R'], bl: ['B', 'R', 'T'],
-    tr: ['R', 'T', 'B'], right: ['R', 'B', 'T'], br: ['R', 'B', 'T'], bottom: ['B', 'T', 'R'],
+    tl: ['T', 'L', 'B', 'R'], left: ['L', 'T', 'B', 'R'], top: ['T', 'B', 'L', 'R'], bl: ['L', 'B', 'R', 'T'],
+    tr: ['R', 'T', 'B', 'L'], right: ['R', 'B', 'T', 'L'], br: ['R', 'B', 'L', 'T'], bottom: ['B', 'T', 'L', 'R'],
   },
   tall: {
-    tl: ['T', 'B'], tr: ['T', 'B'], top: ['T', 'B'], left: ['T', 'B'],
-    bl: ['B', 'T'], br: ['B', 'T'], bottom: ['B', 'T'], right: ['B', 'T'],
+    tl: ['T', 'B', 'L', 'R'], tr: ['T', 'B', 'R', 'L'], top: ['T', 'B', 'L', 'R'], left: ['T', 'B', 'L', 'R'],
+    bl: ['B', 'T', 'L', 'R'], br: ['B', 'T', 'R', 'L'], bottom: ['B', 'T', 'L', 'R'], right: ['B', 'T', 'R', 'L'],
   },
 }
 /** The least room the object keeps, as fractions of the frame (width, height). */
-const HERO: Record<Shape, [number, number]> = { wide: [0.36, 0.5], square: [0.46, 0.4], tall: [0.6, 0.34] }
+const HERO: Record<Shape, [number, number]> = { wide: [0.3, 0.4], square: [0.32, 0.3], tall: [0.46, 0.28] }
 
 interface Sized { k: string; w: number; h: number; slot: Slot }
 interface Grid { W: number; H: number; m: number; gut: number; gap: number; shape: Shape }
@@ -185,15 +199,17 @@ function plan(boxes: Box[], g: Grid, z: number, pad: Pad): { placed: Placed[]; h
   const colCap = (W - 2 * m) * (shape === 'wide' ? 0.3 : 0.4)
   const bandCap = (H - 2 * m) * (shape === 'tall' ? 0.4 : 0.32)
   const geo = () => {
-    const wL = widest(fill.L), wR = widest(fill.R)
-    const midL = m + (wL ? wL + gap : 0), midR = W - m - (wR ? wR + gap : 0)
+    // the object stays in the centre: a column on one side keeps the same room free on the other, and
+    // so does a band above or below
+    const wL = widest(fill.L), wR = widest(fill.R), wC = Math.max(wL, wR)
+    const midL = m + (wC ? wC + gap : 0), midR = W - m - (wC ? wC + gap : 0)
     const tW = shape === 'square' ? W - 2 * m : midR - midL, bW = midR - midL
     const tP = pack(fill.T, tW, gut), bP = pack(fill.B, bW, gut)
-    const hT = tP.h, hB = bP.h
+    const hT = tP.h, hB = bP.h, hC = Math.max(hT, hB)
     const colTop = shape === 'square' && hT ? m + hT + gap : m
     const hero: Rect = {
       l: midL + pad.l, r: midR - pad.r,
-      t: (hT ? m + hT + gap : m) + pad.t, b: H - m - (hB ? hB + gap : 0) - pad.b,
+      t: (hC ? m + hC + gap : m) + pad.t, b: H - m - (hC ? hC + gap : 0) - pad.b,
     }
     return { wL, wR, midL, midR, tW, bW, tP, bP, hT, hB, colTop, hero }
   }
@@ -202,7 +218,7 @@ function plan(boxes: Box[], g: Grid, z: number, pad: Pad): { placed: Placed[]; h
     const [hw, hh] = HERO[shape]
     return colH(fill.L, gut) <= H - m - q.colTop && colH(fill.R, gut) <= H - m - q.colTop && q.wL <= colCap && q.wR <= colCap
       && fill.T.every((b) => b.w <= q.tW) && fill.B.every((b) => b.w <= q.bW) && q.hT <= bandCap && q.hB <= bandCap
-      && q.hero.r - q.hero.l >= hw * W && q.hero.b - q.hero.t >= hh * H
+      && q.hero.r - q.hero.l >= hw * W - 1 && q.hero.b - q.hero.t >= hh * H - 1
   }
   let ok = true
   for (const b of boxes) {
@@ -246,7 +262,16 @@ const NOPAD: Pad = { l: 0, r: 0, t: 0, b: 0 }
 /** Lays out boxes (natural sizes, CSS px) over a w × h view. `reserve` keeps room at the bottom (the
  *  present bar); `pad` is room the object's own marks need. Returns top-left positions and scales, and
  *  the hero: the room left for the object. */
-export function layout(boxes: Box[], W: number, H: number, reserve = 0, pad: Pad = NOPAD): { placed: Placed[]; hero: Rect } {
+export function layout(boxes: Box[], W0: number, H0: number, reserve = 0, pad: Pad = NOPAD, inset: Pad = NOPAD): { placed: Placed[]; hero: Rect } {
+  // the view's own controls (tool shelf, navigation) keep their strips: the plate is laid out beside them
+  const W = W0 - inset.l - inset.r, H = H0 - inset.t - inset.b
+  const r = inner(boxes, W, H, reserve, pad)
+  return {
+    placed: r.placed.map((q) => ({ ...q, x: q.x + inset.l, y: q.y + inset.t })),
+    hero: { l: r.hero.l + inset.l, r: r.hero.r + inset.l, t: r.hero.t + inset.t, b: r.hero.b + inset.t },
+  }
+}
+function inner(boxes: Box[], W: number, H: number, reserve: number, pad: Pad): { placed: Placed[]; hero: Rect } {
   const g = gridOf(W, H - reserve)
   const z0 = Math.min(MAX_Z, Math.max(MIN_Z, Math.sqrt(W * (H - reserve)) / REF))
   let live = boxes.map((b, i) => ({ b, i })).sort((a, c) => rank(a.b.slot) - rank(c.b.slot) || a.i - c.i).map((x) => x.b)

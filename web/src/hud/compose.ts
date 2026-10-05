@@ -17,47 +17,6 @@ export function toggleVariant(c: Record<string, string | undefined>, f: string, 
 }
 /** How many variants of these families are on. */
 export const countOn = (compose: Record<string, string>, fams: readonly string[]) => fams.reduce((n, f) => n + variantsOf(compose, f).length, 0)
-const same = (a: string | undefined, b: string | undefined) => variantsOf({ x: a }, 'x').sort().join() === variantsOf({ x: b }, 'x').sort().join()
-
-const pick = (f: Family, i: number) => FAMILIES.find((x) => x.id === f)?.modules[i]?.id ?? 'off'
-export const PRESETS: { id: string; title: string; desc: string; set: () => Composition }[] = [
-  {
-    id: 'lab', title: 'Lab', desc: 'Registration frame, readouts, steps, orbit ring, captures',
-    set: () => ({ frame: pick('frame', 0), meta: pick('meta', 2), steps: pick('steps', 1), orbit: pick('orbit', 0), bounds: pick('bounds', 0), focus: 'off', selection: pick('selection', 2), callout: pick('callout', 1), scan: 'off', captures: pick('captures', 0), camera: 'off', dial: 'off' }),
-  },
-  {
-    id: 'camera', title: 'Camera', desc: 'Stations, the az/el chart and a tick ring',
-    set: () => ({ frame: pick('frame', 1), meta: pick('meta', 1), steps: 'off', orbit: pick('orbit', 2), camera: pick('camera', 3), dial: pick('dial', 0), bounds: 'off', focus: pick('focus', 0), selection: 'off', callout: 'off', scan: 'off', captures: 'off' }),
-  },
-  {
-    id: 'measure', title: 'Measure', desc: 'Extents, numbered callouts and a safe area',
-    set: () => ({ frame: pick('frame', 3), meta: pick('meta', 0), steps: 'off', orbit: 'off', camera: 'off', dial: pick('dial', 2), bounds: pick('bounds', 1), focus: pick('focus', 0), selection: pick('selection', 0), callout: pick('callout', 2), scan: 'off', captures: 'off' }),
-  },
-  {
-    id: 'quantum', title: 'Quantum', desc: 'Quantum readouts, the slice index and run history',
-    set: () => ({ frame: pick('frame', 0), meta: pick('meta', 3), steps: pick('steps', 1), orbit: 'off', camera: 'off', dial: 'off', bounds: pick('bounds', 2), focus: 'off', selection: pick('selection', 3), callout: pick('callout', 3), scan: pick('scan', 1), captures: pick('captures', 3) }),
-  },
-  {
-    id: 'clean', title: 'Clean', desc: 'Only the steps; nothing over the object',
-    set: () => ({ frame: 'off', meta: 'off', steps: pick('steps', 1), orbit: 'off', camera: 'off', dial: 'off', bounds: 'off', focus: 'off', selection: pick('selection', 2), callout: pick('callout', 1), scan: 'off', captures: 'off' }),
-  },
-]
-
-/** Every family set: the preset's choices, everything else off. */
-export function full(c: Composition): Record<string, string> {
-  return Object.fromEntries(FAMILIES.map((f) => [f.id, c[f.id] ?? 'off']))
-}
-
-export const DEFAULT_COMPOSITION = (): Composition => PRESETS[0].set()
-
-/** Which preset a composition equals, or null (custom). */
-export function presetOf(c: Composition): string | null {
-  for (const p of PRESETS) {
-    const want = p.set()
-    if (FAMILIES.every((f) => same(want[f.id], c[f.id]))) return p.id
-  }
-  return null
-}
 
 /** Where a piece was put, as fractions of the view: top-left, or its centre when `c`. `auto`: placed by the
  *  view to keep pieces apart (it may move it again); without it, the user put it there. */
@@ -154,7 +113,7 @@ export async function savePng(el: HTMLElement, name: string, scale = 3) {
 
 /** Lays every piece out afresh for the view's shape (hud/tidy.ts): measures each at its natural size,
  *  then places it on the grid around the object. Object and full-view marks stay as they are. */
-export function composeLayout(root: HTMLElement, onMove: (k: string, p: Placement) => void, slotOf: (k: string) => Slot, scaleOf: (k: string) => number, reserve: number, pad?: Pad): { hero: Rect; out: number } {
+export function composeLayout(root: HTMLElement, onMove: (k: string, p: Placement) => void, slotOf: (k: string) => Slot, scaleOf: (k: string) => number, reserve: number, pad?: Pad, inset?: Pad): { hero: Rect; out: number } {
   const view = root.getBoundingClientRect()
   // a slot strip may be shrunk to fit between the corners (fitStrips): measure its pieces unshrunk
   root.querySelectorAll<HTMLElement>(':scope > .hud-slot').forEach((el) => { el.style.zoom = '' })
@@ -167,7 +126,11 @@ export function composeLayout(root: HTMLElement, onMove: (k: string, p: Placemen
       return { k: p.dataset.hud!, w: r.width / z, h: r.height / z, slot: slotOf(p.dataset.hud!) }
     })
     .filter((b) => b.w > 0 && b.h > 0)
-  const { placed, hero } = layout(boxes, view.width, view.height, reserve, pad)
+  const { placed, hero } = layout(boxes, view.width, view.height, reserve, pad, inset)
   for (const q of placed) onMove(q.k, { x: q.x / view.width, y: q.y / view.height, auto: true, z: Math.abs(q.z - 1) > 0.001 ? q.z : undefined, out: q.out || undefined })
   return { hero, out: placed.filter((q) => q.out).length }
 }
+
+/** Whether two compositions turn on the same pieces. */
+export const sameComposition = (a: Record<string, string | undefined>, b: Record<string, string | undefined>) =>
+  FAMILIES.every((f) => variantsOf(a, f.id).sort().join() === variantsOf(b, f.id).sort().join())

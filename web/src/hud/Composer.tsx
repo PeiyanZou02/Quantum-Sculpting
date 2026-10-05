@@ -219,7 +219,7 @@ function padOf(chosen: HudModule[]): Pad {
 }
 
 /** Draws the chosen modules over the view. `chrome` lets the host put its own controls into slots. */
-export function HudLayer({ ctx, compose, chrome, positions = {}, arrange = false, edit, looks = {}, hl = null, ghost = null, texts = [], autoArrange = false, onCrowded, onLeftOut, tidyKey = 0, reserve = 0, onHero, onMove, onText }: {
+export function HudLayer({ ctx, compose, chrome, positions = {}, arrange = false, edit, looks = {}, hl = null, ghost = null, texts = [], autoArrange = false, onCrowded, onLeftOut, tidyKey = 0, reserve = 0, inset, onHero, onMove, onText }: {
   ctx: HudCtx; compose: Composition; chrome?: Partial<Record<(typeof SLOTS)[number], ReactNode>>
   positions?: Record<string, Placement>; arrange?: boolean; edit?: Edit; looks?: Record<string, Look>; hl?: string | null
   /** The piece being previewed from the library (outlined, the rest dimmed). */
@@ -232,8 +232,10 @@ export function HudLayer({ ctx, compose, chrome, positions = {}, arrange = false
   onLeftOut?: (n: number) => void
   /** Bump to lay every piece out afresh for the view (pieces the user placed move too). */
   tidyKey?: number
-  /** Room kept free at the bottom when laying out (the present bar). */
+  /** Room kept free at the bottom when laying out. */
   reserve?: number
+  /** Strips along the edges kept for the view's own controls (tool shelf, navigation). */
+  inset?: Pad
   /** After a layout: the room left for the object (view px), so the host can frame it there. */
   onHero?: (r: Rect) => void
   texts?: { id: string; text: string }[]
@@ -276,7 +278,7 @@ export function HudLayer({ ctx, compose, chrome, positions = {}, arrange = false
         if (!el) return
         const ready = [...el.querySelectorAll<HTMLElement>('.hud-piece[data-hud]')].filter((p) => !p.dataset.hud!.startsWith('chrome:') && boxOf(p).width > 0).length
         if (ready < want && ++tries < 12) { setTimeout(go, 60); return }
-        const { hero, out } = composeLayout(el, onMove, slotOf, (k) => looks[k]?.size ?? 1, reserve, padOf(chosen))
+        const { hero, out } = composeLayout(el, onMove, slotOf, (k) => looks[k]?.size ?? 1, reserve, padOf(chosen), inset)
         onHero?.(hero)
         onLeftOut?.(out)
         setTimeout(() => { if (root.current) onCrowded?.(settle(root.current, ctx.rect, onMove, () => true, (k) => positions[k]?.z ?? 1, ghost).stuck) }, 160)

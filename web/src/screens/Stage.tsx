@@ -8,19 +8,19 @@ import { Engine, type LayerName, type ViewName } from '../view/engine'
 import { loadBundled, makeEntangleMaterial, type ShaderTables } from '../view/entangle'
 import { QProbe } from '../qs/QProbe'
 import { useProbe, type ProbeHit } from '../qs/useProbe'
-import { QPill } from '../qs/QPill'
 import { Icon, IconButton } from '../qs/Icon'
-import { Popover, PopSection, Check } from '../qs/Popover'
+import { Popover, PopSection } from '../qs/Popover'
 import { Slider } from '../qs/Slider'
 import { Spinner } from './parts'
 import { HudLayer } from '../hud/Composer'
 import { FAMILIES } from '../hud/registry'
-import { PRESETS, presetOf, full, toggleVariant, variantsOf } from '../hud/compose'
-import { MARK_MIME, MarkLibrary } from './MarkLibrary'
+import { chosenOf, toggleVariant, variantsOf } from '../hud/compose'
+import { MARK_MIME } from './MarkLibrary'
 import { usePresent } from '../present'
-import { PresentChrome } from './PresentBar'
+import { usePresentKeys } from './presentKeys'
 import type { HudCtx, Vec3 } from '../hud/types'
 import { MODEL_EXT } from './modelExt'
+import { ShapePicker } from './Shapes'
 import { live, bump } from '../live'
 import { ownerPalette, nationName } from '../view/nations'
 import { fit, frameOf } from '../frames'
@@ -83,13 +83,14 @@ export function Stage() {
   const [tables, setTables] = useState<ShaderTables[]>([])
   const st = useStore()
   const pr = usePresent()
-  const present = pr.mode === 'present'
-  // Lab starts from Clean without the step pipeline: the focus strip over the view already says where you are
-  const labCompose = Object.keys(st.compose).length ? st.compose : { ...(PRESETS.find((p) => p.id === 'clean')!.set() as Record<string, string>), steps: 'off' }
+  usePresentKeys()
   // a component previewed from the library is drawn on top of the composition as it is now
-  const pv = present && pr.preview && !pr.preview.startsWith('guide:') ? pr.preview.split(':') : null
-  const shown: Record<string, string> = !present ? labCompose
-    : pv && !variantsOf(pr.compose, pv[0]).includes(pv[1]) ? { ...pr.compose, [pv[0]]: toggleVariant(pr.compose, pv[0], pv[1]) } : pr.compose
+  const pv = pr.preview && !pr.preview.startsWith('guide:') ? pr.preview.split(':') : null
+  const shown: Record<string, string> = pv && !variantsOf(pr.compose, pv[0]).includes(pv[1]) ? { ...pr.compose, [pv[0]]: toggleVariant(pr.compose, pv[0], pv[1]) } : pr.compose
+  // the view's control strips (tools left, gizmo and navigation right): the same room is kept on both sides
+  const side = pr.bare ? 0 : st.hud.axes || st.hud.camera || st.hud.nav ? 88 : st.hud.tools ? 56 : 0
+  // with pieces composed around the object, the view's own caption and value scale give way to them
+  const composed = chosenOf(pr.compose).some((m) => m.slot !== 'object' && m.slot !== 'full') || pr.texts.length > 0
   const { model, modelMesh, grid, gridData, procData, resultMesh, view, slice, m, hud, scan, theme, tool, shading, shade, layers } = st
 
   useEffect(() => {
@@ -121,12 +122,10 @@ export function Stage() {
   useEffect(() => { engine?.setMesh('result', resultMesh) }, [engine, resultMesh])
   useEffect(() => { engine?.show(view as ViewName) }, [engine, view, gridData, procData, resultMesh, modelMesh])
   useEffect(() => { engine?.setGhosts((Object.keys(layers) as Layer[]).filter((k) => layers[k].visible)) }, [engine, layers, gridData, procData, resultMesh, modelMesh])
-  // the bounding box and print grid: Lab's guides, or the present composition's
-  const guides = present
-    ? { ...pr.guides, box: pr.guides.box || pr.preview === 'guide:box', floor: pr.guides.floor || pr.preview === 'guide:floor' }
-    : { box: hud.bounds, floor: hud.floor, div: 4 }
+  // the bounding box and print grid (a guide previewed from the library shows too)
+  const guides = { ...pr.guides, box: pr.guides.box || pr.preview === 'guide:box', floor: pr.guides.floor || pr.preview === 'guide:floor' }
   useEffect(() => { engine?.setFrame({ bounds: guides.box, floor: guides.floor, divisions: guides.div }) }, [engine, guides.box, guides.floor, guides.div, grid])
-  const planeOn = hud.slice || tool === 'slice' || (present && (pr.sweep || (shown.slicecard ?? 'off') !== 'off'))
+  const planeOn = hud.slice || tool === 'slice' || pr.sweep || (shown.slicecard ?? 'off') !== 'off'
   useEffect(() => { engine?.setSlice(planeOn ? slice : null) }, [engine, slice, view, planeOn])
   useEffect(() => { if (engine && view === 'scan') engine.setScan(slice.axis === 'z' ? slice.index + 1 : 0) }, [engine, view, slice, grid])
   // entering the scan view turns the plane to z (only then: the axis is read, not watched)
@@ -154,25 +153,23 @@ export function Stage() {
   }, [engine, shading, entMats, theme, isNations])
 
   useEffect(() => { engine?.setLighting(shade.light) }, [engine, shade.light])
-  // present: turntable, and a reel that flies through the saved shots
-  useEffect(() => { engine?.setSpin(present && pr.spin, pr.spinSpeed * pr.spinDir) }, [engine, present, pr.spin, pr.spinSpeed, pr.spinDir])
+  // motion: turntable, and a reel that flies through the saved shots
+  useEffect(() => { engine?.setSpin(pr.spin, pr.spinSpeed * pr.spinDir) }, [engine, pr.spin, pr.spinSpeed, pr.spinDir])
   useEffect(() => {
-    if (!engine || !present) return
+    if (!engine || !pr.fly) return
     const p = usePresent.getState()   // pr.fly asks for the flight; the shot is read, not watched
     const sh = p.shots[p.shot]
     if (sh) engine.flyTo(sh.az, sh.el, sh.dist)
-  }, [engine, present, pr.fly])
+  }, [engine, pr.fly])
   useEffect(() => {
-    if (!present || !pr.reel || pr.shots.length < 2) return
+    if (!pr.reel || pr.shots.length < 2) return
     const t = setInterval(() => { const p = usePresent.getState(); p.setShot((p.shot + 1) % p.shots.length) }, pr.reelSec * 1000)
     return () => clearInterval(t)
-  }, [present, pr.reel, pr.shots.length, pr.reelSec])
+  }, [pr.reel, pr.shots.length, pr.reelSec])
   useEffect(() => { if (engine) { (window as unknown as { __qsEngine?: Engine }).__qsEngine = engine; live.engine = engine } }, [engine])
-  // present opens on navigate: the probe's hover readout and the slice drag are lab tools
-  useEffect(() => { const s = useStore.getState(); if (present && (s.tool === 'probe' || s.tool === 'slice')) s.setTool('navigate') }, [present])
-  // present: the cutting plane sweeps up and down; compositions can cycle on their own
+  // the cutting plane sweeps up and down; compositions can cycle on their own
   useEffect(() => {
-    if (!present || !pr.sweep || !grid) return
+    if (!pr.sweep || !grid) return
     // within its range, `step` layers at a time, one pass in `sec` seconds; changes apply as it runs
     const { from, to, step, sec, mode } = pr.sweepCfg
     const lo = Math.round(Math.min(from, to) * (grid.n - 1)), hi = Math.round(Math.max(from, to) * (grid.n - 1))
@@ -189,9 +186,9 @@ export function Stage() {
       useStore.getState().setSlice({ index: next })
     }, (sec * 1000 * step) / Math.max(1, hi - lo))
     return () => clearInterval(t)
-  }, [present, pr.sweep, grid, pr.sweepCfg])
+  }, [pr.sweep, grid, pr.sweepCfg])
   useEffect(() => {
-    if (!present || !pr.cycle) return
+    if (!pr.cycle) return
     const t = setInterval(() => {
       const p = usePresent.getState()   // step through the saved compositions
       if (p.saved.length < 2) return
@@ -199,7 +196,7 @@ export function Stage() {
       p.load(p.saved[(i + 1) % p.saved.length].id)
     }, pr.cycleSec * 1000)
     return () => clearInterval(t)
-  }, [present, pr.cycle, pr.cycleSec])
+  }, [pr.cycle, pr.cycleSec])
 
   // tools: the slice tool takes the left drag; navigate turns the probe off
   useEffect(() => { engine?.setRotate(tool !== 'slice') }, [engine, tool])
@@ -335,24 +332,28 @@ export function Stage() {
     ro.observe(el)
     return () => ro.disconnect()
   }, [])
-  // Compose frames the object for its plate; Lab and Explore get their own camera back on return
-  const labCam = useRef<ReturnType<Engine['cameraState']> | null>(null)
+  // when the view changes size (panels, resizers, the window), lay the pieces out again for it, unless
+  // some were placed by hand (those stay where they were put)
   useEffect(() => {
-    if (!engine) return
-    if (present) labCam.current = engine.cameraState()
-    else if (labCam.current) { engine.setCameraState(labCam.current); labCam.current = null }
-  }, [engine, present])
-  // Compose: when the view changes size (panels, resizers, the window), lay the pieces out again for
-  // it, unless some were placed by hand (those stay where they were put)
-  useEffect(() => {
-    if (!present || vsize.w < 50) return
+    if (vsize.w < 50) return
     const t = setTimeout(() => {
       const p = usePresent.getState()
       const mine = Object.entries(p.pos).filter(([k]) => k.startsWith('present|') && !k.startsWith('present|chrome:'))
       if (mine.length && mine.every(([, v]) => v.auto)) p.tidyUp()
     }, 220)
     return () => clearTimeout(t)
-  }, [present, vsize.w, vsize.h])
+  }, [vsize.w, vsize.h])
+  // after a layout the user asked for (a preset, a tidy, a frame), the object is framed in the room the
+  // pieces leave, centred in the view so it never drifts to one side
+  const aimed = useRef(pr.aim)
+  const onHero = (r: { l: number; r: number; t: number; b: number }) => {
+    if (!engine || aimed.current === usePresent.getState().aim) return
+    aimed.current = usePresent.getState().aim
+    const cx = vsize.w / 2, cy = vsize.h / 2
+    // the largest box centred in the view that stays in that room
+    const hw = Math.max(vsize.w * 0.12, Math.min(cx - r.l, r.r - cx)), hh = Math.max(vsize.h * 0.12, Math.min(cy - r.t, r.b - cy))
+    engine.frameInto({ l: cx - hw, r: cx + hw, t: cy - hh, b: cy + hh })
+  }
   const hudCtx = (e: Engine): HudCtx => {
     const a = e.angles(), lens = e.lens()
     const done = [!!model, !!gridData, !!procData, !!st.report]
@@ -384,7 +385,7 @@ export function Stage() {
           ['Mesh', st.report ? `Level ${m.level.toFixed(2)}` : '—'],
         ],
       },
-      runs: present && pr.shots.length ? pr.shots.map((sh, i) => ({ id: i, label: `Shot ${i + 1} · az ${Math.round(sh.az)}° el ${Math.round(sh.el)}°`, mode: 'shot', strength: sh.el / 90, reach: sh.az / 360, t: Date.now() - (pr.shots.length - i) * 60000 })) : st.runs,
+      runs: st.runs,
       busy: Object.values(st.busy).some(Boolean),
       orbitTo: (az, el) => e.orbitTo(az, el),
       thumbs: (names, tw, th) => e.thumbs(names, tw, th),
@@ -416,10 +417,10 @@ export function Stage() {
   const shaded = view === 'processed' || view === 'scan'
   const ghostCount = LAYERS.filter((l) => layers[l.id].visible).length
   const frame = frameOf(pr.frame)
-  const framed = present && frame.ratio != null
-  // the artboard keeps clear of the present bar below it and has a margin all round (none while capturing)
-  const pad = pr.bare ? 0 : 28
-  const board = framed && room.w > 0 ? fit(frame.ratio!, room.w - 2 * pad, room.h - 2 * pad - (pr.bare ? 0 : 64)) : null
+  const framed = frame.ratio != null
+  // the artboard has a margin all round (none while capturing)
+  const pad = pr.bare ? 0 : 24
+  const board = framed && room.w > 0 ? fit(frame.ratio!, room.w - 2 * pad, room.h - 2 * pad - (pr.bare ? 0 : 40)) : null
 
   return (
     <main className={'stage' + (framed ? ' stage--framed' : '')} ref={mainRef}>
@@ -445,20 +446,8 @@ export function Stage() {
               })}
             </PopSection>
           </Popover>
-          <Popover icon="gizmo" title="Gizmos" desc="Axis gizmo, navigation buttons, camera readout and tool shelf." on={hud.axes || hud.nav}
-            onIcon={() => st.setHud({ axes: !(hud.axes || hud.nav), nav: !(hud.axes || hud.nav) })} width={260}>
-            <PopSection label="Viewport">
-              <Check label="Axis gizmo" note="click an axis to look along it" checked={hud.axes} onChange={(v) => st.setHud({ axes: v })} />
-              <Check label="Navigation" note="orbit, pan, zoom, reset" checked={hud.nav} onChange={(v) => st.setHud({ nav: v })} />
-              <Check label="Camera" note="azimuth, elevation" checked={hud.camera} onChange={(v) => st.setHud({ camera: v })} />
-              <Check label="Tool shelf" note="probe, annotate, measure, slice" checked={hud.tools} onChange={(v) => st.setHud({ tools: v })} />
-            </PopSection>
-          </Popover>
-          <ComposeMenu compose={labCompose} setCompose={(c) => st.setCompose({ ...labCompose, ...c })} />
-          <IconButton name="drag" title="Arrange" desc="Drag the readouts and marks around the view. Double-click a handle to send a piece back." on={pr.arrange} onClick={() => pr.setArrange(!pr.arrange)} />
           <ShadingOptions tables={tables} />
-          <button className="stage__present" disabled={!model} onClick={() => pr.setMode('present')}
-            data-tip="Compose" data-tip-desc="Open the composer with this view: HUD, frames and export. Your pins and view come along.">Compose</button>
+          <IconButton name="drag" title={pr.composing ? 'Done arranging' : 'Arrange the view'} desc="Drag pieces around the view, resize them by the corner, select and remove them. Everything else is under Properties · Compose." hotkey="C" on={pr.composing} onClick={() => pr.setComposing(!pr.composing)} />
         </div>
       </div>
 
@@ -479,23 +468,22 @@ export function Stage() {
         onPointerDown={(e) => {
           down.current = [e.clientX, e.clientY]
           // compose mode: a click on the view outside every piece clears the selection
-          if (present && pr.composing && !(e.target instanceof Element && e.target.closest('.hud-piece'))) pr.setSel(null)
+          if (pr.composing && !(e.target instanceof Element && e.target.closest('.hud-piece'))) pr.setSel(null)
           if ('onPointerDown' in sliceHandlers && sliceHandlers.onPointerDown) sliceHandlers.onPointerDown(e)
           else probe.handlers.onPointerDown(e)
         }}
         onDragOver={(e) => {
           e.preventDefault()
-          if (e.dataTransfer.types.includes(MARK_MIME)) { e.dataTransfer.dropEffect = present ? 'copy' : 'none'; setMarkOver(present) } else setOver(true)
+          if (e.dataTransfer.types.includes(MARK_MIME)) { e.dataTransfer.dropEffect = 'copy'; setMarkOver(true) } else setOver(true)
         }}
         onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) { setOver(false); setMarkOver(false) } }}
         onDrop={(e) => {
           e.preventDefault()
           setOver(false)
           setMarkOver(false)
-          // a component from the library: placed where it was dropped (Present)
+          // a component from the library: placed where it was dropped
           const mark = e.dataTransfer.getData(MARK_MIME)
           if (mark) {
-            if (!present) return
             const r = e.currentTarget.getBoundingClientRect()
             const at = { x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height }
             if (mark === 'text') pr.addText(at)
@@ -512,24 +500,24 @@ export function Stage() {
         }}
         style={{ background: model ? undefined : 'radial-gradient(circle,var(--qs-dot) 1px,transparent 1.5px) 12px 12px/24px 24px', ...(board ? { width: board.w, height: board.h, flex: 'none' } : null) }}
       >
-        {hud.frame && !present && <ViewMarks />}
+        {hud.frame && !board && !variantsOf(shown, 'frame').length && <ViewMarks />}
         {!model && <Landing over={over} />}
         {model && over && <div className="stage__drop">Release to open</div>}
         {model && engine && (
           <QProbeAnchored probe={probe} project={project} n={grid?.n ?? 32} mm={grid?.voxel_size ?? 1} measure={tool === 'measure'}
-            hideHover={(shown.selection ?? 'off') !== 'off'} hidePins={(shown.callout ?? 'off') !== 'off'} showPins={present} />
+            hideHover={(shown.selection ?? 'off') !== 'off'} hidePins={(shown.callout ?? 'off') !== 'off'} showPins />
         )}
 
         {model && engine && (
           <HudLayer ctx={hudCtx(engine)} compose={shown}
-            arrange={!present && pr.arrange && !pr.bare}
-            edit={present && pr.composing && !pr.bare && !pr.recording ? { sel: pr.sel, onSelect: pr.setSel, onRemove: pr.removePiece, onResize: (k, size) => pr.setLook(k, { size }) } : undefined}
-            looks={present ? pr.looks : undefined} hl={present ? pr.hl : null} ghost={present ? pr.preview : null}
-            texts={present ? pr.texts : undefined} onText={pr.setText}
-            autoArrange={present} onCrowded={pr.setCrowded} onLeftOut={pr.setLeftOut} tidyKey={present ? pr.tidyKey : 0} reserve={present && !pr.bare && !framed ? 76 : 0} onHero={present ? (r) => engine.frameInto(r) : undefined}
-            positions={Object.fromEntries(Object.entries(pr.pos).filter(([k]) => k.startsWith(pr.mode + '|')).map(([k, v]) => [k.slice(pr.mode.length + 1), v]))}
-            onMove={(k, p) => pr.setPos(`${pr.mode}|${k}`, p)}
-            chrome={present ? { top: <PresentChrome /> } : {
+            edit={pr.composing && !pr.bare && !pr.recording ? { sel: pr.sel, onSelect: pr.setSel, onRemove: pr.removePiece, onResize: (k, size) => pr.setLook(k, { size }) } : undefined}
+            looks={pr.looks} hl={pr.hl} ghost={pr.preview}
+            texts={pr.texts} onText={pr.setText}
+            autoArrange onCrowded={pr.setCrowded} onLeftOut={pr.setLeftOut} tidyKey={pr.tidyKey} onHero={onHero}
+            inset={{ l: side, r: side, t: 0, b: 0 }}
+            positions={Object.fromEntries(Object.entries(pr.pos).filter(([k]) => k.startsWith('present|')).map(([k, v]) => [k.slice(8), v]))}
+            onMove={(k, p) => pr.setPos(`present|${k}`, p)}
+            chrome={pr.bare ? {} : {
             left: hud.tools ? (
               <div className="toolshelf hud-chrome" role="toolbar" aria-label="Tools" onPointerDown={(e) => e.stopPropagation()} onPointerUp={(e) => e.stopPropagation()}>
                 {TOOLS.map((t, i) => (
@@ -547,72 +535,34 @@ export function Stage() {
                 )}
               </div>
             ) : undefined,
-            tl: hud.caption && info ? (
+            tl: hud.caption && info && !composed ? (
               <div className="hud__info">
                 <span>{info[0]}</span>
                 <span>{info[1]}</span>
                 {tool === 'slice' && grid && <span>slice · drag up or down · z {slice.index}</span>}
               </div>
             ) : undefined,
-            tr: hud.axes || hud.camera ? (
-              <div className="nav hud-chrome" onPointerDown={(e) => e.stopPropagation()} onPointerUp={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
+            // the axis gizmo, the camera readout and navigation share one strip down the right edge
+            right: hud.axes || hud.camera || hud.nav ? (
+              <div className="nav-strip hud-chrome" onPointerDown={(e) => e.stopPropagation()} onPointerUp={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
                 {hud.axes && <Gizmo engine={engine} />}
                 {hud.camera && <CameraReadout engine={engine} />}
+                {hud.nav && (
+                  <div className="nav__col">
+                    <DragButton name="zoom" title="Zoom" desc="Drag up or down here, or scroll in the view." onDrag={(_, dy) => engine.nudge({ zoom: dy })} />
+                    <DragButton name="pan" title="Pan" desc="Drag here, or right-drag in the view." onDrag={(dx, dy) => engine.nudge({ pan: [dx, dy] })} />
+                    <DragButton name="orbit" title="Orbit" desc="Drag here, or drag in the view." onDrag={(dx, dy) => engine.nudge({ orbit: [dx, dy] })} />
+                    <IconButton name="frame" title="Reset view" desc="Back to the starting angle, centred on the grid." hotkey="Home" side="left" onClick={() => engine.home()} />
+                  </div>
+                )}
               </div>
             ) : undefined,
-            right: hud.nav ? (
-              <div className="nav__col hud-chrome" onPointerDown={(e) => e.stopPropagation()} onPointerUp={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
-                <DragButton name="zoom" title="Zoom" desc="Drag up or down here, or scroll in the view." onDrag={(_, dy) => engine.nudge({ zoom: dy })} />
-                <DragButton name="pan" title="Pan" desc="Drag here, or right-drag in the view." onDrag={(dx, dy) => engine.nudge({ pan: [dx, dy] })} />
-                <DragButton name="orbit" title="Orbit" desc="Drag here, or drag in the view." onDrag={(dx, dy) => engine.nudge({ orbit: [dx, dy] })} />
-                <IconButton name="frame" title="Reset view" desc="Back to the starting angle, centred on the grid." hotkey="Home" side="left" onClick={() => engine.home()} />
-              </div>
-            ) : undefined,
-            br: hud.legend && shaded && !(nations && (view === 'processed' || view === 'scan')) ? <Legend level={m.level} mode={shading} /> : undefined,
+            br: hud.legend && !composed && shaded && !(nations && (view === 'processed' || view === 'scan')) ? <Legend level={m.level} mode={shading} /> : undefined,
           }} />
         )}
       </div>
       {board && !pr.bare && <div className="stage__board-label" data-no-export>{frame.t} · {frame.use}{frame.sizes[0] ? ` · ${frame.sizes[Math.min(pr.outSize, frame.sizes.length - 1)].join(' × ')} px` : ''}</div>}
     </main>
-  )
-}
-
-/** The composer: presets, then one variant (or off) per mark family, then the scene guides. */
-export function ComposeMenu({ compose, setCompose, guides = true, align = 'right' }: {
-  compose: Record<string, string>; setCompose: (c: Record<string, string>) => void; guides?: boolean; align?: 'left' | 'right'
-}) {
-  const st = useStore()
-  const { hud } = st
-  const current = presetOf(compose)
-  const onCount = FAMILIES.filter((f) => variantsOf(compose, f.id).length).length
-  return (
-    <Popover icon="layers" title="Compose the view" desc="Choose which marks and readouts are drawn over the geometry, family by family, or start from a preset." on={onCount > 0} width={384} align={align}>
-      <PopSection label="Compositions">
-        <div className="cmp-presets">
-          {PRESETS.map((p) => (
-            <button key={p.id} className={'cmp-preset' + (current === p.id ? ' cmp-preset--on' : '')} onClick={() => setCompose(full(p.set()))} data-tip={p.title} data-tip-desc={p.desc}>
-              <span className="cmp-preset__t">{p.title}</span>
-              <span className="cmp-preset__d">{p.desc}</span>
-            </button>
-          ))}
-          <span className={'cmp-preset' + (current ? '' : ' cmp-preset--on')} style={{ cursor: 'default' }}>
-            <span className="cmp-preset__t">Custom</span>
-            <span className="cmp-preset__d">{current ? 'change any family below' : `${onCount} families on`}</span>
-          </span>
-        </div>
-      </PopSection>
-      <PopSection label="Marks · several per family">
-        <MarkLibrary compose={compose} onToggle={(f, id) => setCompose({ [f]: toggleVariant(compose, f, id) })} />
-      </PopSection>
-      {guides && <PopSection label="Guides">
-        <Check label="Grid box" note="dashed n³ outline" checked={hud.bounds} onChange={(v) => st.setHud({ bounds: v })} />
-        <Check label="Floor" note="lines under the model" checked={hud.floor} onChange={(v) => st.setHud({ floor: v })} />
-        <Check label="Cutting plane" note="the slice in the view" checked={hud.slice} onChange={(v) => st.setHud({ slice: v })} />
-        <Check label="Info" note="what the view shows" checked={hud.caption} onChange={(v) => st.setHud({ caption: v })} />
-        <Check label="Value scale" note="in shaded views" checked={hud.legend} onChange={(v) => st.setHud({ legend: v })} />
-        <Check label="Corners" note="the view's corner marks" checked={hud.frame} onChange={(v) => st.setHud({ frame: v })} />
-      </PopSection>}
-    </Popover>
   )
 }
 
@@ -713,41 +663,40 @@ function QProbeAnchored({ probe, project, n, mm, measure, hideHover, hidePins, s
   )
 }
 
-/** First landing: two clear ways in, and the four steps ahead. */
+/** First landing: a shape to start from or your own model, and the four steps ahead. */
 function Landing({ over }: { over: boolean }) {
   const st = useStore()
   const file = useRef<HTMLInputElement>(null)
   return (
     <div className="landing">
       <div className="landing__card">
-        <span className="qs-label">Start</span>
         <span className="landing__title">{over ? 'Release to open the model' : 'What would you like to sculpt?'}</span>
-        <div className="landing__choices">
-          <button className="landing__choice" onClick={st.useTestCup} disabled={st.busy.model}>
-            <Icon name="cup" size={28} />
-            <span className="landing__ct">Use the test cup</span>
-            <span className="landing__cd">Built in · 80 × 80 × 90 mm · ready in a second</span>
+        <section className="landing__sec">
+          <span className="landing__k">Start from a shape</span>
+          <ShapePicker big />
+        </section>
+        <section className="landing__sec">
+          <span className="landing__k">Or your own model</span>
+          <button className={'landing__import' + (over ? ' landing__import--over' : '')} onClick={() => file.current?.click()}>
+            <Icon name="upload" size={24} />
+            <span className="landing__ct">Import a model</span>
+            <span className="landing__ext">{MODEL_EXT.join(' ')}</span>
           </button>
-          <button className={'landing__choice' + (over ? ' landing__choice--over' : '')} onClick={() => file.current?.click()}>
-            <Icon name="upload" size={28} />
-            <span className="landing__ct">Import your own model</span>
-            <span className="landing__cd">Drop it anywhere here, or browse · {MODEL_EXT.join(' ')}</span>
-          </button>
-        </div>
+        </section>
         <input ref={file} type="file" hidden accept={MODEL_EXT.join(',')} onChange={(e) => {
           const f = e.target.files?.[0]
           if (f) st.upload(f)
           e.target.value = ''
         }} />
-        <ol className="landing__steps">
-          {[['model', 'Model', 'set which way is up'], ['grid', 'Voxelise', '16³ to 256³'], ['quantum', 'Quantum', 'blur on Atlas or locally'], ['print', 'Mesh', 'check and export STL']].map(([i, t, d]) => (
-            <li key={t}><Icon name={i} /><span>{t}</span><span>{d}</span></li>
+        <ol className="landing__steps" aria-label="The steps">
+          {[['model', 'Model'], ['grid', 'Voxelise'], ['quantum', 'Quantum'], ['print', 'Mesh']].map(([i, t], k) => (
+            <li key={t}><Icon name={i} size={24} /><span>{String(k + 1).padStart(2, '0')} {t}</span></li>
           ))}
         </ol>
         {st.recent.length > 0 && (
           <div className="landing__recent">
-            <span className="qs-mono" style={{ color: 'var(--qs-ink3)' }}>Recent in input/</span>
-            {st.recent.slice(0, 4).map((r) => <QPill key={r.name} kind="hair" size="s" label={r.name} onClick={() => st.openRecent(r.name)} />)}
+            <span className="landing__k">Recent</span>
+            {st.recent.slice(0, 4).map((r) => <button key={r.name} className="landing__file" onClick={() => st.openRecent(r.name)}>{r.name}</button>)}
           </div>
         )}
       </div>

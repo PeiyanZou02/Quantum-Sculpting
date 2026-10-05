@@ -1,7 +1,7 @@
-// Quantum Sculpting: an app for sculpting with quantum processes. Three tabs over one workspace:
-// Lab makes the geometry and looks into it (parameters, the view, properties, the drawer), Compose
-// composes the display and its output (Present mode), Notes holds the research. The view stays
-// mounted throughout. Columns fold and swap sides; the drawer docks under the view or full width.
+// Quantum Sculpting: an app for sculpting with quantum processes. Two tabs: Lab is the one workspace
+// (parameters, the view with the HUD composed over it, properties from the model to the output, the
+// drawer); Research holds the research. Columns fold and swap sides; the drawer docks under the view or
+// along the whole window.
 import { useEffect } from 'react'
 import { useStore, type Stage as FocusStage } from './store'
 import { onNet, onRestart } from './api'
@@ -15,9 +15,8 @@ import { KeyDialog } from './screens/KeyDialog'
 import { Toasts } from './screens/Toasts'
 import { TooltipLayer } from './qs/Tooltip'
 import { usePresent } from './present'
-import { PresentBar } from './screens/PresentBar'
-import { ComposeLeft, ComposeRight } from './screens/PresentPanel'
-import { Column, Drawer, NotesPage } from './screens/Shell'
+import { BarePeek } from './screens/PresentBar'
+import { Column, Drawer, ResearchPage } from './screens/Shell'
 import './styles/system.css'
 import './styles/bento.css'
 import './styles/type.css'
@@ -59,16 +58,14 @@ export default function App() {
     return () => { mq.removeEventListener('change', follow); offNet(); offBoot() }
   }, [init])
 
-  const sides = tab !== 'notes' && !bare
   const lab = tab === 'lab'
-  // Lab: Parameters | view | Properties (or swapped). Compose: what goes on | view | how it leaves.
-  const cols = lab
-    ? [{ t: 'Parameters', icon: 'sliceTool', body: <InputPane /> }, { t: 'Properties', icon: 'model', body: <OutputPane /> }]
-    : [{ t: 'Compose', icon: 'layers', body: <ComposeLeft /> }, { t: 'Output', icon: 'export', body: <ComposeRight /> }]
+  const sides = lab && !bare
+  // Parameters | view | Properties, or swapped
+  const cols = [{ t: 'Parameters', icon: 'sliceTool', body: <InputPane /> }, { t: 'Properties', icon: 'model', body: <OutputPane /> }]
   const [a, b] = sh.swap ? [cols[1], cols[0]] : cols
-  const full = sh.dock === 'full' || !lab
+  const full = sh.dock === 'full'
   return (
-    <div className={`app ux ux--${tab}` + (tab === 'compose' ? ' app--present' : '') + (bare ? ' app--bare' : '')}>
+    <div className={`app ux ux--${tab}` + (bare ? ' app--bare' : '')}>
       {!bare && <TopBar />}
       <div className="ux-body">
         {sides && (
@@ -83,10 +80,10 @@ export default function App() {
           <Column side="right" title={b.t} icon={b.icon} open={sh.rightOpen} width={sh.right} onWidth={(v) => sh.setSize({ right: v })}
             onFold={(v) => sh.setLayout({ rightOpen: v })} onSwap={() => sh.setLayout({ swap: !sh.swap })}>{b.body}</Column>
         )}
-        {tab === 'notes' && <NotesPage />}
+        {tab === 'research' && <ResearchPage />}
       </div>
-      {full && !bare && <div className="ux-foot"><Drawer content={lab} /></div>}
-      {tab === 'compose' && <PresentBar />}
+      {full && !bare && <div className="ux-foot"><Drawer /></div>}
+      <BarePeek />
       {keyOpen && <KeyDialog />}
       <Toasts />
       <TooltipLayer />

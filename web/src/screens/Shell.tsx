@@ -1,5 +1,5 @@
 // Shell parts: the resizers between panels, the drawer under the view (runtime, Evolve log, Atlas
-// jobs), and the Notes page.
+// jobs), and the Research page.
 import type { ReactNode } from 'react'
 import { useShell, type DrawerTab } from '../shell'
 import { useStore } from '../store'
@@ -91,14 +91,14 @@ export function Drawer({ content = true }: { content?: boolean }) {
   )
 }
 
-/** Notes: the research behind the project. Peiyan is writing it; this is its place. */
-export function NotesPage() {
+/** Research: the research behind the project. Peiyan is writing it; this is its place. */
+export function ResearchPage() {
   return (
     <div className="notes">
       <div className="notes__col">
-        <span className="notes__k">Notes</span>
+        <span className="notes__k">Research</span>
         <h1 className="notes__t">The research behind Quantum Sculpting</h1>
-        <p className="notes__p">Peiyan is writing this part: the concept, the quantum procedures (Quantum Blur Core, the nations of Evolve), the method and the references. It will live here, beside the Lab that makes the geometry and the composer that presents it.</p>
+        <p className="notes__p">Peiyan is writing this part: the concept, the quantum procedures (Quantum Blur Core, the nations of Evolve), the method and the references. It will live here, beside the Lab that makes the geometry, composes it and sends it out.</p>
         <p className="notes__p notes__p--dim">Placeholder · to be written.</p>
       </div>
     </div>
