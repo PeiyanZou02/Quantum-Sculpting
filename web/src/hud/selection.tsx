@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
-import type { HudCtx, HudModule, Vec3 } from './types'
+import type { HudCtx, Vec3 } from './types'
 import './marks.css'
 
 /*
@@ -42,7 +42,6 @@ function T({ x, y, c = INK, size = 11, anchor, children }: { x: number; y: numbe
 /** The hovered cell on screen: centre and a square side covering its projected cube (clamped). */
 function useCellSquare(ctx: HudCtx, min = 14, max = 64) {
   const { hover, project } = ctx
-  const key = hover ? hover.cell.join(',') : ''
   return useMemo(() => {
     if (!hover) return null
     const [i, j, k] = hover.cell
@@ -58,12 +57,12 @@ function useCellSquare(ctx: HudCtx, min = 14, max = 64) {
     const raw = Number.isFinite(x0) ? Math.max(x1 - x0, y1 - y0) : min
     const s = Math.round(Math.min(max, Math.max(min, raw)))
     return { cx: c[0], cy: c[1], s }
-  }, [ctx.tick, ctx.w, ctx.h, key])
+  }, [hover, project, min, max])
 }
 
 /* ── v1 · square + tab ──────────────────────────────────────────────────────── */
 
-function SquareTab({ ctx }: { ctx: HudCtx }) {
+export function SquareTab({ ctx }: { ctx: HudCtx }) {
   const sq = useCellSquare(ctx, 16)
   if (!sq || !ctx.hover) return null
   const { cx, cy, s } = sq
@@ -84,7 +83,7 @@ function SquareTab({ ctx }: { ctx: HudCtx }) {
 
 /* ── v2 · lock-on ───────────────────────────────────────────────────────────── */
 
-function LockOn({ ctx }: { ctx: HudCtx }) {
+export function LockOn({ ctx }: { ctx: HudCtx }) {
   const sq = useCellSquare(ctx, 20)
   if (!sq || !ctx.hover) return null
   const { cx, cy, s } = sq
@@ -103,7 +102,7 @@ function LockOn({ ctx }: { ctx: HudCtx }) {
 
 /* ── v3 · target ────────────────────────────────────────────────────────────── */
 
-function Target({ ctx }: { ctx: HudCtx }) {
+export function Target({ ctx }: { ctx: HudCtx }) {
   const sq = useCellSquare(ctx, 22, 48)
   if (!sq || !ctx.hover) return null
   const { cx, cy, s } = sq
@@ -131,7 +130,7 @@ function Target({ ctx }: { ctx: HudCtx }) {
 /** A 5 × 5 map of the slice: the cell's coarse row and column tinted, its block in ink. */
 const K = 5, C = 14, GRID = K * C
 
-function CellInSlice({ ctx }: { ctx: HudCtx }) {
+export function CellInSlice({ ctx }: { ctx: HudCtx }) {
   const { hover, n, w, h } = ctx
   if (!hover || n <= 0) return null
   const ax = ctx.slice.axis
@@ -158,10 +157,3 @@ function CellInSlice({ ctx }: { ctx: HudCtx }) {
     </Hud>
   )
 }
-
-export const SELECTION_MODULES: HudModule[] = [
-  { family: 'selection', id: 'v1', label: 'square + tab', desc: 'Index sits on the frame, not inside', slot: 'object', render: (ctx) => <SquareTab ctx={ctx} /> },
-  { family: 'selection', id: 'v2', label: 'lock-on', desc: 'Corners close in over 240 ms', slot: 'object', render: (ctx) => <LockOn ctx={ctx} /> },
-  { family: 'selection', id: 'v3', label: 'target', desc: 'Axis ticks give the cell address', slot: 'object', render: (ctx) => <Target ctx={ctx} /> },
-  { family: 'selection', id: 'v4', label: 'cell in slice', desc: 'Row and column tinted', slot: 'object', render: (ctx) => <CellInSlice ctx={ctx} /> },
-]

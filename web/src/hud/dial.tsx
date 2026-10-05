@@ -3,8 +3,9 @@
 // O4 polar keeps a short dashed history.
 import { useMemo, useState } from 'react'
 import type { PointerEvent as RPointerEvent } from 'react'
-import type { HudCtx, HudModule } from './types'
-import { Card, useCamTrail } from './camera'
+import type { HudCtx } from './types'
+import { Card } from './camera'
+import { useCamTrail } from './useCamTrail'
 import './orbit.css'
 
 const RAD = Math.PI / 180
@@ -70,7 +71,7 @@ const TICKS72 = (() => {
   return d
 })()
 
-function TickRing({ ctx }: { ctx: HudCtx }) {
+export function TickRing({ ctx }: { ctx: HudCtx }) {
   const { az, el } = ctx.cam
   const drag = useDrag((x, y) => ctx.orbitTo(wrap360(Math.atan2(x - T_CX, T_CY - y) / RAD), el))
   const [hov, setHov] = useState(false)
@@ -114,7 +115,7 @@ const EL_BASE = `M${S_EX + S_ER} ${S_EY}A${S_ER} ${S_ER} 0 0 0 ${S_EX} ${S_EY - 
 const EL_BELOW = `M${S_EX + S_ER} ${S_EY}A${S_ER} ${S_ER} 0 0 1 ${S_EX} ${S_EY + S_ER}`
 const EL_HIT = `M${S_EX} ${S_EY - S_ER}A${S_ER} ${S_ER} 0 0 1 ${S_EX} ${S_EY + S_ER}`
 
-function SplitArcs({ ctx }: { ctx: HudCtx }) {
+export function SplitArcs({ ctx }: { ctx: HudCtx }) {
   const { az, el } = ctx.cam
   const da = useDrag((x, y) => ctx.orbitTo(wrap360(Math.atan2(x - S_AX, S_AY - y) / RAD), el))
   const de = useDrag((x, y) => {
@@ -161,7 +162,7 @@ function SplitArcs({ ctx }: { ctx: HudCtx }) {
 
 // O3 · edge rulers: azimuth on the floor edge, elevation on the side -------------------------
 
-function EdgeRulers({ ctx }: { ctx: HudCtx }) {
+export function EdgeRulers({ ctx }: { ctx: HudCtx }) {
   const { w, h } = ctx
   const { az, el } = ctx.cam
   // bottom ruler (az 0 → 360) and right ruler (el +90 at the top → −90)
@@ -249,7 +250,7 @@ const SPOKES = (() => {
   return d
 })()
 
-function Polar({ ctx }: { ctx: HudCtx }) {
+export function Polar({ ctx }: { ctx: HudCtx }) {
   const { az, el } = ctx.cam
   const trail = useCamTrail(ctx.tick, az, el)
   let path = ''
@@ -277,41 +278,3 @@ function Polar({ ctx }: { ctx: HudCtx }) {
     </Card>
   )
 }
-
-export const DIAL_MODULES: HudModule[] = [
-  {
-    family: 'dial',
-    id: 'o1',
-    label: 'tick ring',
-    desc: '72 ticks, one node, no ellipse',
-    slot: 'br',
-    interactive: true,
-    render: (ctx) => <TickRing ctx={ctx} />,
-  },
-  {
-    family: 'dial',
-    id: 'o2',
-    label: 'split arcs',
-    desc: 'Azimuth and elevation read apart',
-    slot: 'br',
-    interactive: true,
-    render: (ctx) => <SplitArcs ctx={ctx} />,
-  },
-  {
-    family: 'dial',
-    id: 'o3',
-    label: 'edge rulers',
-    desc: 'Azimuth on the floor edge, elevation on the side',
-    slot: 'full',
-    interactive: true,
-    render: (ctx) => <EdgeRulers ctx={ctx} />,
-  },
-  {
-    family: 'dial',
-    id: 'o4',
-    label: 'polar',
-    desc: 'Elevation inward, recent path dashed',
-    slot: 'br',
-    render: (ctx) => <Polar ctx={ctx} />,
-  },
-]

@@ -8,10 +8,11 @@ import { Segmented, AxisToggle } from '../qs/Segmented'
 import { Slider, Select, Input } from '../qs/Slider'
 import { ScrollArea } from '../qs/ScrollArea'
 import { SectionTabs } from './SectionTabs'
-import { Dot, Spinner, fmt } from './parts'
+import { Dot, Spinner } from './parts'
+import { fmt } from './fmt'
+import { MODEL_EXT } from './modelExt'
 import './evolve.css'
 
-export const MODEL_EXT = ['.stl', '.obj', '.ply', '.glb', '.off']
 const MARKERS = [
   { id: 'in-01', label: 'Model', icon: 'model' }, { id: 'in-02', label: 'Voxelise', icon: 'grid' },
   { id: 'in-03', label: 'Quantum', icon: 'quantum' }, { id: 'in-04', label: 'Mesh', icon: 'print' },

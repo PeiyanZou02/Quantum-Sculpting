@@ -148,8 +148,11 @@ export function QSlice({
   // ---- cabinet projection ----
   const [W, H, u32, ox, oy] = LAYOUTS[layout] ?? LAYOUTS.compact
   const u = (u32 * 32) / N
-  const P = (i: number, j: number, kk: number): V2 => [ox + u * (i + j * KX), oy - u * (kk + j * KY)]
-  const p3 = (a: number, b: number, L: number): V2 => (ax === 'z' ? P(a, b, L) : ax === 'x' ? P(L, a, b) : P(a, L, b))
+  const { P, p3 } = useMemo(() => {
+    const P = (i: number, j: number, kk: number): V2 => [ox + u * (i + j * KX), oy - u * (kk + j * KY)]
+    const p3 = (a: number, b: number, L: number): V2 => (ax === 'z' ? P(a, b, L) : ax === 'x' ? P(L, a, b) : P(a, L, b))
+    return { P, p3 }
+  }, [u, ox, oy, ax])
   const quad = (L: number) => poly(([[0, 0], [N, 0], [N, N], [0, N]] as V2[]).map(([a, b]) => p3(a, b, L)))
 
   let hid = ''
@@ -231,8 +234,7 @@ export function QSlice({
     const eb = p3(0, 1, L)
     ctx.setTransform(dpr * (ea[0] - O[0]), dpr * (ea[1] - O[1]), dpr * (eb[0] - O[0]), dpr * (eb[1] - O[1]), dpr * O[0], dpr * O[1])
     fillSection(ctx, secK, N, level, shaded, INK, 0.82)
-    // p3 depends only on u, ox, oy, ax (listed).
-  }, [secK, N, level, shaded, W, H, u, ox, oy, ax, k])
+  }, [secK, N, level, shaded, W, H, p3, k])
 
   const sc = M / N
   useLayoutEffect(() => {

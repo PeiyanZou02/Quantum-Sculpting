@@ -1,7 +1,7 @@
 // Runtime log and Atlas jobs panels, plus the bottom status bar.
 // Runtime: events, every request to the service with its timing, errors. Atlas: the account's jobs
 // (only in Atlas mode or during a run, as in Peiyan's interface: no Atlas requests otherwise).
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState, useTransition } from 'react'
 import type { ReactNode } from 'react'
 import { useStore, type LogLine } from '../store'
 import { api, type AtlasJobRow } from '../api'
@@ -230,7 +230,8 @@ export function Runtime({ log }: { log: LogLine[] }) {
     return () => ro.disconnect()
   }, [])
   const lastT = log.length ? log[log.length - 1].t : 0
-  useEffect(() => { if (live) setSeenT(lastT) }, [live, lastT])
+  // while following, everything shown counts as seen
+  if (live && seenT !== lastT) setSeenT(lastT)
   const fresh = live ? 0 : lines.reduce((n, l) => n + (l.t > seenT ? 1 : 0), 0)
 
   const box = () => wrap.current?.querySelector<HTMLElement>('.qs-scroll__box') ?? null
@@ -377,38 +378,43 @@ const jobKind = (s: string): Exclude<JobFilter, 'all'> => (DONE.has(s) ? 'comple
 export function AtlasJobs({ running }: { running: boolean }) {
   const key = useStore((s) => s.key)
   const [jobs, setJobs] = useState<AtlasJobRow[]>([])
+  const [jobsAt, setJobsAt] = useState(0)   // when the list last arrived, for "last 24 h"
   const [cursor, setCursor] = useState<string | null>(null)
   const [filter, setFilter] = useState<JobFilter>('all')
   const [err, setErr] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
+  // pending while a request is out (an async transition), so a poll from the effect sets no state itself
+  const [loading, startLoad] = useTransition()
   const [loaded, setLoaded] = useState(false)
   const [copied, copy] = useCopied()
 
-  const load = useCallback(async (more = false) => {
+  const load = useCallback((more = false) => {
     if (!key?.set) return
-    setLoading(true)
-    try {
-      const res = await api.atlasJobs(50, more ? cursor ?? undefined : undefined)
-      setJobs((j) => (more ? [...j, ...res.jobs] : res.jobs))
-      setCursor(res.next_cursor)
-      setErr(null)
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e))
-    } finally {
-      setLoading(false)
-      setLoaded(true)
-    }
+    startLoad(async () => {
+      try {
+        const res = await api.atlasJobs(50, more ? cursor ?? undefined : undefined)
+        setJobs((j) => (more ? [...j, ...res.jobs] : res.jobs))
+        setJobsAt(Date.now())
+        setCursor(res.next_cursor)
+        setErr(null)
+      } catch (e) {
+        setErr(e instanceof Error ? e.message : String(e))
+      } finally {
+        setLoaded(true)
+      }
+    })
   }, [key?.set, cursor])
 
   // every 3 s during a run, 30 s otherwise, nothing while the tab is hidden
+  // the latest load (and its cursor) without restarting the timer each time a page arrives
+  const poll = useEffectEvent(() => { load() })
   useEffect(() => {
     if (!key?.set) return
-    load()
-    const t = setInterval(() => document.visibilityState === 'visible' && load(), running ? 3000 : 30000)
+    poll()
+    const t = setInterval(() => document.visibilityState === 'visible' && poll(), running ? 3000 : 30000)
     return () => clearInterval(t)
-  }, [key?.set, running]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [key?.set, running])
 
-  const day = useMemo(() => jobs.filter((j) => Date.now() - Date.parse(j.created_at) < 864e5).length, [jobs])
+  const day = useMemo(() => jobs.filter((j) => jobsAt - Date.parse(j.created_at) < 864e5).length, [jobs, jobsAt])
   const counts = useMemo(() => {
     const c = { all: jobs.length, active: 0, completed: 0, failed: 0 }
     for (const j of jobs) c[jobKind(j.status)]++

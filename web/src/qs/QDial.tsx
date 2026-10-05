@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { KeyboardEvent, PointerEvent } from 'react'
 import './qs.css'
 
@@ -54,7 +54,7 @@ export function QDial(props: QDialProps) {
   const [scrolling, setScrolling] = useState(false)
 
   const live = useRef({ props, v })
-  live.current = { props, v }
+  useLayoutEffect(() => { live.current = { props, v } })   // the latest, for handlers and timers
   const drag = useRef<{ sx: number; sy: number; sv: number; moved: boolean; last: number } | null>(null)
   const hitRef = useRef<HTMLDivElement>(null)
   const timers = useRef<{ scroll?: number; commit?: number; press?: number }>({})

@@ -2,7 +2,7 @@
 // Ported from SculptorChrome (16px corners at 24px inset, 4px edge dots) and the onformative-style
 // "research lab" mood: dots along the edges, small + crosses around the centre.
 import type { CSSProperties, ReactNode } from 'react'
-import type { HudCtx, HudModule } from './types'
+import type { HudCtx } from './types'
 import './lab.css'
 
 const INSET = 28
@@ -58,7 +58,7 @@ function brackets(w: number, h: number, inset: number, len: number) {
 
 const stroke = (c: string, extra?: CSSProperties): CSSProperties => ({ fill: 'none', stroke: c, strokeWidth: 1, ...extra })
 
-function Registration({ ctx }: { ctx: HudCtx }) {
+export function Registration({ ctx }: { ctx: HudCtx }) {
   const { w, h } = ctx
   let d = ''
   for (const fx of [1 / 3, 2 / 3]) for (const fy of [1 / 3, 2 / 3]) d += cross(w * fx, h * fy, 5)
@@ -70,7 +70,7 @@ function Registration({ ctx }: { ctx: HudCtx }) {
   )
 }
 
-function Brackets({ ctx }: { ctx: HudCtx }) {
+export function Brackets({ ctx }: { ctx: HudCtx }) {
   const { w, h } = ctx
   return (
     <Layer ctx={ctx}>
@@ -80,7 +80,7 @@ function Brackets({ ctx }: { ctx: HudCtx }) {
   )
 }
 
-function BracketDots({ ctx }: { ctx: HudCtx }) {
+export function BracketDots({ ctx }: { ctx: HudCtx }) {
   const { w, h } = ctx
   return (
     <Layer ctx={ctx}>
@@ -91,7 +91,7 @@ function BracketDots({ ctx }: { ctx: HudCtx }) {
   )
 }
 
-function SafeArea({ ctx }: { ctx: HudCtx }) {
+export function SafeArea({ ctx }: { ctx: HudCtx }) {
   const { w, h } = ctx
   const l = w * 0.1
   const t = h * 0.1
@@ -109,38 +109,3 @@ function SafeArea({ ctx }: { ctx: HudCtx }) {
     </Layer>
   )
 }
-
-export const FRAME_MODULES: HudModule[] = [
-  {
-    family: 'frame',
-    id: 'v1',
-    label: 'registration',
-    desc: 'Square dots along the edges and small crosses on the thirds, like a print sheet.',
-    slot: 'full',
-    render: (ctx) => <Registration ctx={ctx} />,
-  },
-  {
-    family: 'frame',
-    id: 'v2',
-    label: 'brackets',
-    desc: 'Ink corner brackets around the view and a grey centre cross.',
-    slot: 'full',
-    render: (ctx) => <Brackets ctx={ctx} />,
-  },
-  {
-    family: 'frame',
-    id: 'v3',
-    label: 'bracket + dots',
-    desc: 'Grey corners with sparse edge dots; the lightest frame.',
-    slot: 'full',
-    render: (ctx) => <BracketDots ctx={ctx} />,
-  },
-  {
-    family: 'frame',
-    id: 'v4',
-    label: 'safe area',
-    desc: 'Dashed frame at 80% of the view with thirds, for framing a capture.',
-    slot: 'full',
-    render: (ctx) => <SafeArea ctx={ctx} />,
-  },
-]

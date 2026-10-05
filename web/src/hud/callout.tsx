@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
-import type { HudCtx, HudModule, HudPin } from './types'
+import type { HudCtx, HudPin } from './types'
 import './marks.css'
 
 /*
@@ -51,13 +51,13 @@ function usePlaced(ctx: HudCtx, room: number): Placed[] {
   return useMemo(
     () =>
       pins.flatMap((p) => (p.x == null || p.y == null ? [] : [{ ...p, x: p.x, y: p.y, sg: (p.x > w - room ? -1 : 1) as 1 | -1 }])),
-    [ctx.tick, w, ctx.h, pins, room],
+    [w, pins, room],
   )
 }
 
 /* ── v1 · dot leader ────────────────────────────────────────────────────────── */
 
-function DotLeader({ ctx }: { ctx: HudCtx }) {
+export function DotLeader({ ctx }: { ctx: HudCtx }) {
   const pins = usePlaced(ctx, 220)
   if (!pins.length) return null
   return (
@@ -81,7 +81,7 @@ function DotLeader({ ctx }: { ctx: HudCtx }) {
 
 /* ── v2 · elbow ─────────────────────────────────────────────────────────────── */
 
-function Elbow({ ctx }: { ctx: HudCtx }) {
+export function Elbow({ ctx }: { ctx: HudCtx }) {
   const pins = usePlaced(ctx, 240)
   if (!pins.length) return null
   return (
@@ -105,7 +105,7 @@ function Elbow({ ctx }: { ctx: HudCtx }) {
 
 /* ── v3 · numbered ──────────────────────────────────────────────────────────── */
 
-function Numbered({ ctx }: { ctx: HudCtx }) {
+export function Numbered({ ctx }: { ctx: HudCtx }) {
   const placed = usePlaced(ctx, 0)
   const { pins, rect, w } = ctx
   if (!pins.length) return null
@@ -139,7 +139,7 @@ function Numbered({ ctx }: { ctx: HudCtx }) {
 
 /* ── v4 · value flag ────────────────────────────────────────────────────────── */
 
-function ValueFlag({ ctx }: { ctx: HudCtx }) {
+export function ValueFlag({ ctx }: { ctx: HudCtx }) {
   const pins = usePlaced(ctx, 0)
   if (!pins.length) return null
   return (
@@ -161,10 +161,3 @@ function ValueFlag({ ctx }: { ctx: HudCtx }) {
     </Hud>
   )
 }
-
-export const CALLOUT_MODULES: HudModule[] = [
-  { family: 'callout', id: 'v1', label: 'dot leader', desc: 'Code label, lowercase', slot: 'object', render: (ctx) => <DotLeader ctx={ctx} /> },
-  { family: 'callout', id: 'v2', label: 'elbow', desc: 'Two lines of data on a shelf', slot: 'object', render: (ctx) => <Elbow ctx={ctx} /> },
-  { family: 'callout', id: 'v3', label: 'numbered', desc: 'Keeps labels off a busy object', slot: 'object', render: (ctx) => <Numbered ctx={ctx} /> },
-  { family: 'callout', id: 'v4', label: 'value flag', desc: 'Pill flag for a probed value', slot: 'object', render: (ctx) => <ValueFlag ctx={ctx} /> },
-]

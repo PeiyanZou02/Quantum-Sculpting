@@ -6,7 +6,8 @@
 // Timings are the sheet's: underline 350 ms, fills 300 ms, ruler 300 ms, replay 12 s.
 import { useMemo, useState } from 'react'
 import type { CSSProperties, PointerEvent as RPointerEvent } from 'react'
-import type { FamilyDef, HudCtx, HudModule } from './types'
+import type { HudCtx } from './types'
+import { useNow } from '../useNow'
 import './navmore.css'
 
 // ---------------------------------------------------------------- shared
@@ -193,25 +194,23 @@ function lastRun(spans: Span[], n: number): (Span | null)[] {
 
 const E_W = 600
 
-function RunTimeline({ ctx }: { ctx: HudCtx }) {
+export function RunTimeline({ ctx }: { ctx: HudCtx }) {
   const reqs = useMemo(() => requestsOf(ctx.log), [ctx.log])
   const { list } = stepsOf(ctx)
   const chain = lastRun(spansOf(reqs), list.length)
   const timed = chain.filter((s): s is Span => !!s)
   const running = isRunning(ctx)
-  const now = Date.now()
+  const now = useNow(running, 500)
   // not to scale: every step keeps a readable share, longer ones get more (log of the duration)
   const ms = chain.map((s, i) => (s ? (running && i === 2 && s === timed[timed.length - 1] ? now : s.b) - s.a : 0))
   const raw = ms.map((d) => 1 + Math.log10(1 + d / 10))
   const sum = raw.reduce((a, v) => a + v, 0) || 1
   const share = raw.map((v) => Math.max(0.18, v / sum))
   const k = share.reduce((a, v) => a + v, 0)
-  let acc = 0
+  const widths = share.map((v) => (v / k) * 100)
   const segs = list.map((s, i) => {
-    const l = acc
-    const w = (share[i] / k) * 100
-    acc += w
-    return { s, l, w, span: chain[i], d: ms[i] }
+    const l = widths.slice(0, i).reduce((a, v) => a + v, 0)
+    return { s, l, w: widths[i], span: chain[i], d: ms[i] }
   })
   // the run's length is the time its steps took, without the idle time between them
   const total = ms.reduce((a, v) => a + v, 0)
@@ -374,11 +373,11 @@ const PLOT_W = 520
 const LANE_H = 34
 const LANES = ['Local', 'Atlas slot 1', 'Atlas slot 2', 'Atlas slot 3']
 
-function RunTiles({ ctx }: { ctx: HudCtx }) {
+export function RunTiles({ ctx }: { ctx: HudCtx }) {
   const reqs = useMemo(() => requestsOf(ctx.log), [ctx.log])
   // a cache write, not a state change: the same job and count record nothing twice
   observe(ctx.job)
-  const now = Date.now()
+  const now = useNow(isRunning(ctx), 500)
   const d = tilesData(ctx, reqs, now)
   const [scrub, setScrub] = useState<{ key: number; t: number } | null>(null)
   const [drag, setDrag] = useState<number | null>(null)
@@ -506,7 +505,7 @@ function RunTiles({ ctx }: { ctx: HudCtx }) {
 
 const TAB_W = 130
 
-function Tabs({ ctx }: { ctx: HudCtx }) {
+export function Tabs({ ctx }: { ctx: HudCtx }) {
   const { list, cur } = stepsOf(ctx)
   return (
     <div className="qn" role="tablist" style={{ display: 'flex' }}>
@@ -526,7 +525,7 @@ function Tabs({ ctx }: { ctx: HudCtx }) {
 
 // ---------------------------------------------------------------- H segmented progress
 
-function Segmented({ ctx }: { ctx: HudCtx }) {
+export function Segmented({ ctx }: { ctx: HudCtx }) {
   const { list } = stepsOf(ctx)
   const running = isRunning(ctx)
   const tl = tilesOf(ctx)
@@ -557,7 +556,7 @@ function Segmented({ ctx }: { ctx: HudCtx }) {
 // stay within 640 px.
 const crumbValue = (s: Step) => (s.i === 0 ? s.value.replace(/\.[a-z0-9]+$/i, '') : s.value.replace(' · ', ' '))
 
-function Breadcrumb({ ctx }: { ctx: HudCtx }) {
+export function Breadcrumb({ ctx }: { ctx: HudCtx }) {
   const { list } = stepsOf(ctx)
   return (
     <div className="qn" style={{ display: 'flex', alignItems: 'center', gap: 3, maxWidth: 640 }}>
@@ -579,7 +578,7 @@ function Breadcrumb({ ctx }: { ctx: HudCtx }) {
 const J_GAP = 77
 const J_W = 290
 
-function Ruler({ ctx }: { ctx: HudCtx }) {
+export function Ruler({ ctx }: { ctx: HudCtx }) {
   const { list, cur } = stepsOf(ctx)
   const [open, setOpen] = useFollow(cur)
   const o = list[open] ?? list[0]
@@ -613,7 +612,7 @@ function Ruler({ ctx }: { ctx: HudCtx }) {
 
 // ---------------------------------------------------------------- K expanding index
 
-function Expanding({ ctx }: { ctx: HudCtx }) {
+export function Expanding({ ctx }: { ctx: HudCtx }) {
   const { list, cur } = stepsOf(ctx)
   const [open, setOpen] = useFollow(cur)
   return (
@@ -633,82 +632,3 @@ function Expanding({ ctx }: { ctx: HudCtx }) {
     </div>
   )
 }
-
-// ---------------------------------------------------------------- families
-
-const TIMELINE: HudModule[] = [
-  {
-    family: 'timeline',
-    id: 'v1',
-    label: 'run timeline',
-    desc: 'Steps as time ranges, for reviewing a finished run. Not to scale.',
-    slot: 'bottom',
-    render: (ctx) => <RunTimeline ctx={ctx} />,
-  },
-  {
-    family: 'timeline',
-    id: 'v2',
-    label: 'with tiles',
-    desc: 'Local work, the three Atlas slots and the 2 s polls, to scale. Drag to scrub.',
-    slot: 'bottom',
-    interactive: true,
-    render: (ctx) => <RunTiles ctx={ctx} />,
-  },
-]
-
-const BARS: HudModule[] = [
-  {
-    family: 'bars',
-    id: 'v1',
-    label: 'tabs',
-    desc: 'Values sit under each tab, so the bar is also a summary. The underline moves in 350 ms.',
-    slot: 'top',
-    interactive: true,
-    render: (ctx) => <Tabs ctx={ctx} />,
-  },
-  {
-    family: 'bars',
-    id: 'v2',
-    label: 'segmented progress',
-    desc: 'The live step fills with its own progress, here tiles returned.',
-    slot: 'bottom',
-    interactive: true,
-    render: (ctx) => <Segmented ctx={ctx} />,
-  },
-  {
-    family: 'bars',
-    id: 'v3',
-    label: 'breadcrumb',
-    desc: 'Reads as one sentence about the run. The current step is outlined in ink.',
-    slot: 'top',
-    interactive: true,
-    render: (ctx) => <Breadcrumb ctx={ctx} />,
-  },
-]
-
-const INDEXES: HudModule[] = [
-  {
-    family: 'indexes',
-    id: 'v1',
-    label: 'ruler index',
-    desc: 'Steps as long ticks on a scale. The live step lists its settings.',
-    slot: 'left',
-    interactive: true,
-    render: (ctx) => <Ruler ctx={ctx} />,
-  },
-  {
-    family: 'indexes',
-    id: 'v2',
-    label: 'expanding index',
-    desc: 'One step open at a time; a line, not a box, holds its settings.',
-    slot: 'right',
-    interactive: true,
-    render: (ctx) => <Expanding ctx={ctx} />,
-  },
-]
-
-export const NAV_FAMILIES: FamilyDef[] = [
-  { id: 'timeline', title: 'Run timeline', desc: 'The last run, step by step and tile by tile', modules: TIMELINE },
-  { id: 'bars', title: 'Bars', desc: 'Tabs, progress and a breadcrumb through the steps', modules: BARS },
-  { id: 'indexes', title: 'Indexes', desc: 'Step indexes that open onto their settings', modules: INDEXES },
-]

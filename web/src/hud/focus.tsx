@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useEffectEvent, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
-import type { HudCtx, HudModule, Rect } from './types'
+import type { HudCtx, Rect } from './types'
 import './marks.css'
 
 /*
@@ -41,7 +41,7 @@ function cornerPath({ l, r, t, b }: Rect, len: number) {
 
 /* ── v1 · grey corners ──────────────────────────────────────────────────────── */
 
-function GreyCorners({ ctx }: { ctx: HudCtx }) {
+export function GreyCorners({ ctx }: { ctx: HudCtx }) {
   if (!ctx.rect) return null
   return (
     <Hud ctx={ctx}>
@@ -52,7 +52,7 @@ function GreyCorners({ ctx }: { ctx: HudCtx }) {
 
 /* ── v2 · frame + tag ───────────────────────────────────────────────────────── */
 
-function FrameTag({ ctx }: { ctx: HudCtx }) {
+export function FrameTag({ ctx }: { ctx: HudCtx }) {
   if (!ctx.rect) return null
   const { l, r, t, b } = frameOf(ctx.rect)
   const label = 'focus · auto'
@@ -71,7 +71,7 @@ function FrameTag({ ctx }: { ctx: HudCtx }) {
 
 /* ── v3 · depth band ────────────────────────────────────────────────────────── */
 
-function DepthBand({ ctx }: { ctx: HudCtx }) {
+export function DepthBand({ ctx }: { ctx: HudCtx }) {
   if (!ctx.rect) return null
   const { l, r, t, b } = frameOf(ctx.rect)
   const H = 8
@@ -108,22 +108,23 @@ function bigMove(a: Snap, b: Snap, w: number, h: number) {
   )
 }
 
-function Refocusing({ ctx }: { ctx: HudCtx }) {
+export function Refocusing({ ctx }: { ctx: HudCtx }) {
   const [beat, setBeat] = useState(0)
   const last = useRef<Snap | null>(null)
   const { tick, rect, cam, w, h } = ctx
   // Each tick restarts the timer; when it fires the view has settled. Compare with the last settled
   // view and breathe once after a reset or any large move.
+  const settled = useEffectEvent(() => {
+    if (!rect) return
+    const cur: Snap = { az: cam.az, el: cam.el, dist: cam.dist, cx: (rect.l + rect.r) / 2, cy: (rect.t + rect.b) / 2, s: Math.max(rect.r - rect.l, rect.b - rect.t) }
+    const prev = last.current
+    last.current = cur
+    if (prev && bigMove(prev, cur, w, h)) setBeat((n) => n + 1)
+  })
+  // Only tick drives this; the camera has not moved since, so the latest rect and camera match it.
   useEffect(() => {
-    const id = window.setTimeout(() => {
-      if (!rect) return
-      const cur: Snap = { az: cam.az, el: cam.el, dist: cam.dist, cx: (rect.l + rect.r) / 2, cy: (rect.t + rect.b) / 2, s: Math.max(rect.r - rect.l, rect.b - rect.t) }
-      const prev = last.current
-      last.current = cur
-      if (prev && bigMove(prev, cur, w, h)) setBeat((n) => n + 1)
-    }, SETTLE_MS)
+    const id = window.setTimeout(settled, SETTLE_MS)
     return () => window.clearTimeout(id)
-    // Only tick drives this; the closure holds the matching rect and camera.
   }, [tick])
   if (!rect) return null
   const fr = frameOf(rect)
@@ -136,10 +137,3 @@ function Refocusing({ ctx }: { ctx: HudCtx }) {
     </Hud>
   )
 }
-
-export const FOCUS_MODULES: HudModule[] = [
-  { family: 'focus', id: 'v1', label: 'grey corners', desc: 'Never confused with selection', slot: 'object', render: (ctx) => <GreyCorners ctx={ctx} /> },
-  { family: 'focus', id: 'v2', label: 'frame + tag', desc: 'For the processed and result views', slot: 'object', render: (ctx) => <FrameTag ctx={ctx} /> },
-  { family: 'focus', id: 'v3', label: 'depth band', desc: 'Near and far edges of the frame', slot: 'object', render: (ctx) => <DepthBand ctx={ctx} /> },
-  { family: 'focus', id: 'v4', label: 'refocusing', desc: 'Breathes once after reset view', slot: 'object', render: (ctx) => <Refocusing ctx={ctx} /> },
-]

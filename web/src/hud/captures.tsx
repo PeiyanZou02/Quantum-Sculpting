@@ -1,7 +1,8 @@
 // CAPTURES: past processing runs this session as dots (filled = taken, ring = current), after the
 // lab-HUD mood reference; plus a timeline and a strength × reach scatter of the same runs.
 import type { CSSProperties } from 'react'
-import type { HudCtx, HudModule } from './types'
+import type { HudCtx } from './types'
+import { useNow } from '../useNow'
 import './lab.css'
 
 type Run = HudCtx['runs'][number]
@@ -62,7 +63,7 @@ function Title({ count, total }: { count: number; total?: number }) {
 }
 
 /** v1 / v2: rows of ten dots, newest as ring + dot, empty rings fill the row. */
-function Dots({ ctx, labels }: { ctx: HudCtx; labels: boolean }) {
+export function Dots({ ctx, labels }: { ctx: HudCtx; labels: boolean }) {
   const runs = ctx.runs.slice(-PER_ROW * MAX_ROWS)
   const slots = Math.max(PER_ROW, Math.ceil(runs.length / PER_ROW) * PER_ROW)
   const rows: number[][] = []
@@ -93,7 +94,7 @@ function Dots({ ctx, labels }: { ctx: HudCtx; labels: boolean }) {
 }
 
 /** v3: runs on a time axis from the first run to now. */
-function Timeline({ ctx }: { ctx: HudCtx }) {
+export function Timeline({ ctx }: { ctx: HudCtx }) {
   const W = 360
   const runs = ctx.runs
   // `now` comes from the newest run, not the wall clock, so the axis only moves when a run lands.
@@ -102,6 +103,7 @@ function Timeline({ ctx }: { ctx: HudCtx }) {
   const span = Math.max(60_000, t1 - t0)
   const x = (t: number) => (runs.length < 2 ? W : ((ms(t) - t0) / span) * W)
   const last = runs.length - 1
+  const now = useNow()   // for "… s ago"
   return (
     <div style={{ display: 'flex', alignItems: 'flex-start', gap: 20 }}>
       <Title count={runs.length} />
@@ -117,7 +119,7 @@ function Timeline({ ctx }: { ctx: HudCtx }) {
         ))}
         <span style={{ ...MONO10, position: 'absolute', left: 0, top: 22, color: 'var(--qs-ink3)' }}>{runs.length ? clock(runs[0].t) : '—'}</span>
         <span style={{ ...MONO10, position: 'absolute', right: 0, top: 22, color: 'var(--qs-ink3)' }}>
-          {runs.length ? `${clock(runs[last].t)} · ${ago(runs[last].t, Date.now())}` : 'no runs yet'}
+          {runs.length ? `${clock(runs[last].t)} · ${ago(runs[last].t, now)}` : 'no runs yet'}
         </span>
       </div>
     </div>
@@ -125,7 +127,7 @@ function Timeline({ ctx }: { ctx: HudCtx }) {
 }
 
 /** v4: past runs on strength (x) × reach (y), with the current settings as a cross. */
-function Scatter({ ctx }: { ctx: HudCtx }) {
+export function Scatter({ ctx }: { ctx: HudCtx }) {
   const S = 96
   const runs = ctx.runs
   const xMax = Math.max(1, ctx.q.strength, ...runs.map((r) => r.strength))
@@ -160,41 +162,3 @@ function Scatter({ ctx }: { ctx: HudCtx }) {
     </div>
   )
 }
-
-export const CAPTURES_MODULES: HudModule[] = [
-  {
-    family: 'captures',
-    id: 'v1',
-    label: 'dots',
-    desc: 'One dot per run: grey for past runs, a ring for the newest, empty rings to ten.',
-    slot: 'bottom',
-    render: (ctx) => <Dots ctx={ctx} labels={false} />,
-  },
-  {
-    family: 'captures',
-    id: 'v2',
-    label: 'dots with labels',
-    desc: 'The same dots; hover one to read its run.',
-    slot: 'bottom',
-    interactive: true,
-    render: (ctx) => <Dots ctx={ctx} labels />,
-  },
-  {
-    family: 'captures',
-    id: 'v3',
-    label: 'timeline',
-    desc: 'Runs on a time axis, first run to the newest.',
-    slot: 'bottom',
-    interactive: true,
-    render: (ctx) => <Timeline ctx={ctx} />,
-  },
-  {
-    family: 'captures',
-    id: 'v4',
-    label: 'strength × reach',
-    desc: 'Past runs plotted by strength and reach; the cross is the current setting.',
-    slot: 'bottom',
-    interactive: true,
-    render: (ctx) => <Scatter ctx={ctx} />,
-  },
-]

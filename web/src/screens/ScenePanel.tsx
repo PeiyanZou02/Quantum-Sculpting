@@ -2,7 +2,7 @@
 // it faintly with the current view (ghost); the arrow lets the probe read it.
 import { useStore, type Layer, type View } from '../store'
 import { Icon, IconButton } from '../qs/Icon'
-import { fmt } from './parts'
+import { fmt } from './fmt'
 
 export function ScenePanel() {
   const st = useStore()

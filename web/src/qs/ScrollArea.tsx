@@ -6,6 +6,11 @@ import './scroll.css'
 export interface ScrollMarker { id: string; label: string; icon?: string }
 export interface ScrollIndex { markers: ScrollMarker[]; active: string | null; go: (id: string) => void; pos: Record<string, number>; frac: (id: string) => number }
 
+/** The caller's own index, drawn as an element so its handlers (go) are never called while rendering. */
+function IndexSlot({ render, ...ix }: ScrollIndex & { render: (index: ScrollIndex) => ReactNode }) {
+  return render(ix)
+}
+
 export function ScrollArea({ children, markers, className, style, follow, onActive, bar = true, renderIndex, tail = false }: {
   children: ReactNode
   /** Draw the scrollbar rail and thumb (default true). */
@@ -110,7 +115,7 @@ export function ScrollArea({ children, markers, className, style, follow, onActi
         {children}
         {tail && <div ref={tailRef} aria-hidden />}
       </div>
-      {renderIndex && markers && renderIndex({ markers, active, go, pos, frac })}
+      {renderIndex && markers && <IndexSlot render={renderIndex} markers={markers} active={active} go={go} pos={pos} frac={frac} />}
       {bar && <div className={'qs-scroll__rail' + (scrollable ? '' : ' qs-scroll__rail--idle') + (markers && !renderIndex ? ' qs-scroll__rail--index' : '')}
         onPointerDown={(e) => {
           if (e.target !== e.currentTarget) return

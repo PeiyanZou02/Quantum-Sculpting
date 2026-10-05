@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { KeyboardEvent, PointerEvent } from 'react'
 import './qs.css'
 
@@ -53,7 +53,7 @@ export function QFader(props: QFaderProps) {
     return Math.round(Math.max(min, Math.min(max, s)) * 1e6) / 1e6
   }
   const live = useRef({ props, value, snap })
-  live.current = { props, value, snap }
+  useLayoutEffect(() => { live.current = { props, value, snap } })   // the latest, for handlers
   const set = (x: number) => {
     const n = live.current.snap(x)
     if (n !== live.current.value) live.current.props.onChange?.(n)

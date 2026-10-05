@@ -6,26 +6,25 @@
 import { useState } from 'react'
 import { useStore } from '../store'
 import { usePresent, type Look } from '../present'
-import { CATEGORIES, FAMILIES, chosenOf, keyOf, savePng, variantsOf } from '../hud/Composer'
+import { CATEGORIES, FAMILIES } from '../hud/registry'
+import { chosenOf, countOn, keyOf, savePng, variantsOf } from '../hud/compose'
 import type { HudModule } from '../hud/types'
 import { Slider } from '../qs/Slider'
 import { Segmented } from '../qs/Segmented'
 import { IconButton } from '../qs/Icon'
 
 /** Sentence case for the library's short names ("polar" → "Polar"). */
-export const cap = (s: string) => (s ? s[0].toUpperCase() + s.slice(1) : s)
-export const familyOf = (id: string) => FAMILIES.find((f) => f.id === id)
-export const nameOf = (m: HudModule) => `${familyOf(m.family)?.title ?? m.family} · ${cap(m.label)}`
+const cap = (s: string) => (s ? s[0].toUpperCase() + s.slice(1) : s)
+const familyOf = (id: string) => FAMILIES.find((f) => f.id === id)
+const nameOf = (m: HudModule) => `${familyOf(m.family)?.title ?? m.family} · ${cap(m.label)}`
 
 /** The MIME type a dragged library row carries: "family:variant", or "text". */
 export const MARK_MIME = 'application/x-qs-mark'
 
 /** Which library category a family belongs to. */
-export const catOf = (family: string) => CATEGORIES.find((c) => c.fams.includes(family as never))?.id ?? 'marks'
-/** How many variants of these families are on. */
-export const countOn = (compose: Record<string, string>, fams: readonly string[]) => fams.reduce((n, f) => n + variantsOf(compose, f).length, 0)
+const catOf = (family: string) => CATEGORIES.find((c) => c.fams.includes(family as never))?.id ?? 'marks'
 
-export const TIERS: { v: 1 | 2 | 3; t: string }[] = [{ v: 1, t: 'Primary' }, { v: 2, t: 'Secondary' }, { v: 3, t: 'Tertiary' }]
+const TIERS: { v: 1 | 2 | 3; t: string }[] = [{ v: 1, t: 'Primary' }, { v: 2, t: 'Secondary' }, { v: 3, t: 'Tertiary' }]
 
 /** One library row: the name, and a dot when it is on. */
 export function LibRow({ on, name, drag, onToggle, onHover, onDragStart }: {

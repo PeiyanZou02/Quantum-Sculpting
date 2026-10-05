@@ -3,14 +3,15 @@
 // defend or explore) and all are measured together; yes and no each leave their own mark on the shape.
 // This panel follows the turn on screen: the turn player, each nation's question, odds and answer,
 // the relationship graph, and the chronicle of the whole history.
-import { useLayoutEffect, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useMemo, useState, type ReactNode } from 'react'
 import { useStore, TURNS_PER_SECOND } from '../store'
 import type { NationAction, NationAsk, NationEvent, NationsHistory, NationTurn } from '../api'
 import { ScrollArea } from '../qs/ScrollArea'
 import { SectionTabs } from './SectionTabs'
 import { Slider } from '../qs/Slider'
 import { Icon } from '../qs/Icon'
-import { Spinner, fmt } from './parts'
+import { Spinner } from './parts'
+import { fmt } from './fmt'
 import { nationColor, nationName, type Theme } from '../view/nations'
 import './evolve.css'
 
@@ -30,7 +31,7 @@ const QUESTION_DESC: Record<NationAsk, string> = {
   defend: 'Yes builds a wall near its borders; no splits off its far half as a new nation, if it is big enough.',
   explore: 'Yes heals gaps and grows outward in a cone; no makes its outermost voxels fall off.',
 }
-export const DID: Record<NationAction, string> = {
+const DID: Record<NationAction, string> = {
   attack: 'Attacked', fortify: 'Built a wall', grow: 'Grew outward', flee: 'Fled outward',
   split: 'Split', wither: 'Withered', waver: 'Too small to split',
 }
@@ -58,7 +59,7 @@ function list(ids: number[], theme: Theme): ReactNode {
 }
 
 /** One event as a sentence. */
-export function say(e: NationEvent, theme: Theme): ReactNode {
+export function Say({ e, theme }: { e: NationEvent; theme: Theme }): ReactNode {
   const N = (i: number) => <Nat i={i} theme={theme} />
   switch (e.type) {
     case 'annex': return <>{N(e.who)} annexed {N(e.whom)}.</>
@@ -136,16 +137,16 @@ const azimuth = (p: [number, number, number] | null, cx: number, cy: number, i: 
 
 // ── small parts ──────────────────────────────────────────────────────────────────────────────────
 function useWidth() {
-  const [el, setEl] = useState<HTMLDivElement | null>(null)
   const [w, setW] = useState(0)
-  useLayoutEffect(() => {
+  // measured from the ref callback as the box mounts (before paint), then followed
+  const ref = useCallback((el: HTMLDivElement | null) => {
     if (!el) return
     setW(Math.floor(el.getBoundingClientRect().width))
     const ro = new ResizeObserver(([e]) => setW(Math.floor(e.contentRect.width)))
     ro.observe(el)
     return () => ro.disconnect()
-  }, [el])
-  return [setEl, w] as const
+  }, [])
+  return [ref, w] as const
 }
 
 function Blk({ id, label, note, tools, children }: { id: string; label: string; note?: ReactNode; tools?: ReactNode; children: ReactNode }) {
@@ -287,7 +288,7 @@ function TurnBlk({ rec, history, theme }: { rec: NationTurn; history: NationsHis
         <span className="ev-k">{ev.turn === 0 ? 'Founding' : 'This turn'}</span>
         <ul className="ev-said">
           {ev.turn === 0 && <li>The model was split into {history.k} nations. Before any measurement each is in a superposition of doing and not doing.</li>}
-          {rec.events.map((e, i) => <li key={i}>{say(e, theme)}</li>)}
+          {rec.events.map((e, i) => <li key={i}><Say e={e} theme={theme} /></li>)}
           {ev.turn > 0 && !rec.events.length && <li className="ev-quiet">A quiet turn: borders moved, but no alliance, war, split or death.</li>}
         </ul>
       </div>
@@ -525,7 +526,7 @@ function ChronicleBlk({ history, saga, theme }: { history: NationsHistory; saga:
             <li key={g.turn} className={'ev-log__turn' + (g.turn > turn ? ' ev-log__turn--later' : '') + (g.turn === turn ? ' ev-log__turn--now' : '')}>
               <Pill num on={g.turn === turn} tip={`Go to turn ${g.turn}`} desc={g.turn > turn ? 'Not reached yet on screen' : 'Show the territory at the end of this turn'}
                 onClick={() => { pause(); setTurn(g.turn) }}>{g.turn}</Pill>
-              <ul>{g.events.map((e, k) => <li key={k}>{say(e, theme)}</li>)}</ul>
+              <ul>{g.events.map((e, k) => <li key={k}><Say e={e} theme={theme} /></li>)}</ul>
             </li>
           ))}
         </ol>

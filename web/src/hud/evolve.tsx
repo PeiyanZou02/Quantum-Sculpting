@@ -5,7 +5,6 @@ import { useMemo } from 'react'
 import { useStore } from '../store'
 import type { NationEvent, NationsHistory } from '../api'
 import { nationColor, nationName, type Theme } from '../view/nations'
-import type { HudModule } from './types'
 import './evolve.css'
 
 function useEvolve() {
@@ -48,7 +47,7 @@ function text(e: NationEvent): [number[], string] {
 }
 
 // ── nations: the roster for this turn ────────────────────────────────────────────────────────────
-function Nations() {
+export function Nations() {
   const { history: h, turn, theme } = useEvolve()
   if (!h) return <Empty />
   const rec = h.turns[turn]
@@ -75,7 +74,7 @@ function Nations() {
 
 // ── territory: each nation's share over the whole history, a playhead on this turn ──────────────
 const W = 480, H = 96, MARK = 14
-function Territory() {
+export function Territory() {
   const { history: h, turn, theme } = useEvolve()
   const paths = useMemo(() => {
     if (!h) return null
@@ -119,7 +118,7 @@ function Territory() {
 }
 
 // ── chronicle: the latest events up to this turn ─────────────────────────────────────────────────
-function Chronicle() {
+export function Chronicle() {
   const { history: h, turn, theme } = useEvolve()
   if (!h) return <Empty />
   const rows = h.turns.slice(1, turn + 1).flatMap((r) => r.events.filter((e) => e.type !== 'ally' && e.type !== 'rift').map((e) => ({ t: r.turn, e }))).slice(-7).reverse()
@@ -145,7 +144,7 @@ function Chronicle() {
 
 // ── relations: nations on a ring, alliances and this turn's attacks ─────────────────────────────
 const R = 78, S = 200
-function Relations() {
+export function Relations() {
   const { history: h, turn, theme } = useEvolve()
   if (!h) return <Empty />
   const rec = h.turns[turn]
@@ -190,7 +189,7 @@ function Relations() {
 }
 
 // ── record: the history in figures ───────────────────────────────────────────────────────────────
-function Record() {
+export function Record() {
   const { history: h, turn } = useEvolve()
   if (!h) return <Empty />
   const c = tally(h, turn)
@@ -210,11 +209,3 @@ function Record() {
     </div>
   )
 }
-
-export const EVOLVE_MODULES: HudModule[] = [
-  { family: 'evolve', id: 'v1', label: 'nations', desc: 'This turn’s nations by territory, with what each did.', slot: 'tr', render: () => <Nations /> },
-  { family: 'evolve', id: 'v2', label: 'territory', desc: 'Every nation’s share of the territory over the whole history; wars, annexations and splits marked under it.', slot: 'bottom', render: () => <Territory /> },
-  { family: 'evolve', id: 'v3', label: 'chronicle', desc: 'The latest wars, annexations, splits, exiles and deaths up to this turn.', slot: 'bl', render: () => <Chronicle /> },
-  { family: 'evolve', id: 'v4', label: 'relations', desc: 'Nations on a ring: alliances as heavy lines, this turn’s attacks as dashed arrows.', slot: 'br', render: () => <Relations /> },
-  { family: 'evolve', id: 'v5', label: 'record', desc: 'Alive, wars, annexations and splits so far, as figures.', slot: 'tl', render: () => <Record /> },
-]

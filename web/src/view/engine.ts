@@ -265,6 +265,11 @@ export class Engine {
     this.tween = { from: this.camera.position.clone().sub(this.controls.target), to, t0: performance.now() }
   }
 
+  /** Left drag orbits (off while the slice tool takes the drag). */
+  setRotate(on: boolean) {
+    this.controls.enableRotate = on
+  }
+
   /** Turntable: the camera circles the model slowly. */
   setSpin(on: boolean, degPerSec = 8) {
     this.controls.autoRotate = on
