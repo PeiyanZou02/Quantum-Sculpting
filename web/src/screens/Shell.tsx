@@ -5,8 +5,8 @@ import { useShell, type DrawerTab } from '../shell'
 import { useStore } from '../store'
 import { RuntimePanel, AtlasPanel } from './Terminal'
 import { EvolveLog } from './EvolveLog'
-import { Icon, IconButton } from '../qs/Icon'
-import { Now, AtlasStatus, ThemeButton } from './TopBar'
+import { Icon } from '../qs/Icon'
+import { Now } from './TopBar'
 
 /** A drag handle on a panel edge. `dir` is the side the panel grows toward when dragged that way. */
 export function Resizer({ edge, value, min, max, set }: { edge: 'left' | 'right' | 'top'; value: number; min: number; max: number; set: (v: number) => void }) {
@@ -80,9 +80,6 @@ export function Drawer({ content = true }: { content?: boolean }) {
           </button>
         ))}
         <div className="ux-drawer__status"><Now /></div>
-        <AtlasStatus />
-        <ThemeButton />
-        <IconButton name="help" size={22} title="Help · README" onClick={() => window.open('https://github.com/madebyrayz/quantum-sculptor#readme', '_blank')} />
         {content && <button className="ux-ib" onClick={() => sh.setLayout({ dock: sh.dock === 'view' ? 'full' : 'view' })}
           data-tip={sh.dock === 'view' ? 'Dock along the whole window' : 'Dock under the view'} aria-label="Change where the drawer docks">{sh.dock === 'view' ? '⤓' : '⤒'}</button>}
         <button className="ux-drawer__fold" onClick={() => sh.setDrawerOpen(!sh.drawerOpen)} aria-label={sh.drawerOpen ? 'Fold the drawer' : 'Open the drawer'} data-tip={sh.drawerOpen ? 'Fold' : 'Open'}>

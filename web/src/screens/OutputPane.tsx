@@ -68,77 +68,44 @@ const Empty = ({ children }: { children: ReactNode }) => <p className="qs-help u
 /** The four groups of Properties, one per step, so the rail matches the Parameters rail. */
 const GROUPS: { id: StepId; icon: string; t: string }[] = [
   { id: 'model', icon: 'model', t: 'Model' },
-  { id: 'voxels', icon: 'grid', t: 'Grid and slice' },
+  { id: 'voxels', icon: 'grid', t: 'Grid' },
   { id: 'quantum', icon: 'quantum', t: 'Quantum' },
-  { id: 'mesh', icon: 'print', t: 'Print and export' },
+  { id: 'mesh', icon: 'print', t: 'Mesh' },
 ]
 type StepId = 'model' | 'voxels' | 'quantum' | 'mesh'
 const groupOf = (s: string): StepId => (s === 'evolve' || s === 'scan' ? 'quantum' : s as StepId)
 
-/** Lab · outputs. Everything the steps produced, stacked in one column; the rail jumps between the
- *  four groups and lights the one in view. When the focus moves to another step, the column follows. */
-export function OutputPane({ rail = true }: { rail?: boolean }) {
+/** Lab · outputs, one stage at a time: what the open step produced. The rail follows the step you
+ *  open on the left; click it to look at another stage's results without changing the view. */
+export function OutputPane() {
   const evolve = useStore((s) => s.q.mode === 'nations')
-  const focus = useStore((s) => s.focus)
-  const box = useRef<HTMLDivElement>(null)
-  const [active, setActive] = useState<StepId>('model')
-  const go = (id: StepId, smooth = true) => {
-    const el = box.current?.querySelector<HTMLElement>(`[data-group="${id}"]`)
-    if (el && box.current) box.current.scrollTo({ top: el.offsetTop - 4, behavior: smooth ? 'smooth' : 'auto' })
-  }
-  const onScroll = () => {
-    const el = box.current
-    if (!el) return
-    const top = el.scrollTop + 24
-    let cur: StepId = 'model'
-    for (const g of GROUPS) {
-      const sec = el.querySelector<HTMLElement>(`[data-group="${g.id}"]`)
-      if (sec && sec.offsetTop <= top) cur = g.id
-    }
-    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 4) cur = GROUPS[GROUPS.length - 1].id
-    setActive(cur)
-  }
-  // the column follows the step you open (not every small change of focus inside it)
-  const followed = useRef('')
-  const follow = useEffectEvent((g: StepId) => go(g))
-  useEffect(() => {
-    const g = groupOf(focus.stage)
-    if (followed.current === g) return
-    followed.current = g
-    follow(g)
-  }, [focus.stage])
+  const stage = useStore((s) => s.focus.stage)
+  const [picked, setPicked] = useState<{ g: StepId; at: string } | null>(null)
+  // a pick lasts until the focus moves to another step
+  const g: StepId = picked && picked.at === stage ? picked.g : groupOf(stage)
   return (
     <div className="lab-in lab-in--right">
       <div className="lab-in__page">
-        <div className="lab-props" ref={box} onScroll={onScroll}>
-          <div data-group="model" className="lab-group">
-            <ModelOut />
-          </div>
-          <div data-group="voxels" className="lab-group">
-            <GridOut />
-            <SliceOut />
-          </div>
-          <div data-group="quantum" className="lab-group">
-            <QuantumOut />
-            {evolve ? <EvolveSections /> : <QuantumSections />}
-          </div>
-          <div data-group="mesh" className="lab-group">
-            <PrintOut />
-            <ExportOut />
-          </div>
-          <div style={{ height: '60vh' }} />
+        <header className="lab-in__head">
+          <span className="lab-in__no">{String(GROUPS.findIndex((x) => x.id === g) + 1).padStart(2, '0')}</span>
+          <span className="lab-in__t">{g === 'quantum' && evolve ? 'Evolve' : GROUPS.find((x) => x.id === g)!.t}</span>
+        </header>
+        <div className="lab-props" key={g}>
+          {g === 'model' && <ModelOut />}
+          {g === 'voxels' && <><GridOut /><SliceOut /></>}
+          {g === 'quantum' && <><QuantumOut />{evolve ? <EvolveSections /> : <QuantumSections />}</>}
+          {g === 'mesh' && <><PrintOut /><ExportOut /></>}
+          <div style={{ height: 24 }} />
         </div>
       </div>
-      {rail && (
-        <nav className="lab-rail lab-rail--right" aria-label="Properties sections">
-          {GROUPS.map((g) => (
-            <button key={g.id} className={'lab-rail__b' + (active === g.id ? ' lab-rail__b--on' : '')} onClick={() => go(g.id)}
-              data-tip={g.id === 'quantum' && evolve ? 'Evolve' : g.t} data-tip-side="left">
-              <Icon name={g.id === 'quantum' && evolve ? 'entangle' : g.icon} size={16} />
-            </button>
-          ))}
-        </nav>
-      )}
+      <nav className="lab-rail lab-rail--right" aria-label="Properties by stage">
+        {GROUPS.map((x, k) => (
+          <button key={x.id} className={'lab-rail__b' + (g === x.id ? ' lab-rail__b--on' : '')} onClick={() => setPicked({ g: x.id, at: stage })}
+            aria-current={g === x.id ? 'page' : undefined} data-tip={`${String(k + 1).padStart(2, '0')} ${x.id === 'quantum' && evolve ? 'Evolve' : x.t}`} data-tip-side="left">
+            <Icon name={x.id === 'quantum' && evolve ? 'entangle' : x.icon} size={16} />
+          </button>
+        ))}
+      </nav>
     </div>
   )
 }
@@ -246,7 +213,7 @@ export function SliceOut() {
         {g ? <SectionMap size={w} grid={g} input={src === 'processed' ? gridData : null} axis={slice.axis} index={slice.index} level={level} onIndex={(i) => st.setSlice({ index: i })} />
           : <Empty>Voxelise to slice the grid.</Empty>}
       </div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 14 }}>
+      <div className="out-pair">
         <Segmented size="s" options={[{ value: 'input', label: 'Input' }, { value: 'processed', label: 'Processed', disabled: !procData }]} value={src} onChange={(v) => setSrc(v as 'input' | 'processed')} />
         <Segmented<Axis> size="s" options={(['x', 'y', 'z'] as Axis[]).map((a) => ({ value: a, label: a.toUpperCase(), disabled: scanning && a !== 'z' }))} value={slice.axis} onChange={(a) => st.setSlice({ axis: a })} />
       </div>

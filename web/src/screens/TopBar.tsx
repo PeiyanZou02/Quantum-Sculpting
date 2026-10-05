@@ -75,10 +75,11 @@ export function AtlasStatus() {
 export function ThemeButton() {
   const themePref = useStore((s) => s.themePref)
   const setTheme = useStore((s) => s.setTheme)
-  return <IconButton size={22} name={themePref === 'system' ? 'auto' : themePref === 'light' ? 'sun' : 'moon'} title={`Theme: ${themePref === 'system' ? 'follows the system' : themePref} · click to change`} onClick={() => setTheme(NEXT[themePref])} />
+  return <IconButton size={28} name={themePref === 'system' ? 'auto' : themePref === 'light' ? 'sun' : 'moon'} title={`Theme: ${themePref === 'system' ? 'follows the system' : themePref} · click to change`} onClick={() => setTheme(NEXT[themePref])} />
 }
 
-/** The top bar: the mark, the name and the tabs. Status lives on the drawer row. */
+/** The top bar: the mark, the name and the tabs; Atlas, theme and help on the right. What is loaded
+ *  and the latest event live on the drawer row. */
 export function TopBar() {
   return (
     <header className="top">
@@ -87,6 +88,11 @@ export function TopBar() {
         <span className="top__name">Quantum Sculpting</span>
       </div>
       <Tabs />
+      <div className="top__actions">
+        <AtlasStatus />
+        <ThemeButton />
+        <IconButton name="help" size={28} title="Help · README" onClick={() => window.open('https://github.com/madebyrayz/quantum-sculptor#readme', '_blank')} />
+      </div>
     </header>
   )
 }
