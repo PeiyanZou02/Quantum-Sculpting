@@ -433,7 +433,7 @@ export function QSlice({
     <div style={{ order: 3, display: 'flex', flexDirection: 'column', gap: 18, width: SW }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <span style={{ font: `400 11px/1 ${MONO}`, color: INK3 }}>Axis</span>
-        <div style={{ display: 'inline-flex', padding: 2, borderRadius: 999, border: `1px solid ${CTL}` }}>
+        <div style={{ display: 'inline-flex', padding: 2, borderRadius: 0, border: `1px solid ${CTL}` }}>
           {(['x', 'y', 'z'] as Axis[]).map((a) => {
             const on = a === ax
             return (
@@ -451,7 +451,7 @@ export function QSlice({
                   height: 22,
                   padding: '0 10px',
                   margin: 0,
-                  borderRadius: 999,
+                  borderRadius: 0,
                   border: `1px solid ${on ? INK : 'transparent'}`,
                   background: on ? SEL : 'transparent',
                   color: on ? INK : INK2,
@@ -539,7 +539,7 @@ const tabStyle: CSSProperties = {
   alignItems: 'center',
   height: 18,
   padding: '0 7px',
-  borderRadius: 999,
+  borderRadius: 0,
   font: `400 10px/1 ${MONO}`,
   whiteSpace: 'nowrap',
   boxSizing: 'border-box',

@@ -162,7 +162,7 @@ button.sec__head { all: unset; display: flex; align-items: baseline; gap: 10px; 
 .hud__info span:first-child { color: var(--qs-ink); }
 .hud__info span:last-child { color: var(--qs-ink3); }
 .nav { position: absolute; right: 14px; top: 14px; display: flex; flex-direction: column; align-items: center; gap: 6px; z-index: 3; }
-.nav__col { display: flex; flex-direction: column; gap: 2px; padding: 4px; border-radius: 999px; background: var(--qs-faint); }
+.nav__col { display: flex; flex-direction: column; gap: 2px; padding: 4px; border-radius: 0; background: var(--qs-faint); }
 .nav__sep { height: 1px; margin: 3px 6px; background: var(--qs-line); }
 .nav__cam { display: flex; gap: 8px; color: var(--qs-ink3); }
 .gizmo { overflow: visible; }
@@ -202,15 +202,15 @@ button.sec__head { all: unset; display: flex; align-items: baseline; gap: 10px; 
 .stage__view--slice { cursor: ns-resize; }
 .stage__view--navigate { cursor: grab; }
 
-.shading { display: inline-flex; height: 28px; padding: 2px; gap: 2px; box-sizing: border-box; border-radius: 999px; border: 1px solid var(--qs-ctl); }
-.shading__b { all: unset; width: 26px; display: inline-flex; align-items: center; justify-content: center; border-radius: 999px; color: var(--qs-ink2); cursor: pointer; transition: background .15s, color .15s; }
+.shading { display: inline-flex; height: 28px; padding: 2px; gap: 2px; box-sizing: border-box; border-radius: 0; border: 1px solid var(--qs-ctl); }
+.shading__b { all: unset; width: 26px; display: inline-flex; align-items: center; justify-content: center; border-radius: 0; color: var(--qs-ink2); cursor: pointer; transition: background .15s, color .15s; }
 .shading__b:hover:not(:disabled) { background: var(--qs-faint); color: var(--qs-ink); }
 .shading__b--on, .shading__b--on:hover:not(:disabled) { background: var(--qs-ink); color: var(--qs-bg); }
 .shading__b:disabled { color: var(--qs-ink3); cursor: default; }
 .shading__b:focus-visible { box-shadow: 0 0 0 3px var(--qs-line); }
 
 .vp-tl { position: absolute; left: 12px; top: 12px; display: flex; align-items: flex-start; gap: 14px; z-index: 3; }
-.toolshelf { display: flex; flex-direction: column; gap: 2px; padding: 4px; border-radius: 999px; background: var(--qs-faint); }
+.toolshelf { display: flex; flex-direction: column; gap: 2px; padding: 4px; border-radius: 0; background: var(--qs-faint); }
 .toolshelf__sep { height: 1px; margin: 3px 6px; background: var(--qs-line); }
 .vp-tl .hud__info { position: static; padding-top: 8px; pointer-events: none; }
 .hud__info span:nth-child(3) { color: var(--qs-ink); }
@@ -271,8 +271,8 @@ button.sec__head { all: unset; display: flex; align-items: baseline; gap: 10px; 
 
 /* focus strip: what the workspace shows and why; follows what you do, not a switch */
 .focus-strip { display: flex; align-items: center; gap: 14px; min-width: 0; flex: 1 1 0; }
-.focus-strip__steps { display: inline-flex; align-items: center; gap: 2px; margin: 0; padding: 2px; list-style: none; height: 28px; box-sizing: border-box; border-radius: 999px; border: 1px solid var(--qs-ctl); flex: none; }
-.focus-strip__s { all: unset; box-sizing: border-box; cursor: pointer; display: inline-flex; align-items: center; height: 22px; padding: 0 10px; border-radius: 999px; font: 400 12px/1 var(--qs-sans); color: var(--qs-ink3); transition: background var(--qs-snap) var(--qs-ease), color var(--qs-snap) var(--qs-ease); }
+.focus-strip__steps { display: inline-flex; align-items: center; gap: 2px; margin: 0; padding: 2px; list-style: none; height: 28px; box-sizing: border-box; border-radius: 0; border: 1px solid var(--qs-ctl); flex: none; }
+.focus-strip__s { all: unset; box-sizing: border-box; cursor: pointer; display: inline-flex; align-items: center; height: 22px; padding: 0 10px; border-radius: 0; font: 400 12px/1 var(--qs-sans); color: var(--qs-ink3); transition: background var(--qs-snap) var(--qs-ease), color var(--qs-snap) var(--qs-ease); }
 .focus-strip__s--done { color: var(--qs-ink2); }
 .focus-strip__s:hover:not(:disabled):not(.focus-strip__s--on) { background: var(--qs-faint); color: var(--qs-ink); }
 .focus-strip__s:disabled { cursor: default; }

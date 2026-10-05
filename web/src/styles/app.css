@@ -393,3 +393,14 @@ body:has(.app.ux) { background: var(--ux-app); }
 .ux-panel__toggle:has(.ux-panel__aside) .ux-chev { margin-left: 16px; }
 .ux-panel__toggle .ux-panel__aside { margin-left: auto; }
 .ux .ev-pill--on { background: var(--ux-on) !important; color: var(--ux-on-ink) !important; box-shadow: none !important; }
+
+/* round 5 — button groups of three or more wrap instead of squeezing their labels */
+.ux-buttons:has(> :nth-child(3)) { grid-auto-flow: row; grid-template-columns: repeat(auto-fit, minmax(112px, 1fr)); }
+/* the picked frame keeps its inverse fill (the transparent cell rule above came later and hid it) */
+.ux .pd-frame.pd-frame--on, .ux .pd-frame.pd-frame--on:hover { background: var(--ux-on); color: var(--ux-on-ink); box-shadow: none; }
+.qp-tiling { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+.qp-tiling .qp-seg { display: grid; grid-template-columns: 1fr 1fr; }
+.qp-tiling .qp-seg { gap: 0; padding: 0; border: 1px solid var(--ux-strong); }
+.qp-tiling .qp-pill { height: 30px; justify-content: center; border: 0; border-radius: 0; }
+.qp-tiling .qp-pill + .qp-pill { box-shadow: inset 1px 0 0 var(--ux-line); }
+.qp-tiling .qp-pill--on { background: var(--ux-on); color: var(--ux-on-ink); }

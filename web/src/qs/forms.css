@@ -29,7 +29,7 @@
 .qs-select-field, .qs-input-field { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .qs-select { position: relative; display: block; }
 .qs-select select {
-  appearance: none; width: 100%; height: 28px; padding: 0 28px 0 12px; border-radius: 999px;
+  appearance: none; width: 100%; height: 28px; padding: 0 28px 0 12px; border-radius: 0;
   border: 1px solid var(--qs-ctl); background: transparent; color: var(--qs-ink);
   font: 400 11px/1 var(--qs-mono); cursor: pointer; outline: none; transition: border-color .15s, background .15s;
   text-overflow: ellipsis;
@@ -57,14 +57,14 @@
 /* icon button */
 .qs-ib {
   all: unset; position: relative; display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box;
-  border-radius: 999px; color: var(--qs-ink2); cursor: pointer; transition: background .15s, color .15s; flex: none;
+  border-radius: 0; color: var(--qs-ink2); cursor: pointer; transition: background .15s, color .15s; flex: none;
 }
 .qs-ib:hover:not(:disabled) { background: var(--qs-faint); color: var(--qs-ink); }
 .qs-ib:focus-visible { box-shadow: 0 0 0 3px var(--qs-line); }
 .qs-ib--on, .qs-ib--on:hover:not(:disabled) { background: var(--qs-ink); color: var(--qs-bg); }
 .qs-ib:disabled { color: var(--qs-ink3); cursor: default; }
 .qs-ib__badge {
-  position: absolute; right: -3px; top: -3px; min-width: 13px; height: 13px; padding: 0 3px; border-radius: 999px; box-sizing: border-box;
+  position: absolute; right: -3px; top: -3px; min-width: 13px; height: 13px; padding: 0 3px; border-radius: 0; box-sizing: border-box;
   background: var(--qs-ink); color: var(--qs-bg); font: 500 11px/13px var(--qs-mono); text-align: center;
 }
 
@@ -73,7 +73,7 @@
 /* dropdown (custom listbox) */
 .qs-dd {
   all: unset; box-sizing: border-box; display: flex; align-items: center; gap: 10px; width: 100%; height: 28px; padding: 0 12px 0 13px;
-  border: 1px solid var(--qs-ctl); border-radius: 999px; cursor: pointer; color: var(--qs-ink); transition: border-color .15s, background .15s;
+  border: 1px solid var(--qs-ctl); border-radius: 0; cursor: pointer; color: var(--qs-ink); transition: border-color .15s, background .15s;
 }
 .qs-dd:hover:not(:disabled) { border-color: var(--qs-ink3); }
 .qs-dd--open { border-color: var(--qs-ink); background: var(--qs-faint); }
@@ -86,8 +86,8 @@
   position: fixed; z-index: 70; max-height: 280px; overflow-y: auto; box-sizing: border-box; padding: 5px;
   background: var(--qs-bg); border: 1px solid var(--qs-ctl); display: flex; flex-direction: column; gap: 1px; scrollbar-width: thin;
 }
-.qs-dd__opt { display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 12px 0 8px; border-radius: 999px; cursor: pointer; font: 400 12px/1 var(--qs-sans); color: var(--qs-ink2); white-space: nowrap; }
+.qs-dd__opt { display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 12px 0 8px; border-radius: 0; cursor: pointer; font: 400 12px/1 var(--qs-sans); color: var(--qs-ink2); white-space: nowrap; }
 .qs-dd__opt--hi { background: var(--qs-faint); color: var(--qs-ink); }
 .qs-dd__opt--on { color: var(--qs-ink); }
-.qs-dd__tick { width: 6px; height: 6px; border-radius: 999px; flex: none; }
+.qs-dd__tick { width: 6px; height: 6px; border-radius: 0; flex: none; }
 .qs-dd__opt--on .qs-dd__tick { background: var(--qs-ink); }

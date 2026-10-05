@@ -31,9 +31,9 @@ command -v pnpm >/dev/null || { say "pnpm is missing: npm i -g pnpm"; exit 1; }
 
 VITE=""
 start() {
-  (cd web && exec ./node_modules/.bin/vite --port "$PORT" --strictPort) &
+  (cd web && exec ./node_modules/.bin/vite --host 127.0.0.1 --port "$PORT" --strictPort) &
   VITE=$!
-  say "serving http://localhost:$PORT · following origin/$BRANCH every ${EVERY}s"
+  say "serving http://127.0.0.1:$PORT · following origin/$BRANCH every ${EVERY}s"
 }
 stop() { [ -n "$VITE" ] && kill "$VITE" 2>/dev/null && wait "$VITE" 2>/dev/null; VITE=""; }
 trap 'stop; exit 0' INT TERM

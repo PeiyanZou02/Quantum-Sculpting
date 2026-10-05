@@ -21,7 +21,7 @@
   text-align: inherit; cursor: pointer; pointer-events: auto;
 }
 .qn-btn[aria-disabled="true"] { cursor: default; }
-.qn-btn:focus-visible { outline: 1px solid var(--qs-ink); outline-offset: 3px; border-radius: 999px; }
+.qn-btn:focus-visible { outline: 1px solid var(--qs-ink); outline-offset: 3px; border-radius: 0; }
 
 /* settings rows: key, dotted leader, value (J, K) */
 .qn-row { display: flex; align-items: baseline; gap: 8px; }
@@ -33,7 +33,7 @@
 /* I breadcrumb: grey outline on hover, ink on the current step */
 .qn-crumb {
   display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 9px; box-sizing: border-box;
-  border-radius: 999px; border: 1px solid transparent;
+  border-radius: 0; border: 1px solid transparent;
 }
 .qn-crumb:hover:not(.is-cur):not([aria-disabled="true"]) { border-color: var(--qs-ink3); }
 .qn-crumb.is-cur { border-color: var(--qs-ink); }
@@ -42,7 +42,7 @@
 .qn-scrub { cursor: ew-resize; touch-action: none; pointer-events: auto; }
 .qn-pill {
   display: inline-flex; align-items: center; justify-content: center; min-width: 44px; height: 18px; padding: 0 7px;
-  box-sizing: border-box; border-radius: 999px; border: 1px solid var(--qs-ink);
+  box-sizing: border-box; border-radius: 0; border: 1px solid var(--qs-ink);
   font: 400 11px/1 var(--qs-mono); font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--qs-ink);
 }
 

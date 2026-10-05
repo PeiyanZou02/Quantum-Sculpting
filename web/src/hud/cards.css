@@ -8,8 +8,8 @@
 .hud-card__plane { display: grid; grid-template-columns: 1fr auto; row-gap: 6px; align-items: baseline; }
 .hud-card__k { font: 400 12px/1 var(--qs-sans); color: var(--qs-ink2); }
 .hud-card__v { font: 400 12px/1 var(--qs-mono); color: var(--qs-ink); }
-.hud-card__bar { grid-column: 1 / -1; height: 3px; border-radius: 999px; background: var(--qs-line); overflow: hidden; }
-.hud-card__bar > span { display: block; height: 100%; background: var(--qs-ink); border-radius: 999px; transition: width .25s; }
+.hud-card__bar { grid-column: 1 / -1; height: 3px; border-radius: 0; background: var(--qs-line); overflow: hidden; }
+.hud-card__bar > span { display: block; height: 100%; background: var(--qs-ink); border-radius: 0; transition: width .25s; }
 .hud-card .slice-map { pointer-events: none; }
 .hud-card--blocks { width: 272px; padding: 0; }
 .hud-card--blocks .blk { margin: 0; padding: 0 0 14px; background: none !important; }
@@ -22,7 +22,7 @@
 .hud-stages--row { flex-direction: row; align-items: flex-start; }
 .hud-stages--column { flex-direction: column; }
 .hud-stage { position: relative; display: flex; flex-direction: column; gap: 6px; }
-.hud-stage__img { border-radius: 14px; border: 1px solid var(--qs-line); background: none; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+.hud-stage__img { border-radius: 0; border: 1px solid var(--qs-line); background: none; overflow: hidden; display: flex; align-items: center; justify-content: center; }
 .hud-stage__img img { display: block; }
 .hud-stage--on .hud-stage__img { border-color: var(--qs-ink); }
 .hud-stage__empty { font: 400 11px/1 var(--qs-sans); color: var(--qs-ink3); }

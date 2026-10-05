@@ -9,7 +9,7 @@
   appearance: none; border: 0; margin: 0; padding: 0; background: none; color: inherit; font: inherit;
   cursor: pointer; pointer-events: auto; text-align: inherit;
 }
-.qs-lab-btn:focus-visible { outline: 1px solid var(--qs-ink); outline-offset: 3px; border-radius: 999px; }
+.qs-lab-btn:focus-visible { outline: 1px solid var(--qs-ink); outline-offset: 3px; border-radius: 0; }
 
 /* metadata blocks */
 .qs-lab-meta { display: flex; flex-direction: column; gap: 7px; min-width: 176px; color: var(--qs-ink); font-variant-numeric: tabular-nums; }
@@ -37,7 +37,7 @@
 
 /* pills (index tabs, active items) */
 .qs-lab-pill {
-  display: inline-flex; align-items: center; height: 18px; padding: 0 7px; border-radius: 999px; box-sizing: border-box;
+  display: inline-flex; align-items: center; height: 18px; padding: 0 7px; border-radius: 0; box-sizing: border-box;
   border: 1px solid var(--qs-ink); background: var(--qs-bg); color: var(--qs-ink);
   font: 400 11px/1 var(--qs-mono); font-variant-numeric: tabular-nums; white-space: nowrap;
   transition: background .15s, color .15s, border-color .15s;

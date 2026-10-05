@@ -272,7 +272,7 @@ function BlurBlk({ sel }: { sel: number | null }) {
             <text x={0} y={72} fontSize={11} fill="var(--qs-ink3)">turn</text>
             <text x={0} y={base - 2} fontSize={11} fill="var(--qs-ink3)">out</text>
             {DEMO_IN.map((v, i) => (
-              <rect key={'i' + i} x={cx(i) - sq / 2} y={8} width={sq} height={sq} rx={2} fill={v ? 'var(--qs-ink)' : 'none'} stroke={v ? 'var(--qs-ink)' : 'var(--qs-ink4)'} strokeWidth={1} />
+              <rect key={'i' + i} x={cx(i) - sq / 2} y={8} width={sq} height={sq} fill={v ? 'var(--qs-ink)' : 'none'} stroke={v ? 'var(--qs-ink)' : 'var(--qs-ink4)'} strokeWidth={1} />
             ))}
             {DEMO_IN.map((_, i) => Array.from({ length: DEMO_B }, (_, bit) => {
               const one = (gray(i) >> bit) & 1
@@ -413,13 +413,15 @@ function AtlasBlk() {
   const skip = (i: number) => (q.mode !== 'atlas' || (proc?.cached && !running)) && REMOTE.has(i)
 
   return (
-    <Blk id="q-atlas" label="Atlas" note={job ? `job ${job.job_id.slice(0, 6)} · ${job.atlas_status || job.status}` : q.mode} tools={
-      <span className="qp-seg">
-        {(['cube', 'layers'] as const).map((t) => (
-          <Pill key={t} on={q.tiling === t} tip={t === 'cube' ? 'Cube tiles' : 'Layer slabs'} desc={t === 'cube' ? 'Split the grid into blocks' : 'Send slabs bottom to top'} onClick={() => setQ({ tiling: t })}>{t}</Pill>
-        ))}
-      </span>
-    }>
+    <Blk id="q-atlas" label="Atlas" note={job ? `job ${job.job_id.slice(0, 6)} · ${job.atlas_status || job.status}` : q.mode}>
+      <div className="qp-tiling">
+        <span className="qp-k">Tiling</span>
+        <span className="qp-seg">
+          {(['cube', 'layers'] as const).map((t) => (
+            <Pill key={t} on={q.tiling === t} tip={t === 'cube' ? 'Cube tiles' : 'Layer slabs'} desc={t === 'cube' ? 'Split the grid into blocks' : 'Send slabs bottom to top'} onClick={() => setQ({ tiling: t })}>{t === 'cube' ? 'Cubes' : 'Layers'}</Pill>
+          ))}
+        </span>
+      </div>
       <div className="figs">
         <Hero k="Jobs" v={fmt.int(tl.jobs)} note={`${tl.shape.join(' × ')} per tile`} />
         <Hero k="Per job" v={fmt.int(perJob)} note="values, of 65,536" />
@@ -532,7 +534,7 @@ function RunsBlk() {
       <div ref={ref} className="qp-measure">
         {W > 0 && (
           <svg className="qp-svg" width={W} height={H} viewBox={`0 0 ${W} ${H}`}>
-            <rect x={P} y={P} width={W - 2 * P} height={H - 2 * P} rx={10} fill="none" stroke="var(--qs-line)" strokeWidth={1} />
+            <rect x={P} y={P} width={W - 2 * P} height={H - 2 * P} fill="none" stroke="var(--qs-line)" strokeWidth={1} />
             <text x={P} y={H - 3} fontSize={11} fill="var(--qs-ink3)">strength →</text>
             <text x={P - 4} y={P - 5} fontSize={11} fill="var(--qs-ink3)">↑ reach</text>
             <line x1={sx(q.strength)} x2={sx(q.strength)} y1={P} y2={H - P} stroke="var(--qs-ink4)" strokeWidth={1} strokeDasharray="2 3" />

@@ -44,7 +44,7 @@ export function LevelHistogram({ bins, level, onLevel, height = 72, min = 0.05, 
         )}
         <div style={{ position: 'absolute', left: `${level * 100}%`, top: -4, bottom: 0, width: 1, background: 'var(--qs-ink)', pointerEvents: 'none' }}>
           <span className="qs-small" style={{
-            position: 'absolute', top: -14, left: 0, transform: 'translateX(-50%)', padding: '2px 6px', borderRadius: 999,
+            position: 'absolute', top: -14, left: 0, transform: 'translateX(-50%)', padding: '2px 6px', borderRadius: 0,
             border: '1px solid var(--qs-ink)', background: drag ? 'var(--qs-ink)' : 'var(--qs-bg)', color: drag ? 'var(--qs-bg)' : 'var(--qs-ink)',
           }}>{level.toFixed(2)}</span>
         </div>

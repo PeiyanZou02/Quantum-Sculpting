@@ -152,7 +152,7 @@
 @keyframes qc-breathe { 0%, 100% { opacity: 1 } 50% { opacity: .35 } }
 .qc-flag {
   position: absolute; left: 50%; top: -10px; transform: translateX(-50%);
-  padding: 4px 8px; border-radius: 999px; border: 1px solid var(--qs-ink); background: var(--qs-bg);
+  padding: 4px 8px; border-radius: 0; border: 1px solid var(--qs-ink); background: var(--qs-bg);
   font: 400 11px/1 var(--qs-mono); font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--qs-ink);
 }
 .qc-press { transition: transform 120ms var(--qs-ease); }
@@ -167,7 +167,7 @@
 
 /* N1: drum */
 .qc-drum {
-  border-radius: 8px;
+  border-radius: 0;
   background: linear-gradient(90deg, var(--qc-m4) 0%, var(--qc-m2) 16%, var(--qc-hi) 42%, var(--qc-m1) 58%, var(--qc-m3) 84%, var(--qc-m4) 100%);
   box-shadow: 0 1px 1.5px var(--qc-shade), 0 8px 16px var(--qc-shade2);
   overflow: hidden;
@@ -175,9 +175,9 @@
 .qc-drumnum { position: absolute; top: 50%; font-family: var(--qs-mono); font-variant-numeric: tabular-nums; line-height: 1; white-space: nowrap; color: var(--qs-ink2); }
 
 /* N2: odometer */
-.qc-odo { display: flex; gap: 3px; padding: 6px; border-radius: 6px; }
+.qc-odo { display: flex; gap: 3px; padding: 6px; border-radius: 0; }
 .qc-digit {
-  position: relative; width: 24px; height: 36px; overflow: hidden; border-radius: 3px;
+  position: relative; width: 24px; height: 36px; overflow: hidden; border-radius: 0;
   background: linear-gradient(180deg, var(--qc-m4) 0%, var(--qc-m1) 30%, var(--qc-hi) 50%, var(--qc-m1) 70%, var(--qc-m4) 100%);
 }
 .qc-digits {
@@ -194,7 +194,7 @@
 
 /* N3: pull rod */
 .qc-rod {
-  border-radius: 6px;
+  border-radius: 0;
   background: linear-gradient(180deg, var(--qc-m3) 0%, var(--qc-hi) 40%, var(--qc-m2) 60%, var(--qc-m4) 100%);
   box-shadow: 0 2px 4px var(--qc-shade2);
 }
@@ -202,7 +202,7 @@
 
 /* N4: centre-detent slide */
 .qc-thumb {
-  border-radius: 3px;
+  border-radius: 0;
   background: linear-gradient(90deg, var(--qc-hi) 0%, var(--qc-m1) 38%, var(--qc-m3) 52%, var(--qc-m2) 70%, var(--qc-hi) 100%);
   box-shadow: 0 1px 1.5px var(--qc-shade), 0 6px 12px var(--qc-shade2);
 }
@@ -213,7 +213,7 @@
 .qc-gate { stroke: var(--qc-recess); }
 
 /* N6: runner */
-.qc-runbar { border-radius: 2px; background: linear-gradient(180deg, var(--qc-hi), var(--qc-m2) 55%, var(--qc-m1)); box-shadow: 0 1px 1.5px var(--qc-shade); }
+.qc-runbar { border-radius: 0; background: linear-gradient(180deg, var(--qc-hi), var(--qc-m2) 55%, var(--qc-m1)); box-shadow: 0 1px 1.5px var(--qc-shade); }
 .qc-runrail { background: var(--qc-m3); }
 
 /* viewcam: trackball and the camera object */
@@ -229,11 +229,11 @@
   box-shadow: 0 2px 3px var(--qc-shade), 0 12px 22px var(--qc-shade2);
 }
 .qc-cam {
-  position: absolute; width: 32px; height: 20px; margin: -10px 0 0 -16px; border-radius: 4px;
+  position: absolute; width: 32px; height: 20px; margin: -10px 0 0 -16px; border-radius: 0;
   background: linear-gradient(180deg, var(--qc-hi) 0%, var(--qc-m1) 48%, var(--qc-m3) 60%, var(--qc-m1) 100%);
   box-shadow: 0 1px 1.5px var(--qc-shade), 0 5px 10px var(--qc-shade2);
 }
-.qc-cam__hood { position: absolute; right: -7px; top: 3px; width: 9px; height: 14px; border-radius: 2px; background: linear-gradient(180deg, var(--qc-m1), var(--qc-m4)); }
+.qc-cam__hood { position: absolute; right: -7px; top: 3px; width: 9px; height: 14px; border-radius: 0; background: linear-gradient(180deg, var(--qc-m1), var(--qc-m4)); }
 .qc-cam__lens {
   position: absolute; right: -9px; top: 5px; width: 10px; height: 10px; border-radius: 50%;
   background: radial-gradient(circle at 45% 40%, var(--qs-ink3) 0%, var(--qc-lens) 60%, var(--qc-lens) 100%);

@@ -173,7 +173,7 @@ export function QDensity({ bins, level, onLevel, onCommit, w, h, total, unit = '
             alignItems: 'center',
             height: 20,
             padding: '0 9px',
-            borderRadius: 999,
+            borderRadius: 0,
             border: `1px solid ${INK}`,
             background: drag ? INK : BG,
             color: drag ? BG : INK,

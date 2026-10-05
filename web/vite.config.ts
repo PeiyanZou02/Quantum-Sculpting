@@ -7,8 +7,8 @@ import { resolve } from 'node:path'
 // One process for development: `pnpm dev` also starts the Flask service (app/server.py) and stops it
 // on exit. Set QS_API to use a service that is already running instead.
 const PORT = Number(process.env.QS_API_PORT ?? 8770)
-const API = process.env.QS_API ?? `http://localhost:${PORT}`
-const ROOT = resolve(__dirname, '..')
+const API = process.env.QS_API ?? `http://127.0.0.1:${PORT}`
+const ROOT = resolve(import.meta.dirname, '..')
 
 function flask(): Plugin {
   let child: ChildProcess | null = null
