@@ -4,7 +4,7 @@
 // stacked so they never overlap each other.
 import { useLayoutEffect, useRef, useState } from 'react'
 import type { ReactNode, RefObject } from 'react'
-import type { Family, HudCtx, HudModule } from './types'
+import type { Family, FamilyDef, HudCtx, HudModule, Rect } from './types'
 import { ORBIT_MODULES } from './orbit'
 import { CAMERA_MODULES } from './camera'
 import { DIAL_MODULES } from './dial'
@@ -19,15 +19,19 @@ import { STEPS_MODULES } from './steps'
 import { CAPTURES_MODULES } from './captures'
 import { CARDS_MODULES, SLICECARD_MODULES } from './cards'
 import { STAGES_MODULES } from './stages'
+import { GLYPH_FAMILIES } from './glyphs'
+import { DATA_FAMILIES } from './datamarks'
+import { NAV_FAMILIES } from './navmore'
+import { CONTROL_FAMILIES } from './controls'
 import { usePresent, type Look } from '../present'
 import './composer.css'
 
-export const FAMILIES: { id: Family; title: string; desc: string; modules: HudModule[] }[] = [
+export const FAMILIES: FamilyDef[] = [
   { id: 'frame', title: 'Frame', desc: 'Registration marks around the view', modules: FRAME_MODULES },
-  { id: 'meta', title: 'Readouts', desc: 'History and scene blocks in the corners', modules: META_MODULES },
+  { id: 'meta', title: 'Readouts', desc: 'History, scene and quantum blocks in the corners', modules: META_MODULES },
   { id: 'steps', title: 'Steps', desc: 'Where you are in the pipeline', modules: STEPS_MODULES },
   { id: 'orbit', title: 'Orbit rings', desc: 'Where the view camera is, and where it can go', modules: ORBIT_MODULES },
-  { id: 'camera', title: 'Camera', desc: 'The view camera as a diagram', modules: CAMERA_MODULES },
+  { id: 'camera', title: 'Camera, abstracted', desc: 'The view camera as a diagram', modules: CAMERA_MODULES },
   { id: 'dial', title: 'Orbit, abstracted', desc: 'Position as numbers on scales', modules: DIAL_MODULES },
   { id: 'bounds', title: 'Bounds', desc: 'The grid volume and the print size', modules: BOUNDS_MODULES },
   { id: 'focus', title: 'Focus', desc: 'What the view camera is looking at', modules: FOCUS_MODULES },
@@ -38,6 +42,16 @@ export const FAMILIES: { id: Family; title: string; desc: string; modules: HudMo
   { id: 'slicecard', title: 'Slice card', desc: 'The section under the cutting plane', modules: SLICECARD_MODULES },
   { id: 'cards', title: 'Data cards', desc: 'Quantum result, print check, model, grid', modules: CARDS_MODULES },
   { id: 'stages', title: 'Stages', desc: 'Model, voxels, quantum and mesh side by side', modules: STAGES_MODULES },
+  ...NAV_FAMILIES, ...GLYPH_FAMILIES, ...DATA_FAMILIES, ...CONTROL_FAMILIES,
+]
+
+/** The library's categories, in the Quicksilver Library's order: each holds families, each family variants. */
+export const CATEGORIES: { id: string; title: string; icon: string; fams: Family[] }[] = [
+  { id: 'marks', title: 'Marks', icon: 'frame', fams: ['frame', 'orbit', 'camera', 'dial', 'bounds', 'focus', 'selection', 'callout', 'scan'] },
+  { id: 'nav', title: 'Navigation', icon: 'navigate', fams: ['steps', 'timeline', 'bars', 'indexes', 'captures'] },
+  { id: 'glyphs', title: 'Quantum glyphs', icon: 'quantum', fams: ['backend', 'register', 'rotation', 'shots', 'processing', 'blur', 'pulse', 'usage'] },
+  { id: 'data', title: 'Data and runtime', icon: 'grid', fams: ['meta', 'cards', 'figures', 'density', 'runtime', 'tiles', 'field', 'values', 'levels', 'slicecard', 'stages'] },
+  { id: 'controls', title: 'Controls', icon: 'orbit', fams: ['dials', 'numbers', 'viewcam'] },
 ]
 
 export type Composition = Partial<Record<Family, string>>   // variant ids, comma-separated, or 'off'
@@ -94,7 +108,9 @@ export function presetOf(c: Composition): string | null {
 
 const SLOTS = ['tl', 'tr', 'bl', 'br', 'top', 'bottom', 'left', 'right'] as const
 
-export interface Placement { x: number; y: number; c?: boolean }
+/** Where a piece was put, as fractions of the view: top-left, or its centre when `c`. `auto`: placed by the
+ *  view to keep pieces apart (it may move it again); without it, the user put it there. */
+export interface Placement { x: number; y: number; c?: boolean; auto?: boolean; /** auto only: scaled down to fit */ z?: number }
 export const TIER_OPACITY = { 1: 1, 2: 0.58, 3: 0.3 } as const
 
 const SHAPES = 'line, path, circle, rect, polyline, polygon, ellipse'
@@ -196,6 +212,7 @@ function Piece({ k, label, ctx, pos, arrange, edit, live, look, dim, ghost, onMo
   const sel = edit?.sel === k
   const cls = 'hud-piece' + (live ? ' hud-mod--live' : '') + (arrange ? ' hud-piece--arrange' : '') + (edit ? ' hud-piece--edit' : '') + (sel ? ' hud-piece--sel' : '') + (pos ? ' hud-piece--placed' : '') + (ghost ? ' hud-piece--ghost' : '')
   const place = pos ? { left: pos.x * ctx.w, top: pos.y * ctx.h, transform: pos.c ? 'translate(-50%, -50%)' : undefined } : undefined
+  const zoom = (look?.size ?? 1) * (pos?.z ?? 1)
   return (
     <div className={cls} data-hud={k} style={place} onPointerDown={edit && !live ? start : undefined}>
       {(arrange || edit) && (
@@ -210,7 +227,7 @@ function Piece({ k, label, ctx, pos, arrange, edit, live, look, dim, ghost, onMo
             data-tip="Remove" data-tip-key="⌫">×</button>}
         </div>
       )}
-      <div ref={body} className="hud-piece__body" style={{ opacity: TIER_OPACITY[tier] * (dim ? 0.16 : 1), zoom: look?.size && look.size !== 1 ? look.size : undefined }}>
+      <div ref={body} className="hud-piece__body" style={{ opacity: TIER_OPACITY[tier] * (dim ? 0.16 : 1), zoom: zoom !== 1 ? zoom : undefined }}>
         {children}
       </div>
     </div>
@@ -279,12 +296,80 @@ function fitStrips(el: HTMLElement | null) {
   }
 }
 
+const PAD = 10, EDGE = 24, STEP = 12
+/** The visible box of a piece (its body, which carries the size). */
+const boxOf = (p: Element) => (p.querySelector(':scope > .hud-piece__body') ?? p).getBoundingClientRect()
+const hits = (x: number, y: number, w: number, h: number, r: DOMRect) => x < r.right + PAD && x + w > r.left - PAD && y < r.bottom + PAD && y + h > r.top - PAD
+/** The nearest place on the view where a piece of this size covers nothing in `blockers` and stays inside the
+ *  margins, preferring not to cover the model. Top-left as fractions of the view, or null if nothing fits. */
+function freeSpot(view: DOMRect, me: DOMRect, blockers: DOMRect[], model: Rect | null): Placement | null {
+  const w = me.width, h = me.height
+  let best: Placement | null = null, score = Infinity
+  for (let y = view.top + EDGE; y + h <= view.bottom - EDGE; y += STEP) {
+    for (let x = view.left + EDGE; x + w <= view.right - EDGE; x += STEP) {
+      if (blockers.some((r) => hits(x, y, w, h, r))) continue
+      let cover = 0
+      if (model) {
+        const ox = Math.max(0, Math.min(x - view.left + w, model.r) - Math.max(x - view.left, model.l))
+        const oy = Math.max(0, Math.min(y - view.top + h, model.b) - Math.max(y - view.top, model.t))
+        cover = (ox * oy) / (w * h)
+      }
+      const sc = Math.hypot(x - me.left, y - me.top) + cover * 700
+      if (sc < score) { score = sc; best = { x: (x - view.left) / view.width, y: (y - view.top) / view.height } }
+    }
+  }
+  return best
+}
+/** Things on screen pieces must not land on: the present bar. */
+const fixedBlockers = () => [...document.querySelectorAll('.present-bar')].map((e) => e.getBoundingClientRect())
+
+/** Settles the pieces on the view so none overlaps another or the bar, or runs off it: pieces in `fixed` (and the host's
+ *  own controls) stay put and go first; the rest, in reading order, keep their place if it is free or
+ *  move to the nearest free spot. Moves are marked `auto` so a later pass may move them again. Returns
+ *  how many moved. */
+export function settle(root: HTMLElement, model: Rect | null, onMove: (k: string, p: Placement) => void, fixed: (k: string) => boolean, scaleOf: (k: string) => number = () => 1, skip: string | null = null) {
+  const view = root.getBoundingClientRect()
+  const pieces = [...root.querySelectorAll<HTMLElement>('.hud-piece[data-hud]')]
+    .filter((p) => !p.parentElement?.closest('.hud-piece'))
+    .map((p) => ({ k: p.dataset.hud!, r: boxOf(p) }))
+    .filter((p) => p.r.width > 0 && p.k !== skip)   // a piece only previewed from the library takes no part
+  const stays = (k: string) => k.startsWith('chrome:') || fixed(k)
+  const order = [...pieces.filter((p) => stays(p.k)), ...pieces.filter((p) => !stays(p.k)).sort((a, b) => a.r.top - b.r.top || a.r.left - b.r.left)]
+  const settled: DOMRect[] = fixedBlockers()
+  let moved = 0, stuck = 0
+  for (const p of order) {
+    // a piece that runs off the view (a tall corner stack) needs a place as much as one on top of another
+    const outside = p.r.left < view.left - 1 || p.r.top < view.top - 1 || p.r.right > view.right + 1 || p.r.bottom > view.bottom + 1
+    if (stays(p.k) || (!outside && !settled.some((r) => hits(p.r.left, p.r.top, p.r.width, p.r.height, r)))) { settled.push(p.r); continue }
+    // full size first; when the view is full, smaller (85, 70, 55 %) rather than on top of another piece
+    const s0 = scaleOf(p.k), w = p.r.width / s0, h = p.r.height / s0
+    let done = false
+    for (const z of [1, 0.85, 0.7, 0.55]) {
+      const spot = freeSpot(view, new DOMRect(p.r.left, p.r.top, w * z, h * z), settled, model)
+      if (!spot) continue
+      onMove(p.k, { ...spot, auto: true, z: z < 1 ? z : undefined })
+      settled.push(new DOMRect(view.left + spot.x * view.width, view.top + spot.y * view.height, w * z, h * z))
+      moved++
+      done = true
+      break
+    }
+    if (!done) { stuck++; settled.push(p.r) }
+  }
+  return { moved, stuck }
+}
+
 /** Draws the chosen modules over the view. `chrome` lets the host put its own controls into slots. */
-export function HudLayer({ ctx, compose, chrome, positions = {}, arrange = false, edit, looks = {}, hl = null, ghost = null, texts = [], onMove, onText }: {
+export function HudLayer({ ctx, compose, chrome, positions = {}, arrange = false, edit, looks = {}, hl = null, ghost = null, texts = [], autoArrange = false, onCrowded, tidyKey = 0, onMove, onText }: {
   ctx: HudCtx; compose: Composition; chrome?: Partial<Record<(typeof SLOTS)[number], ReactNode>>
   positions?: Record<string, Placement>; arrange?: boolean; edit?: Edit; looks?: Record<string, Look>; hl?: string | null
-  /** The piece being previewed from the library: drawn with a "Preview" tag. */
+  /** The piece being previewed from the library (outlined, the rest dimmed). */
   ghost?: string | null
+  /** Keep pieces apart: whenever pieces come or go, any that overlaps another moves to a free spot. */
+  autoArrange?: boolean
+  /** After settling: how many pieces found no room even at 55 %. */
+  onCrowded?: (n: number) => void
+  /** Bump to tidy up every piece on the view (pieces the user placed may move too). */
+  tidyKey?: number
   texts?: { id: string; text: string }[]
   onMove?: (k: string, p: Placement | null) => void; onText?: (id: string, t: string | null) => void
 }) {
@@ -301,7 +386,27 @@ export function HudLayer({ ctx, compose, chrome, positions = {}, arrange = false
     <Piece k={`chrome:${s}`} label="controls" ctx={ctx} arrange={arrange} onMove={onMove} live>{chrome[s]}</Piece>
   ) : null)
   const root = useRef<HTMLDivElement>(null)
-  useLayoutEffect(() => fitStrips(root.current))
+  // whenever pieces come or go, settle them (a piece only previewed does not count); slot stacks shift
+  // as pieces move out of them, so settle again until nothing moves (a few passes at most)
+  const sig = chosen.map(key).filter((k) => k !== ghost).join() + '|' + texts.map((t) => t.id).join()
+  const settledSig = useRef('')
+  const tidied = useRef(tidyKey)
+  useLayoutEffect(() => {
+    fitStrips(root.current)
+    const all = tidyKey !== tidied.current
+    if (!onMove || !root.current || (!all && (!autoArrange || sig === settledSig.current))) return
+    tidied.current = tidyKey
+    settledSig.current = sig
+    const fixed = (k: string) => !all && !!positions[k] && !positions[k].auto
+    let pass = 0
+    const run = () => {
+      if (!root.current) return
+      const { moved, stuck } = settle(root.current, ctx.rect, onMove, fixed, (k) => positions[k]?.z ?? 1, ghost)
+      if (moved && ++pass < 4) setTimeout(run, 60)
+      else onCrowded?.(stuck)
+    }
+    run()
+  })
   return (
     <div ref={root} className={'hud-layer' + (arrange ? ' hud-layer--arrange' : '') + (edit ? ' hud-layer--edit' : '')}>
       {free.map((m) => <Free key={key(m)} k={key(m)} live={m.interactive} look={looks[key(m)]} dim={dim(key(m))} ghost={ghost === key(m)}>{m.render(ctx)}</Free>)}

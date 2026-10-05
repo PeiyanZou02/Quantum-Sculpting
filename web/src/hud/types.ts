@@ -2,7 +2,7 @@
 // QLNav4, QLControls4, QLOverlay4, QLGlyphs4, QLData4) is ported as HudModules that draw over the
 // 3D view from this context. The composer turns on any number of variants per family.
 import type { ReactNode } from 'react'
-import type { GridInfo, JobView, MeshReport, ModelInfo, ProcMeta } from '../api'
+import type { AtlasJobRow, GridInfo, JobView, MeshReport, ModelInfo, ProcMeta } from '../api'
 import type { Axis } from '../qs/grid'
 
 export type Vec3 = [number, number, number]
@@ -24,6 +24,31 @@ export type Family =
   | 'slicecard'  // the section map and cutting plane, infographic
   | 'cards'      // infographic data cards: quantum result, print check, model, grid
   | 'stages'     // the four stages side by side, rendered live from the same camera
+  // Navigation (QLNav4 E–K)
+  | 'timeline'   // run timeline: steps as time ranges, tiles as lanes
+  | 'bars'       // tabs with a sliding underline, segmented progress, breadcrumb with values
+  | 'indexes'    // ruler index, expanding index
+  // Quantum glyphs (QLGlyphs4)
+  | 'backend'    // backend path of a job: hops, the active one dashed
+  | 'register'   // the qubit register of a cell: qubits, weights, rotation
+  | 'rotation'   // Rx θ on a circle, strength
+  | 'shots'      // shots and error: 1/√shots
+  | 'processing' // which engine: Gaussian, emulation, Atlas
+  | 'blur'       // how the blur works: strength, reach, style, qubit weights, mixing
+  | 'pulse'      // pulse schedule: Rx / Ry gates on qubit lines
+  | 'usage'      // Atlas usage, result size by grid, request rate
+  // Data and runtime (QLData4)
+  | 'figures'    // readout + ruler, kept volume, chip, level vs kept
+  | 'density'    // the value histogram with the level
+  | 'runtime'    // the runtime log
+  | 'tiles'      // tiles of the grid and their state
+  | 'field'      // signed distance on the slice
+  | 'values'     // voxel values, coverage
+  | 'levels'     // level sweep: one field at five thresholds
+  // Controls as readouts (QLControls4)
+  | 'dials'      // dials D1–D5 showing a parameter
+  | 'numbers'    // number controls N1–N6: drum, odometer, pull rod, detent slide, gate, dual scale
+  | 'viewcam'    // trackball, view camera from the top and from the side
 
 export interface HudPin { n: number; cell: Vec3; p?: Vec3; lines: [string, string]; x: number | null; y: number | null }
 
@@ -50,7 +75,7 @@ export interface HudCtx {
   proc: ProcMeta | null
   job: JobView | null
   report: MeshReport | null
-  q: { mode: string; strength: number; reach: number; style: string; axes: number[]; shots: number | null; run: string; tiling: string }
+  q: { mode: string; sigma: number; strength: number; reach: number; style: string; axes: number[]; shots: number | null; run: string; tiling: string }
   level: number
   slice: { axis: Axis; index: number }
   /** Hovered cell under the probe (px in viewport), or null. */
@@ -64,10 +89,21 @@ export interface HudCtx {
   // actions the marks may offer
   orbitTo: (az: number, el: number) => void
   setSlice: (p: { axis?: Axis; index?: number }) => void
+  /** Sets the mesh level (rebuilds the mesh locally, as the level slider does). */
+  setLevel?: (v: number) => void
   goStep: (i: number) => void
   /** Off-screen renders of single layers from the current camera (PNG data URLs). */
   thumbs?: (names: ('model' | 'voxels' | 'processed' | 'result')[], w: number, h: number) => Partial<Record<string, string>>
+  /** Raw grids for views of the data: input coverage and the quantum result, index (x·n + y)·n + z, z up. */
+  data: { grid: { n: number; data: Float32Array } | null; proc: { n: number; data: Float32Array } | null }
+  /** The runtime log, newest last (level 'net' lines are requests: "GET /api/… 200 · 12 ms"). */
+  log: { t: number; text: string; level?: 'info' | 'warn' | 'error' | 'net' }[]
+  /** Atlas jobs the service knows about (never fetched by a module). */
+  atlasJobs: AtlasJobRow[]
 }
+
+/** A family of variants, as listed in the compose library. */
+export interface FamilyDef { id: Family; title: string; desc: string; modules: HudModule[] }
 
 export interface HudModule {
   family: Family

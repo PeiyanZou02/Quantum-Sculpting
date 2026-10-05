@@ -345,7 +345,11 @@ export function Stage() {
       busy: Object.values(st.busy).some(Boolean),
       orbitTo: (az, el) => e.orbitTo(az, el),
       thumbs: (names, tw, th) => e.thumbs(names, tw, th),
+      data: { grid: gridData, proc: procData },
+      log: st.log,
+      atlasJobs: st.atlasJobs,
       setSlice: (p) => st.setSlice(p),
+      setLevel: (v) => st.setM({ level: Math.min(0.95, Math.max(0.05, v)) }),
       goStep: (i) => { const v = (['model', 'voxels', 'processed', 'result'] as View[])[i]; if (avail[v]) st.setView(v) },
     }
   }
@@ -471,6 +475,7 @@ export function Stage() {
             edit={present && pr.composing && !pr.bare && !pr.recording ? { sel: pr.sel, onSelect: pr.setSel, onRemove: pr.removePiece } : undefined}
             looks={present ? pr.looks : undefined} hl={present ? pr.hl : null} ghost={present ? pr.preview : null}
             texts={present ? pr.texts : undefined} onText={pr.setText}
+            autoArrange={present} onCrowded={pr.setCrowded} tidyKey={present ? pr.tidyKey : 0}
             positions={Object.fromEntries(Object.entries(pr.pos).filter(([k]) => k.startsWith(pr.mode + '|')).map(([k, v]) => [k.slice(pr.mode.length + 1), v]))}
             onMove={(k, p) => pr.setPos(`${pr.mode}|${k}`, p)}
             chrome={present ? { top: <PresentChrome /> } : {

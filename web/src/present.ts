@@ -7,7 +7,7 @@ import { create } from 'zustand'
 export type Mode = 'lab' | 'present'
 export interface Shot { az: number; el: number; dist: number }
 /** Fractions of the view: the piece's top-left, or its centre when `c` (where a dragged component was dropped). */
-export interface Pos { x: number; y: number; c?: boolean }
+export interface Pos { x: number; y: number; c?: boolean; auto?: boolean; z?: number }
 /** How one component is drawn: emphasis tier (1 primary, 2 secondary, 3 tertiary), line weight and dash
  *  spacing as multiples of its own, size (corner and edge pieces), and whether it is hidden. */
 export interface Look { tier?: 1 | 2 | 3; weight?: number; dash?: number; size?: number; hidden?: boolean }
@@ -19,6 +19,7 @@ export interface Guides { box: boolean; floor: boolean; div: number }
 /** The slice sweep: the range it covers (fractions of the grid height), layers per step, seconds for one
  *  pass through the range, and whether it goes up and down, only up or only down. */
 export interface Sweep { from: number; to: number; step: number; sec: number; mode: 'bounce' | 'up' | 'down' }
+export type PanelTab = 'view' | 'layers' | 'library' | 'notes' | 'motion' | 'capture'
 export interface Saved { id: string; name: string; compose: Record<string, string>; pos: Record<string, Pos>; looks: Record<string, Look>; texts: TextNote[]; guides?: Guides }
 
 interface P {
@@ -45,6 +46,19 @@ interface P {
   /** A component ("family:variant") shown on the view while its library tile is hovered; not part of the composition. */
   preview: string | null
   setPreview: (k: string | null) => void
+  /** The compose panel's page, the library category on show, and the families opened in it. */
+  tab: PanelTab
+  setTab: (t: PanelTab) => void
+  libCat: string
+  setLibCat: (c: string) => void
+  opened: string[]
+  toggleOpened: (family: string) => void
+  /** Pieces that found no free room on the view, even scaled down. */
+  crowded: number
+  setCrowded: (n: number) => void
+  /** Bumped by "Tidy up": the view moves overlapping pieces apart. */
+  tidyKey: number
+  tidyUp: () => void
   /** Put a component on the view: at a point (centre, fractions of the view) or in its usual place. */
   place: (family: string, id: string, at?: { x: number; y: number }) => void
   /** Take a piece off the view. */
@@ -121,7 +135,7 @@ const keep = (s: P) => {
   try {
     localStorage.setItem(KEY, JSON.stringify({
       v: VERSION, mode: s.mode, compose: s.compose, pos: s.pos, shots: s.shots, spin: s.spin, reelSec: s.reelSec, spinSpeed: s.spinSpeed,
-      cycleSec: s.cycleSec, drawer: s.drawer, looks: s.looks, spinDir: s.spinDir, texts: s.texts, pngInk: s.pngInk, saved: s.saved, current: s.current, guides: s.guides, sweepCfg: s.sweepCfg,
+      cycleSec: s.cycleSec, drawer: s.drawer, looks: s.looks, spinDir: s.spinDir, texts: s.texts, pngInk: s.pngInk, saved: s.saved, current: s.current, guides: s.guides, sweepCfg: s.sweepCfg, tab: s.tab, libCat: s.libCat, opened: s.opened,
     }))
   } catch { /* per-viewer only */ }
 }
@@ -156,6 +170,16 @@ export const usePresent = create<P>()((set, get) => {
     },
     arrange: false,
     setArrange: (v) => set({ arrange: v }),
+    tab: saved.tab ?? 'view',
+    setTab: (t) => up({ tab: t }),
+    libCat: saved.libCat ?? 'marks',
+    setLibCat: (c) => up({ libCat: c }),
+    opened: saved.opened ?? [],
+    toggleOpened: (f) => up({ opened: get().opened.includes(f) ? get().opened.filter((x) => x !== f) : [...get().opened, f] }),
+    crowded: 0,
+    setCrowded: (n) => { if (n !== get().crowded) set({ crowded: n }) },
+    tidyKey: 0,
+    tidyUp: () => set({ tidyKey: get().tidyKey + 1 }),
     composing: false,
     setComposing: (v) => set({ composing: v, sel: v ? get().sel : null }),
     sel: null,
@@ -170,7 +194,9 @@ export const usePresent = create<P>()((set, get) => {
       const compose = cur.includes(id) ? s.compose : { ...s.compose, [family]: [...cur, id].join(',') }
       const pos = { ...s.pos }
       if (at) pos[`${PRE}${family}:${id}`] = { x: at.x, y: at.y, c: true }
-      up({ compose, pos, sel: at ? `${family}:${id}` : s.sel })   // a drop selects what was dropped; a click from the library does not
+      // a drop selects what was dropped and stays where it fell; a click puts it in its usual place (the view
+      // moves it to a free spot if that is taken)
+      up({ compose, pos, sel: at ? `${family}:${id}` : s.sel })
     },
     removePiece: (key) => {
       const s = get()
