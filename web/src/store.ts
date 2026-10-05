@@ -121,6 +121,7 @@ const current = (k: string, t: number) => seq[k] === t
 
 let watching: ReturnType<typeof setTimeout> | null = null
 let initing = false
+const resuming = () => { try { return sessionStorage.getItem('qs-resume') === '1' } catch { return false } }
 
 // One request in flight per stage; a new request cancels its own stage and everything downstream.
 const VOX = 0, PROC = 1, MESH = 2
@@ -157,6 +158,7 @@ export const useStore = create<S>()((set, get) => {
   }
 
   async function adoptModel(info: ModelInfo, chain = true) {
+    try { sessionStorage.setItem('qs-resume', '1') } catch { /* private mode: always start fresh */ }
     set({ model: info, up: info.up, grid: null, gridData: null, proc: null, procData: null, report: null, resultMesh: null, exported: null })
     const { mesh } = await api.modelMesh()
     set({ modelMesh: mesh })
@@ -279,7 +281,9 @@ export const useStore = create<S>()((set, get) => {
         const st = await api.state()
         set({ key: st.key })
         get().refreshRecent()
-        if (st.model) {
+        // A fresh tab starts empty, as on another computer. Only a reload of a tab that was already
+        // working (or a run still going on Atlas) picks up the model the service holds.
+        if (st.model && (resuming() || st.job)) {
           await adoptModel(st.model, false)
           if (st.grid) {
             set({ grid: st.grid, vox: { n: st.grid.n, fill: st.grid.fill, values: st.grid.values, pad: st.grid.pad } })
