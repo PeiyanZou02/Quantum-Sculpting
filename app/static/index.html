@@ -131,6 +131,7 @@
           <button type="button" role="radio" data-value="gaussian" aria-checked="false">高斯替身</button>
           <button type="button" role="radio" data-value="emulator" aria-checked="true">本地模拟</button>
           <button type="button" role="radio" data-value="atlas" aria-checked="false">Atlas</button>
+          <button type="button" role="radio" data-value="nations" aria-checked="false">演化</button>
         </div>
         <p class="help" id="mode-help"></p>
       </div>
@@ -140,6 +141,23 @@
           <div class="field-head"><label for="sigma">模糊半径 sigma</label><output id="sigma-out" class="mono"></output></div>
           <input type="range" class="slider" id="sigma" min="0.3" max="3" step="0.1" value="1">
         </div>
+      </div>
+
+      <div id="nations-params" class="group" hidden>
+        <div class="field">
+          <div class="field-head"><label for="nations-k">国家数</label><output id="nations-k-out" class="mono"></output></div>
+          <input type="range" class="slider" id="nations-k" min="3" max="16" step="1" value="12">
+        </div>
+        <div class="field">
+          <div class="field-head"><label for="nations-turns">回合数</label><output id="nations-turns-out" class="mono"></output></div>
+          <input type="range" class="slider" id="nations-turns" min="5" max="300" step="5" value="60">
+        </div>
+        <div class="field">
+          <div class="field-head"><label for="nations-spread">能长多远（占网格的 %）</label><output id="nations-spread-out" class="mono"></output></div>
+          <input type="range" class="slider" id="nations-spread" min="0" max="8" step="0.5" value="4">
+          <p class="help">筑的墙、长出来的角，最多离原来的表面这么远。设成 0 就只有吞并、裂缝、逃离和萎缩。</p>
+        </div>
+        <label class="toggle"><input type="checkbox" class="switch" id="nations-grooves"><span>最后在国界上刻一道沟</span></label>
       </div>
 
       <div id="quantum-params" class="group">
@@ -310,6 +328,18 @@
   </aside>
 
   <aside class="inspector" aria-label="检查">
+    <section class="card" id="saga-card" hidden>
+      <header class="card-head"><h2>国家</h2><output id="saga-turn" class="mono muted"></output></header>
+      <svg class="saga-graph" id="saga-graph" viewBox="0 0 280 280" role="img" aria-label="国家之间的关系"></svg>
+      <p class="help">圆是国家，越大地盘越大。线是关系，越粗越亲，深色的是盟友。红色箭头是这一回合的进攻。虚线圈是已经离开大陆的。</p>
+      <h3 class="subhead">这一回合</h3>
+      <ul class="saga-list" id="saga-now"></ul>
+      <div class="saga-nations" id="saga-nations"></div>
+      <p class="help">每国每回合被问一件事。百分数是测量之前它答「是」的概率，箭头后面是测出来的结果。</p>
+      <h3 class="subhead">大事记</h3>
+      <ul class="saga-list saga-log" id="saga-log"></ul>
+    </section>
+
     <section class="card">
       <header class="card-head"><h2>切片</h2><output id="slice-out" class="mono muted"></output></header>
       <div class="slice-frame"><canvas id="slice-canvas" width="280" height="280"></canvas></div>
@@ -358,6 +388,11 @@
         <p class="empty-text">在左侧选择模型文件，或使用测试杯子。也可以把文件拖到这里。</p>
       </div>
       <div class="drop-hint" id="drop-hint" hidden>松开以载入模型</div>
+    </div>
+    <div class="scan-bar" id="turn-bar" hidden>
+      <button type="button" id="turn-play" class="btn btn-sm btn-secondary">播放</button>
+      <input type="range" class="slider" id="turn-t" min="0" max="30" step="1" value="30" aria-label="第几回合">
+      <output id="turn-out" class="mono muted"></output>
     </div>
     <div class="scan-bar" id="scan-bar" hidden>
       <button type="button" id="scan-play" class="btn btn-sm btn-secondary">播放</button>

@@ -27,6 +27,7 @@ from werkzeug.exceptions import HTTPException
 import atlas
 import emulator
 import levelset
+import nations
 import pipeline
 import tiling
 
@@ -36,7 +37,8 @@ INPUT, GRIDS, OUTPUT = ROOT / "input", ROOT / "grids", ROOT / "output"
 
 MODEL_TYPES = {".stl", ".obj", ".ply", ".glb", ".off"}
 GRID_SIZES = (16, 32, 64, 128, 256)
-MODES = ("gaussian", "emulator", "atlas")
+MODES = ("gaussian", "emulator", "atlas", "nations")
+NATIONS_MAX_GRID = 128  # 「演化」每回合都要在整个网格上改领土，再大每一回合就要好几秒
 ATLAS_TIMEOUT = 15 * 60
 ATLAS_POLL = 2.0
 ATLAS_PARALLEL = 3      # 同时在 Atlas 上跑的分块数
@@ -73,6 +75,7 @@ class State:
         self.grid_params, self.grid_id = None, 0
         self.processed = None
         self.proc_meta, self.proc_id = None, 0
+        self.frames = None          # 「演化」每一回合结束时的领土图，给界面一回合一回合地放
         self.tiles_cache = None
         self.levelset_cache = None
         self.advect_cache = None
@@ -279,7 +282,7 @@ def set_model(mesh, name, file, up="+z", builtin=False):
         S.raw_mesh, S.name, S.file, S.up, S.builtin = mesh, name, file, up, builtin
         S.mesh = pipeline.orient(mesh, up)
         S.model_id += 1
-        S.grid = S.processed = S.proc_meta = None
+        S.grid = S.processed = S.proc_meta = S.frames = None
 
 
 def model_info():
@@ -419,7 +422,7 @@ def voxelize():
             S.grid, S.scale, S.transform = grid, scale, transform
             S.grid_params = {"pad": pad, "fill": fill, "values": values}
             S.grid_id += 1
-            S.processed = S.proc_meta = None
+            S.processed = S.proc_meta = S.frames = None
             if cached:                                   # 后面「推动表面」用同样的细化倍数时不用再算
                 S.levelset_cache = ((S.model_id, S.grid_id, cached[0]), cached[1])
             return jsonify(grid_info())
@@ -461,6 +464,11 @@ def read_process_request(b):
     tile_mode = b.get("tiling") if b.get("tiling") in tiling.MODES else "cube"
     if mode == "gaussian":
         return mode, run, {"sigma": clamp(b.get("sigma"), 0.2, 6.0, 1.0)}, tile_mode
+    if mode == "nations":
+        return mode, run, {"k": int(clamp(b.get("k"), 2, nations.MAX_ALIVE, 12)),
+                           "turns": int(clamp(b.get("turns"), 1, 300, 60)),
+                           "reach": clamp(b.get("spread"), 0.0, 10.0, 4.0),     # 占网格边长的百分之几
+                           "grooves": bool(b.get("grooves"))}, tile_mode
     style = str(b.get("style") or "x")
     if not re.fullmatch(r"[xy]{1,4}", style):
         raise ValueError("style 只能由 x、y 组成，最多 4 个字母。")
@@ -481,6 +489,7 @@ def read_process_request(b):
 def apply_processed(raw, meta):
     """调用方必须已经持有 S.lock。"""
     S.processed = pipeline.normalize(raw, float(S.grid.sum()))
+    S.frames = None
     S.proc_id += 1
     S.proc_meta = {**meta, "proc_id": S.proc_id, "grid_id": S.grid_id,
                    "min": round(float(raw.min()), 5), "max": round(float(raw.max()), 5)}
@@ -496,6 +505,9 @@ def process():
             raise ValueError("先完成体素化。")
         grid, grid_id = S.grid, S.grid_id
     meta = {"mode": mode, "run": run, "params": params, "cached": False, "job_id": None, "tiles": None}
+
+    if mode == "nations":
+        return evolve(grid, grid_id, run, params, meta)
 
     if mode != "atlas":
         with heavy(PROCESS) as check:
@@ -553,6 +565,90 @@ def process():
         threading.Thread(target=_run_atlas_job, daemon=True,
                          args=(job, grid, grid_id, params, meta, key, tile_mode)).start()
         return jsonify(_job_view(job))
+
+
+def evolve(grid, grid_id, run, params, meta):
+    """「演化」：把体素分成几个国家，一回合一回合地改领土（见 nations.py）。结果是最后的形状，不做归一化：
+    这里体素只有「有」和「没有」，而且总量本来就会变（长出来的、打没了的）。"""
+    n = grid.shape[0]
+    if n > NATIONS_MAX_GRID:
+        raise ValueError(f"「演化」最大支持 {NATIONS_MAX_GRID}³ 的网格，先把网格尺寸调小。")
+    with heavy(PROCESS) as check:
+        t0 = time.time()
+        seed = int(hashlib.sha256(run.encode()).hexdigest()[:8], 16)
+        whole = grid >= 0.5
+        if not whole.any():
+            raise ValueError("体素网格里没有实体格子。")
+        # 世界只取模型周围的一个盒子：留出能长出去、能逃出去的余地。盒子的边就是世界的尽头
+        reach = params["reach"] / 100.0 * n
+        margin = int(np.ceil(reach)) + n // 8
+        box = []
+        for axis in range(3):
+            hit = np.flatnonzero(whole.any(axis=tuple(a for a in range(3) if a != axis)))
+            box.append((max(int(hit[0]) - margin, 0), min(int(hit[-1]) + margin + 1, n)))
+        crop = tuple(slice(a, b) for a, b in box)
+        solid = whole[crop]
+        world = nations.found(solid, params["k"], seed)
+        size = np.bincount(world.owner[world.owner >= 0], minlength=world.total)
+        shared, _ = nations.borders(world.owner, world.total)
+        founding = {"turn": 0, "size": size.tolist(), "action": [None] * world.total, "attacks": [], "events": [],
+                    "ties": [[i, j, round(t, 2)] for (i, j), t in sorted(world.ties.items())],
+                    "borders": [[i, j] for i in range(world.total) for j in range(i + 1, world.total) if shared[i, j]],
+                    "home": np.round(world.home[:world.total], 1).tolist(), "exiled": []}
+        frames = [world.owner.copy()]
+        for _ in range(params["turns"]):
+            check()
+            nations.step(world, seed=seed, reach=reach)
+            frames.append(world.owner.copy())
+            if not (world.owner >= 0).any():
+                break                                    # 全都灭亡了，历史到此为止
+        if params["grooves"]:
+            frames[-1] = nations.grooves(frames[-1])
+        final = np.zeros(grid.shape, dtype=bool)
+        final[crop] = frames[-1] >= 0
+        count = lambda kind: sum(1 for r in world.history for e in r["events"] if e["type"] == kind)   # noqa: E731
+        sizes = np.bincount(frames[-1][frames[-1] >= 0], minlength=world.total)
+        with S.lock:
+            if S.grid_id != grid_id:
+                raise Superseded()
+            S.processed = final.astype(np.float32)
+            S.proc_id += 1
+            S.frames = {"proc_id": S.proc_id, "n": n, "k": params["k"], "box": box,
+                        "history": [founding] + world.history, "total": world.total,
+                        "parent": world.parent, "shape": list(solid.shape),
+                        "data": [np.ascontiguousarray((f + 1).astype(np.uint8)) for f in frames]}
+            S.proc_meta = {**meta, "seconds": round(time.time() - t0, 2), "proc_id": S.proc_id,
+                           "grid_id": S.grid_id, "min": 0.0, "max": 1.0,
+                           "nations": {"k": params["k"], "turns": len(frames) - 1, "total": world.total,
+                                       "alive": int((sizes > 0).sum()),
+                                       "wars": count("war"), "annexed": count("annex"), "died": count("death"),
+                                       "split": count("split"), "exiled": count("exile"),
+                                       "grown": int((final & ~whole).sum()), "carved": int((whole & ~final).sum()),
+                                       "start": int(whole.sum()), "end": int(final.sum())}}
+            return jsonify(status="done", meta=S.proc_meta)
+
+
+@app.get("/api/nations/frame/<int:turn>")
+def nations_frame(turn):
+    """第 turn 回合结束时的领土图（第 0 张是建国时的）。"""
+    with S.lock:
+        frames = S.frames
+        if frames is None or not 0 <= turn < len(frames["data"]):
+            abort(404)
+        return binary(frames["data"][turn].tobytes(), {
+            "n": frames["n"], "k": frames["k"], "box": frames["box"], "turn": turn,
+            "turns": len(frames["data"]) - 1, "proc_id": frames["proc_id"]})
+
+
+@app.get("/api/nations/history")
+def nations_history():
+    """整段历史：每一回合各国问了什么、测量前的概率、答了什么、做了什么，关系、边界和大事。"""
+    with S.lock:
+        frames = S.frames
+        if frames is None:
+            abort(404)
+        return jsonify(proc_id=frames["proc_id"], k=frames["k"], total=frames["total"], parent=frames["parent"],
+                       shape=frames["shape"], turns=frames["history"])
 
 
 def _read_record(stem):

@@ -336,6 +336,37 @@ class Viewer {
     return count;
   }
 
+  // 「演化」的一帧：bytes 是盒子 box 里每格属于哪个国家（0 是空的），只画露在外面的，按国家上色
+  setOwners(name, bytes, box, n) {
+    const [[x0, x1], [y0, y1], [z0, z1]] = box;
+    const sy = y1 - y0, sz = z1 - z0, sx = x1 - x0;
+    const at = (x, y, z) => (x < 0 || y < 0 || z < 0 || x >= sx || y >= sy || z >= sz
+      ? 0 : bytes[(x * sy + y) * sz + z]);
+    const cells = [];
+    let count = 0;
+    for (let x = 0; x < sx; x++) {
+      for (let y = 0; y < sy; y++) {
+        for (let z = 0; z < sz; z++) {
+          const who = bytes[(x * sy + y) * sz + z];
+          if (!who) continue;
+          count++;
+          if (!at(x - 1, y, z) || !at(x + 1, y, z) || !at(x, y - 1, z) || !at(x, y + 1, z)
+              || !at(x, y, z - 1) || !at(x, y, z + 1)) cells.push(x + x0, y + y0, z + z0, who);
+        }
+      }
+    }
+    const mesh = new THREE.InstancedMesh(this.box, this.voxelMaterials[name] || this.voxelMaterials.voxels,
+      cells.length / 4);
+    const matrix = new THREE.Matrix4();
+    for (let k = 0; k < cells.length / 4; k++) {
+      matrix.makeTranslation(cells[k * 4], cells[k * 4 + 1], cells[k * 4 + 2]);
+      mesh.setMatrixAt(k, matrix);
+      mesh.setColorAt(k, NATION_COLORS[(cells[k * 4 + 3] - 1) % NATION_COLORS.length]);
+    }
+    this.put(name, mesh);
+    return count;
+  }
+
   show(name) {
     this.active = name;
     for (const [key, layer] of Object.entries(this.layers)) layer.visible = this.shows(key);
@@ -345,14 +376,24 @@ class Viewer {
   }
 }
 
+// 国家的颜色。这里颜色是有意义的（区分是哪一国），深浅两种主题下都看得清
+const NATION_HEX = ['#d9634c', '#4b8fd9', '#6fb85e', '#e0b040', '#9a6cd6', '#45b5b5', '#e07fb0', '#8f8f8f',
+  '#c7783c', '#6478c8', '#a9c450', '#d6508a', '#57a882', '#cf9f78', '#7a66a8', '#b8b864',
+  '#508c64', '#c86464', '#64b4dc', '#b48cc8', '#e6965a', '#78c8a0', '#96785a', '#5a5aa0'];
+const NATION_COLORS = NATION_HEX.map((hex) => new THREE.Color(hex));
+const NATION_NAMES = 'ABCDEFGHIJKLMNOPQRSTUVWX';
+
 // ── 状态 ────────────────────────────────────────────────────────────────
 
 const VIEWS = ['model', 'voxels', 'processed', 'result', 'scan'];
-const MODE_LABEL = { gaussian: '高斯替身', emulator: '本地模拟', atlas: 'Atlas' };
+const MODE_LABEL = { gaussian: '高斯替身', emulator: '本地模拟', atlas: 'Atlas', nations: '演化' };
 const MODE_HELP = {
   gaussian: '普通的高斯模糊，只用来检查流程是否走得通，和量子效果无关。',
   emulator: '在本机近似模拟 Quantum Blur Core，分块方式和 Atlas 一样，拖动参数会实时更新。最终效果以 Atlas 的结果为准。',
   atlas: '把体素网格提交给 Atlas 的 blur-core-v1，大网格会自动分块。相同参数和实验名的结果会缓存，不会重复提交。',
+  nations: '把模型分成几块，每块是一个「国家」、对应一个量子比特。测量之前每国都处在「做」和「不做」的叠加里；'
+    + '每回合问它一件事，测出来是什么就做什么：进攻或逃离，筑墙或分裂，生长或萎缩。国家会结盟、被吞并、'
+    + '独立、逃离大陆、灭亡。在本机模拟，不找 Atlas。换一个实验名就是另一段历史。',
 };
 const ATLAS_STATE = {
   submitting: '正在提交', queued: '排队中', pending: '排队中', running: '运行中', processing: '运行中',
@@ -373,6 +414,8 @@ const state = {
   adopt: false,         // 服务端有新的处理结果等着取（Atlas 任务完成、或刷新页面后恢复）
   partial: false,       // 「处理后」里现在是 Atlas 算到一半的样子
   frameNext: false,     // 下一次体素化完成后把相机对准模型
+  frame: null,          // 「演化」现在显示的那一回合：{ turn, turns, bytes, box, record }
+  saga: null,           // 「演化」的整段历史：每回合各国问了什么、答了什么、做了什么，关系和大事
   recovered: false,     // 服务重启后刚把模型送回去：Atlas 的结果从缓存里读回来
   atlasJob: null,
   run: null,            // 正在 Atlas 上跑的那次提交：分块进度、实验名
@@ -439,6 +482,10 @@ const processParams = () => ({
   style: $('style-select').value,
   axes: [0, 1, 2].filter((a) => $(`axis-${a}`).checked),
   shots: $('shots-input').value ? Number($('shots-input').value) : null,
+  k: Number($('nations-k').value),
+  turns: Number($('nations-turns').value),
+  spread: Number($('nations-spread').value),
+  grooves: $('nations-grooves').checked,
 });
 
 const meshParams = () => ({
@@ -585,7 +632,7 @@ async function doVoxelize(signal) {
   const { data } = await getGrid('/api/grid/input');
   state.grid = info;
   state.gridData = data;
-  state.proc = state.procData = state.report = state.meshError = null;
+  state.proc = state.procData = state.report = state.meshError = state.frame = null;
   state.adopt = state.partial = false;                 // 服务端换了网格，旧的处理结果已经作废
   stopScan();
   scan.z = scan.goal = 0;
@@ -631,6 +678,14 @@ async function adoptProcessed() {
   state.proc = meta.proc;
   state.partial = false;
   state.procData = data;
+  stopTurns();
+  state.frame = null;
+  state.saga = null;
+  if (meta.proc.mode === 'nations') {
+    state.saga = await getJSON('/api/nations/history');
+    sagaBuilt = null;
+    state.frame = await getTurn(meta.proc.nations.turns);     // 先显示最后一回合
+  }
   // 服务端会把实验名整理成能当文件名的样子，写回来保持一致
   if (document.activeElement !== $('run-input')) $('run-input').value = meta.proc.run;
   paintProcessed();
@@ -638,7 +693,238 @@ async function adoptProcessed() {
 
 function paintProcessed() {
   if (!state.procData) return;
+  if (state.frame) {
+    state.procCount = viewer.setOwners('processed', state.frame.bytes, state.frame.box, state.grid.n);
+    return;
+  }
   state.procCount = viewer.setVoxels('processed', state.procData, state.grid.n, level(), true);
+}
+
+// ── 演化：一回合一回合地看 ───────────────────────────────────────────────────
+
+const turns = { timer: null, busy: false };
+
+async function getTurn(turn) {
+  const { buffer, meta } = await getBinary(`/api/nations/frame/${turn}`);
+  return { turn: meta.turn, turns: meta.turns, box: meta.box, bytes: new Uint8Array(buffer),
+    record: state.saga ? state.saga.turns[meta.turn] : null };
+}
+
+async function showTurn(turn) {
+  if (turns.busy || !state.frame) return;
+  turns.busy = true;
+  try {
+    state.frame = await getTurn(Math.min(Math.max(turn, 0), state.frame.turns));
+    paintProcessed();
+  } catch (e) {
+    stopTurns();                                       // 结果已经换掉了，这一段历史取不到了
+  }
+  turns.busy = false;
+  renderTurns();
+  renderSaga();
+}
+
+function stopTurns() {
+  clearInterval(turns.timer);
+  turns.timer = null;
+}
+
+function playTurns() {
+  if (!state.frame) return;
+  const from = state.frame.turn >= state.frame.turns ? 0 : state.frame.turn + 1;
+  showTurn(from);
+  turns.timer = setInterval(() => {
+    if (!state.frame || state.frame.turn >= state.frame.turns) {
+      stopTurns();
+      renderTurns();
+    } else {
+      showTurn(state.frame.turn + 1);
+    }
+  }, Math.max(120, Math.min(350, 15000 / state.frame.turns)));     // 历史长就放快一点，整段大约 15 秒
+}
+
+function renderTurns() {
+  const view = currentView();
+  const on = !!state.frame && (view === 'processed' || view === 'scan');
+  $('turn-bar').hidden = !on || view === 'scan';
+  if (!on) return;
+  const f = state.frame;
+  $('turn-t').max = f.turns;
+  $('turn-t').value = f.turn;
+  paintSlider($('turn-t'));
+  $('turn-out').textContent = `第 ${f.turn} / ${f.turns} 回合`;
+  $('turn-play').textContent = turns.timer ? '暂停' : f.turn >= f.turns ? '重放' : '播放';
+  if (view === 'processed') $('stage-foot-text').textContent = footText('processed');
+}
+
+// ── 演化的侧栏：国家之间的关系、这一回合的事、大事记 ─────────────────────────────
+
+const ASK_LABEL = { attack: '进攻', defend: '防守', explore: '探索' };
+const DEATH_CAUSE = { conquered: '领土被占光', withered: '自己萎缩殆尽', war: '毁于战争', fled: '在逃离中消失', gone: '' };
+const MAJOR = new Set(['annex', 'death', 'split', 'exile', 'breach', 'ally', 'rift', 'war']);
+const SVG = 'http://www.w3.org/2000/svg';
+let sagaBuilt = null;     // 大事记是给哪一段历史建的
+
+function nationTag(i) {
+  const tag = element('span', 'nation');
+  const swatch = element('i');
+  swatch.style.background = NATION_HEX[i % NATION_HEX.length];
+  tag.append(swatch, NATION_NAMES[i % NATION_NAMES.length]);
+  return tag;
+}
+
+// 把一件事写成一句话。数组里的数字是国家，会换成带颜色的名字
+function eventParts(e) {
+  if (e.type === 'annex') return [e.who, ' 吞并了 ', e.whom];
+  if (e.type === 'death') return [e.who, ' 灭亡了', DEATH_CAUSE[e.cause] ? `（${DEATH_CAUSE[e.cause]}）` : ''];
+  if (e.type === 'split') return [e.whom, ' 从 ', e.who, ' 独立'];
+  if (e.type === 'exile') return [e.who, ' 逃离了大陆'];
+  if (e.type === 'ally') return [e.who, ' 和 ', e.whom, ' 结盟'];
+  if (e.type === 'rift') return [e.who, ' 和 ', e.whom, ' 决裂'];
+  if (e.type === 'war') return [e.who, ' 和 ', e.whom, ' 互相开战，边界裂开'];
+  if (e.type === 'breach') return [...e.who.flatMap((a, n) => (n ? ['、', a] : [a])), ' 联手攻破了 ', e.whom, ' 的防守'];
+  return [e.type];
+}
+
+function sentence(parts) {
+  const line = element('span');
+  line.append(...parts.map((part) => (typeof part === 'number' ? nationTag(part) : part)));
+  return line;
+}
+
+// 这个国家这一回合做了什么。进攻的话返回 null，由调用的地方写上打的是谁
+function actionText(r, i) {
+  if (r.action[i] === 'attack') return r.attacks.some(([from]) => from === i) ? null : '进攻（没有邻国）';
+  return { fortify: '筑墙', grow: '生长', flee: '逃离', split: '分裂', wither: '萎缩',
+    waver: '想分裂，没分成' }[r.action[i]] || '';
+}
+
+function svgNode(tag, attrs) {
+  const node = document.createElementNS(SVG, tag);
+  for (const [name, value] of Object.entries(attrs)) node.setAttribute(name, value);
+  return node;
+}
+
+function renderSaga() {
+  const f = state.frame, saga = state.saga;
+  const on = !!f && !!saga && !!f.record;
+  $('saga-card').hidden = !on;
+  if (!on) return;
+  const r = f.record;
+  $('saga-turn').textContent = `第 ${f.turn} / ${f.turns} 回合`;
+
+  // 关系图：位置就是各国在模型上的位置（正面看），逃走的会飘出去
+  if (!saga.frame) {
+    const homes = saga.turns.flatMap((t) => t.home.filter(Boolean));
+    const spread = (axis) => Math.max(...homes.map((h) => h[axis])) - Math.min(...homes.map((h) => h[axis]));
+    const across = spread(0) >= spread(1) ? 0 : 1;
+    const range = (axis) => [Math.min(...homes.map((h) => h[axis])), Math.max(...homes.map((h) => h[axis]))];
+    saga.frame = { across, x: range(across), z: range(2) };
+  }
+  const { across, x: [x0, x1], z: [z0, z1] } = saga.frame;
+  const place = (h) => [28 + 224 * (h[across] - x0) / Math.max(x1 - x0, 1), 252 - 224 * (h[2] - z0) / Math.max(z1 - z0, 1)];
+  const biggest = Math.max(...r.size, 1);
+  const radius = (i) => 5 + 11 * Math.sqrt(r.size[i] / biggest);
+  const at = r.home.map((h) => (h ? place(h) : null));
+  const graph = $('saga-graph');
+  const parts = [];
+  const tie = new Map(r.ties.map(([i, j, t]) => [`${i}-${j}`, t]));
+  for (const [i, j] of r.borders) {
+    if (!at[i] || !at[j]) continue;
+    const t = tie.get(`${i}-${j}`) || 0;
+    parts.push(svgNode('line', { x1: at[i][0], y1: at[i][1], x2: at[j][0], y2: at[j][1],
+      'stroke-width': 1 + 4 * t, 'stroke-linecap': 'round',
+      style: `stroke: var(${t >= 0.5 ? '--ink' : '--gray-600'}); opacity: ${0.3 + 0.7 * t}` }));
+  }
+  for (const [i, j] of r.attacks) {
+    if (!at[i] || !at[j]) continue;
+    const dx = at[j][0] - at[i][0], dy = at[j][1] - at[i][1], d = Math.hypot(dx, dy) || 1;
+    const stop = Math.max(d - radius(j) - 5, 0) / d;                 // 箭头停在对方圆的边上
+    parts.push(svgNode('line', { x1: at[i][0], y1: at[i][1], x2: at[i][0] + dx * stop, y2: at[i][1] + dy * stop,
+      'stroke-width': 1.5, 'marker-end': 'url(#saga-arrow)', style: 'stroke: var(--red-700)' }));
+  }
+  r.size.forEach((size, i) => {
+    if (!size || !at[i]) return;
+    if (r.exiled.includes(i)) {
+      parts.push(svgNode('circle', { cx: at[i][0], cy: at[i][1], r: radius(i) + 3.5, fill: 'none',
+        'stroke-dasharray': '2 3', style: 'stroke: var(--ink-muted)' }));
+    }
+    parts.push(svgNode('circle', { cx: at[i][0], cy: at[i][1], r: radius(i), fill: NATION_HEX[i % NATION_HEX.length],
+      'stroke-width': 1.5, style: 'stroke: var(--surface)' }));
+    const label = svgNode('text', { x: at[i][0] + radius(i) + 3, y: at[i][1] + 4 });
+    label.textContent = NATION_NAMES[i % NATION_NAMES.length];
+    parts.push(label);
+  });
+  const defs = svgNode('defs', {});
+  const marker = svgNode('marker', { id: 'saga-arrow', viewBox: '0 0 8 8', refX: 7, refY: 4, markerWidth: 7,
+    markerHeight: 7, orient: 'auto' });
+  marker.append(svgNode('path', { d: 'M0 0 8 4 0 8Z', style: 'fill: var(--red-700)' }));
+  defs.append(marker);
+  graph.replaceChildren(defs, ...parts);
+
+  // 这一回合的事
+  const happened = r.events.map((e) => sentence(eventParts(e)));
+  if (f.turn === 0) happened.unshift(sentence([`建国：${saga.k} 个国家。`]));
+  if (!happened.length) happened.push(sentence(['这一回合没有大事。']));
+  $('saga-now').replaceChildren(...happened.map((line) => {
+    const li = element('li');
+    li.append(line);
+    return li;
+  }));
+
+  // 每个国家：地盘、被问了什么、测量前的概率、结果
+  const rows = [];
+  r.size.forEach((size, i) => {
+    const name = nationTag(i);
+    const bar = element('span', 'bar');
+    const fill = element('span');
+    fill.style.width = `${100 * size / biggest}%`;
+    bar.append(fill);
+    const did = element('span', 'did');
+    if (!size) {
+      name.classList.add('gone');
+      did.classList.add('gone');
+      did.textContent = '已灭亡';
+    } else if (!r.action[i]) {
+      did.textContent = `${fmt(size)} 格`;
+    } else {
+      const text = actionText(r, i);
+      const target = (r.attacks.find(([from]) => from === i) || [])[1];
+      did.append(`问${ASK_LABEL[r.asked[i]]} ${Math.round(100 * r.odds[i])}% → ${r.said[i] ? '是' : '否'}：`,
+        ...(text === null ? ['进攻 ', nationTag(target)] : [text]));
+    }
+    rows.push(name, bar, did);
+  });
+  $('saga-nations').replaceChildren(...rows);
+
+  // 大事记：整段历史只建一次，之后只标出现在放到哪里
+  const log = $('saga-log');
+  if (sagaBuilt !== saga) {
+    sagaBuilt = saga;
+    const items = saga.turns.flatMap((t) => t.events.filter((e) => MAJOR.has(e.type)).map((e) => {
+      const li = element('li');
+      li.dataset.turn = t.turn;
+      const jump = element('button', '', String(t.turn));
+      jump.type = 'button';
+      jump.setAttribute('aria-label', `跳到第 ${t.turn} 回合`);
+      jump.addEventListener('click', () => {
+        stopTurns();
+        showTurn(t.turn);
+      });
+      li.append(jump, sentence(eventParts(e)));
+      return li;
+    }));
+    if (!items.length) items.push(Object.assign(element('li'), { textContent: '这段历史里没有大事。' }));
+    log.replaceChildren(...items);
+  }
+  let current = null;
+  for (const li of log.children) {
+    const turn = Number(li.dataset.turn);
+    li.classList.toggle('later', turn > f.turn);
+    li.classList.toggle('now', turn === f.turn);
+    if (turn <= f.turn) current = li;
+  }
+  if (current) log.scrollTop = Math.max(current.offsetTop - log.offsetTop - log.clientHeight / 2, 0);
 }
 
 async function doMesh(signal) {
@@ -672,6 +958,7 @@ async function loadModel(send) {
     const { buffer } = await getBinary('/api/model/mesh');
     // 换了模型，服务端已经清掉后面几步的结果，这里同步清掉
     state.grid = state.gridData = state.proc = state.procData = state.report = state.meshError = null;
+    state.frame = null;
     state.adopt = state.partial = false;
     for (const name of ['voxels', 'processed', 'result']) viewer.clear(name);
     viewer.setMesh('model', buffer);
@@ -819,7 +1106,7 @@ async function showPartial(jobId) {
     const { data, meta } = await getGrid(`/api/process/${jobId}/preview`);
     if (!state.grid || meta.n !== state.grid.n) return;
     state.procData = data;
-    state.proc = state.report = null;
+    state.proc = state.report = state.frame = null;
     state.partial = true;
     viewer.clear('result');
     // 一层一层往上算的：用扫描视图，扫描面走到已经连续算完的那一层。别的切法照旧一块一块显示
@@ -1471,6 +1758,14 @@ function footText(view) {
   const { model: m, grid: g, report: r } = state;
   if (view === 'model') return `${m.name} · ${fmt(m.faces)} 个面 · ${dims(m.extents)}`;
   if (view === 'voxels') return `${g.n}³ 网格 · ${fmt(g.solid)} 个实体格子`;
+  if (view === 'processed' && state.frame) {
+    const r = state.frame.record;
+    const alive = r ? r.size.filter((s) => s > 0).length : state.proc.nations.k;
+    if (!r || !state.frame.turn) return `建国：${alive} 个国家 · ${fmt(state.procCount)} 个体素`;
+    const did = (what) => r.action.filter((a) => a === what).length;
+    return `还有 ${alive} 国 · ${fmt(state.procCount)} 个体素 · 进攻 ${did('attack')} · 筑墙 ${did('fortify')}`
+      + ` · 生长 ${did('grow')} · 逃离 ${did('flee')} · 萎缩 ${did('wither')}`;
+  }
   if (view === 'processed') return `阈值 ${level().toFixed(2)} · ${fmt(state.procCount)} 个格子在阈值以上`;
   if (view === 'result') return `${fmt(r.faces)} 个面 · ${r.parts} 块 · ${dims(r.extents)} mm`;
   if (view === 'scan') {
@@ -1505,7 +1800,7 @@ function render() {
     ['每格边长', `${g.voxel_size} 模型单位`],
     ['Atlas 任务数', tiles.total > 1 ? `${tiles.jobs}（分块 ${tileText}）` : '1（不用分块）'],
   ] : []);
-  $('tiling-field').hidden = mode === 'gaussian' || !tiles || tiles.total === 1;
+  $('tiling-field').hidden = mode === 'gaussian' || mode === 'nations' || !tiles || tiles.total === 1;
   if (tiles) {
     $('tiling-help').textContent = segValue('tiling-seg') === 'cube'
       ? `切成 ${tileText} 的块，三个方向都参与模糊，最接近整块计算。有东西的块共 ${tiles.jobs} 个，每个是一次 Atlas 任务。`
@@ -1513,7 +1808,8 @@ function render() {
   }
 
   $('gaussian-params').hidden = mode !== 'gaussian';
-  $('quantum-params').hidden = mode === 'gaussian';
+  $('nations-params').hidden = mode !== 'nations';
+  $('quantum-params').hidden = mode === 'gaussian' || mode === 'nations';
   $('atlas-actions').hidden = mode !== 'atlas';
   $('mode-help').textContent = MODE_HELP[mode];
   $('atlas-jobs-note').hidden = !(tiles && tiles.total > 1);
@@ -1525,7 +1821,12 @@ function render() {
   renderStats('process-stats', state.partial ? [['当前结果', 'Atlas 计算中，逐块更新']] : p ? [
     ['当前结果', MODE_LABEL[p.mode] + (p.cached ? '（缓存）' : '')],
     ...(p.tiles && p.tiles.jobs > 1 ? [['分块', `${p.tiles.jobs} 个 ${p.tiles.shape.join('×')}`]] : []),
-    ['原始数值范围', `${p.min} – ${p.max}`],
+    ...(p.nations ? [
+      ['国家', `${p.nations.k} 个开始，前后 ${p.nations.total} 个，${p.nations.turns} 回合后还有 ${p.nations.alive} 个`],
+      ['独立 / 吞并 / 灭亡', `${p.nations.split} / ${p.nations.annexed} / ${p.nations.died}`],
+      ['逃离大陆 / 互相开战', `${p.nations.exiled} / ${p.nations.wars}`],
+      ['体素', `${fmt(p.nations.start)} → ${fmt(p.nations.end)}`],
+    ] : [['原始数值范围', `${p.min} – ${p.max}`]]),
     ...(p.seconds != null ? [['用时', `${p.seconds} 秒`]] : []),
     ...(p.job_id ? [['任务号', p.job_id]] : []),
   ] : []);
@@ -1584,6 +1885,8 @@ function render() {
     else clearTimeout(jobs.timer);
   }
   renderScan();
+  renderTurns();
+  renderSaga();
   renderRun();
   renderKey();
   drawSlice();
@@ -1626,6 +1929,11 @@ function bind() {
     if (name) loadModel(() => postJSON('/api/model/open', { name, up: $('up-select').value }));
   });
 
+  // 演化要算一整段历史，滑块停下来稍久一点再算
+  const invalidateNations = () => {
+    if (state.view !== 'result') state.view = 'processed';
+    invalidate(STAGE.process, 400);
+  };
   const processChanged = () => {
     if (segValue('mode-seg') === 'atlas') {
       if (!state.atlasJob) state.atlasStatus = null;   // 参数变了，上一次提交的状态不再适用
@@ -1639,6 +1947,18 @@ function bind() {
   bindSeg('mode-seg', processChanged);
   bindSeg('tiling-seg', processChanged);
   for (const id of ['sigma', 'strength', 'reach']) bindSlider(id, 2, processChanged);
+  for (const id of ['nations-k', 'nations-turns']) bindSlider(id, 0, () => invalidateNations());
+  bindSlider('nations-spread', 1, () => invalidateNations());
+  $('nations-grooves').addEventListener('change', processChanged);
+  $('turn-play').addEventListener('click', () => {
+    if (turns.timer) stopTurns();
+    else playTurns();
+    renderTurns();
+  });
+  $('turn-t').addEventListener('input', (e) => {      // 拖着看：停下播放，直接跳到那一回合
+    stopTurns();
+    showTurn(Number(e.target.value));
+  });
   for (const id of ['style-select', 'shots-input', 'run-input', 'axis-0', 'axis-1', 'axis-2']) {
     $(id).addEventListener('change', processChanged);
   }
@@ -1756,6 +2076,12 @@ function showProcessParams(mode, run, params, tiling) {
   $('run-input').value = run;
   if (mode === 'gaussian') {
     $('sigma').value = params.sigma;
+  } else if (mode === 'nations') {
+    $('nations-k').value = params.k;
+    $('nations-turns').value = params.turns;
+    $('nations-spread').value = params.reach;
+    $('nations-grooves').checked = !!params.grooves;
+    for (const id of ['nations-k', 'nations-turns', 'nations-spread']) $(id).paint();
   } else {
     $('strength').value = params.strength;
     $('reach').value = params.reach;
