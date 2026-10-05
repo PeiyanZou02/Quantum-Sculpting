@@ -102,6 +102,21 @@ const img = (src: Blob) => new Promise<HTMLImageElement>((res, rej) => {
   i.src = URL.createObjectURL(src)
 })
 
+const PAINT = ['fill', 'stroke', 'stroke-width', 'stroke-dasharray', 'opacity', 'fill-opacity', 'stroke-opacity', 'font-family', 'font-size', 'font-weight', 'letter-spacing'] as const
+/** html-to-image drops paint that SVG shapes get from class rules (lines vanish, unfilled boxes turn
+ *  black): write it onto each shape's own style for the capture, and put it back afterwards. */
+export function inlineSvgPaint(root: Element): () => void {
+  const undo: (() => void)[] = []
+  root.querySelectorAll<SVGElement>('svg *').forEach((el) => {
+    if (!(el instanceof SVGElement) || !el.getAttribute('class')) return
+    const was = el.getAttribute('style')
+    const cs = getComputedStyle(el)
+    for (const k of PAINT) if (!el.style.getPropertyValue(k)) el.style.setProperty(k, cs.getPropertyValue(k))
+    undo.push(() => { if (was == null) el.removeAttribute('style'); else el.setAttribute('style', was) })
+  })
+  return () => undo.forEach((f) => f())
+}
+
 /** The whole composition as one PNG of exactly w × h px: the backdrop, the geometry, then the HUD,
  *  pins and notes over it. The view has the frame's shape, so nothing is cropped or stretched. */
 export async function exportFrame(engine: Engine | undefined, w: number, h: number, name: string): Promise<void> {
@@ -118,7 +133,8 @@ export async function exportFrame(engine: Engine | undefined, w: number, h: numb
     const pr = engine.pixelRatio()
     const geo = await engine.render(scale / pr)
     // 3 · everything drawn over it, on a transparent ground
-    const over = await toPng(view, { pixelRatio: scale, width: vw, height: vh, style: { background: 'none' }, filter: skip })
+    const restore = inlineSvgPaint(view)
+    const over = await toPng(view, { pixelRatio: scale, width: vw, height: vh, style: { background: 'none' }, filter: skip }).finally(restore)
     const c = document.createElement('canvas')
     c.width = w
     c.height = h

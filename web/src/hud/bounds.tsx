@@ -25,7 +25,7 @@ function Hud({ ctx, children }: { ctx: HudCtx; children: ReactNode }) {
   )
 }
 
-function T({ x, y, c = INK, size = 10, sans, anchor, children }: { x: number; y: number; c?: string; size?: number; sans?: boolean; anchor?: 'start' | 'middle' | 'end'; children: ReactNode }) {
+function T({ x, y, c = INK, size = 11, sans, anchor, children }: { x: number; y: number; c?: string; size?: number; sans?: boolean; anchor?: 'start' | 'middle' | 'end'; children: ReactNode }) {
   return (
     <text x={f(x)} y={f(y)} fontSize={size} textAnchor={anchor} className="qs-hud-halo" style={{ fill: c, fontFamily: sans ? SANS : MONO }}>
       {children}

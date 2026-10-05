@@ -1,6 +1,7 @@
 // Metadata blocks in the lab style: "HISTORY — BASE … / TYPE …", "SCENE — SAMPLES …, SEED …, MODEL …".
 // Intrinsically sized; the composer puts them in the tl / tr slots.
 import type { HudCtx, HudModule } from './types'
+import { Title } from './title'
 import './lab.css'
 
 type Row = [string, string, boolean?] // key, value, dim
@@ -10,7 +11,7 @@ const AX = ['X', 'Y', 'Z']
 const MODE: Record<string, string> = { gaussian: 'Gaussian', emulator: 'Emulator', atlas: 'Atlas', nations: 'Evolve' }
 const modeName = (m: string) => MODE[m] ?? m
 
-function base(path: string) {
+export function base(path: string) {
   const i = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'))
   return i >= 0 ? path.slice(i + 1) : path
 }
@@ -26,7 +27,7 @@ function hash(s: string) {
 }
 
 /** Qubits per axis for an n-cell edge: the emulator caps the register at 32 positions. */
-const qubitsPerAxis = (n: number) => Math.ceil(Math.log2(Math.max(2, Math.min(n, 32))))
+export const qubitsPerAxis = (n: number) => Math.ceil(Math.log2(Math.max(2, Math.min(n, 32))))
 
 function Block({ title, tag, rows }: { title: string; tag?: string; rows: Row[] }) {
   return (
@@ -124,6 +125,14 @@ export const META_MODULES: HudModule[] = [
     desc: 'The quantum settings: qubits per axis, strength, reach, style and axes.',
     slot: 'tr',
     render: (ctx) => <Quantum ctx={ctx} />,
+  },
+  {
+    family: 'meta',
+    id: 'v5',
+    label: 'title',
+    desc: 'The plate’s title: what it shows in a sentence, and the model, grid and run in one line.',
+    slot: 'tl',
+    render: (ctx) => <Title ctx={ctx} />,
   },
 ]
 
