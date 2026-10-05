@@ -90,7 +90,7 @@ def quantum_blur(values, strength=0.5, style="x", reach=0.0, axes=None, shots=No
     return out[tuple(slice(0, s) for s in values.shape)].astype(np.float32)
 
 
-def quantum_blur_tiled(grid, shape, seed=None, **params):
+def quantum_blur_tiled(grid, shape, seed=None, check=None, **params):
     """按 Atlas 的分块方式逐块模拟，这样预览和真正提交得到的结果才对得上。"""
     grid = np.asarray(grid, dtype=np.float32)
     if tuple(shape) == grid.shape:
@@ -99,6 +99,8 @@ def quantum_blur_tiled(grid, shape, seed=None, **params):
     for number, tile in enumerate(tiling.split(grid, shape)):
         if not tile.data.any():
             continue                                   # 空的块模糊后还是空的
+        if check:
+            check()                                    # 结果已经没人要了就停下
         tile_seed = None if seed is None else seed + number
         tiling.place(out, tile, quantum_blur(tile.data, seed=tile_seed, **params))
     return out.astype(np.float32)

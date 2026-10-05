@@ -15,7 +15,9 @@ import traceback
 import uuid
 import webbrowser
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from contextlib import contextmanager
 from pathlib import Path
+from types import SimpleNamespace
 from urllib.parse import urlparse
 
 import numpy as np
@@ -78,6 +80,8 @@ class State:
         self.live = {}              # Atlas 任务号 → 自己轮询到的最新状态
         self.records_cache = {}     # grids/ 里的任务记录，按文件修改时间缓存
         self.account = None
+        self.ticket = 0             # 每个重的请求领一个号，见 begin()
+        self.latest = {}            # 页面 → 它在每一级最新的号
 
 
 S = State()
@@ -146,6 +150,50 @@ def mesh_bytes(mesh):
     v = np.ascontiguousarray(mesh.vertices, dtype="<f4")
     f = np.ascontiguousarray(mesh.faces, dtype="<u4")
     return struct.pack("<II", len(v), len(f)) + v.tobytes() + f.tobytes()
+
+
+# ── 重的计算：在状态锁外面做，一次只跑一个，被新请求取代的中途停下 ─────────────────
+# S.lock 只在读写状态的一瞬间拿着。体素化、模拟、取面可能要算很久，拿着它算的话，
+# 刷新页面、换模型都会卡在这把锁上，看起来就是整个程序死了。
+
+WORK = threading.Lock()
+MESH, PROCESS, VOXEL, MODEL = range(4)      # 越靠后越上游：上游变了，下游正在算的都作废
+
+
+class Superseded(Exception):
+    """这次计算的结果没人要了：同一个页面发来了更新的请求，或者它依据的模型、网格已经换了。"""
+
+
+@app.errorhandler(Superseded)
+def superseded(e):
+    return jsonify(error="这次计算被更新的请求取代了。", superseded=True), 409
+
+
+def begin(stage):
+    """登记一次请求，返回检查函数：同一个页面之后又发来同级或上游的请求，它就抛出 Superseded。"""
+    with S.lock:
+        S.ticket += 1
+        ticket = S.ticket
+        latest = S.latest.setdefault(request.headers.get("X-Client", ""), [0, 0, 0, 0])
+        latest[stage] = ticket
+
+    def check():
+        if max(latest[stage:]) > ticket:
+            raise Superseded()
+    return check
+
+
+@contextmanager
+def heavy(stage):
+    """排队做一次重的计算。轮到的时候如果已经被取代，直接放弃；算的过程中每一步也会问一次。"""
+    check = begin(stage)
+    with WORK:
+        check()
+        levelset.checkpoint = check
+        try:
+            yield check
+        finally:
+            levelset.checkpoint = levelset.keep_going
 
 
 # ── API key（只存在本机用户目录，不进 OneDrive，也不回传给页面） ────────────
@@ -243,6 +291,7 @@ def model_info():
 
 @app.post("/api/model/test-cup")
 def use_test_cup():
+    begin(MODEL)
     cup = pipeline.make_test_cup()
     INPUT.mkdir(exist_ok=True)
     cup.export(INPUT / "test_cup.stl")
@@ -252,6 +301,7 @@ def use_test_cup():
 
 @app.post("/api/model/upload")
 def upload_model():
+    begin(MODEL)
     f = request.files.get("file")
     if f is None or not f.filename:
         raise ValueError("没有收到文件。")
@@ -286,6 +336,7 @@ def list_models():
 
 @app.post("/api/model/open")
 def open_model():
+    begin(MODEL)
     b = body()
     path = INPUT / Path(str(b.get("name", ""))).name       # 只取文件名，不让路径跑到 input/ 外面
     if path.suffix.lower() not in MODEL_TYPES or not path.is_file():
@@ -297,6 +348,7 @@ def open_model():
 
 @app.post("/api/model/orient")
 def orient_model():
+    begin(MODEL)
     up = body().get("up", "+z")
     with S.lock:
         if S.raw_mesh is None:
@@ -348,24 +400,29 @@ def voxelize():
     with S.lock:
         if S.mesh is None:
             raise ValueError("先选择一个模型。")
+        mesh, model_id = S.mesh, S.model_id
+    with heavy(VOXEL):
         cached = None
         if values == "coverage":
             # VDB 的做法：网格 → 有符号距离场 → 每个格子的覆盖率。0.5 等值面就是真实表面
-            scale, transform = pipeline.placement(S.mesh, n=n, pad=pad)
+            scale, transform = pipeline.placement(mesh, n=n, pad=pad)
             refine = max(1, min(4, MAX_FINE // n))
-            cached = (refine, levelset.from_mesh(S.mesh, transform, n, refine, fill=fill))
+            cached = (refine, levelset.from_mesh(mesh, transform, n, refine, fill=fill))
             grid = levelset.coverage(cached[1])
         else:
-            grid, scale, transform = pipeline.mesh_to_grid(S.mesh, n=n, pad=pad, fill=fill)
+            grid, scale, transform = pipeline.mesh_to_grid(mesh, n=n, pad=pad, fill=fill)
         if grid.sum() == 0:
             raise ValueError("体素化后没有任何实体格子，模型可能是空的。")
-        S.grid, S.scale, S.transform = grid, scale, transform
-        S.grid_params = {"pad": pad, "fill": fill, "values": values}
-        S.grid_id += 1
-        S.processed = S.proc_meta = None
-        if cached:                                   # 后面「推动表面」用同样的细化倍数时不用再算
-            S.levelset_cache = ((S.model_id, S.grid_id, cached[0]), cached[1])
-        return jsonify(grid_info())
+        with S.lock:
+            if S.model_id != model_id:
+                raise Superseded()                   # 算的时候模型换了
+            S.grid, S.scale, S.transform = grid, scale, transform
+            S.grid_params = {"pad": pad, "fill": fill, "values": values}
+            S.grid_id += 1
+            S.processed = S.proc_meta = None
+            if cached:                                   # 后面「推动表面」用同样的细化倍数时不用再算
+                S.levelset_cache = ((S.model_id, S.grid_id, cached[0]), cached[1])
+            return jsonify(grid_info())
 
 
 @app.get("/api/grid/<which>")
@@ -438,25 +495,31 @@ def process():
         if S.grid is None:
             raise ValueError("先完成体素化。")
         grid, grid_id = S.grid, S.grid_id
-        meta = {"mode": mode, "run": run, "params": params, "cached": False, "job_id": None,
-                "tiles": None}
+    meta = {"mode": mode, "run": run, "params": params, "cached": False, "job_id": None, "tiles": None}
 
-        if mode == "gaussian":
+    if mode != "atlas":
+        with heavy(PROCESS) as check:
             t0 = time.time()
-            raw = emulator.mock_blur(grid, **params)
+            if mode == "gaussian":
+                raw = emulator.mock_blur(grid, **params)
+            else:
+                # 和 Atlas 用同样的分块，预览才和真正提交的结果对应
+                shape = tiling.tile_shape(grid.shape[0], tile_mode, atlas_bits())
+                seed = int(hashlib.sha256(run.encode()).hexdigest()[:8], 16)
+                raw = emulator.quantum_blur_tiled(grid, shape, seed=seed, check=check, **params)
             meta["seconds"] = round(time.time() - t0, 3)
-            return jsonify(status="done", meta=apply_processed(raw, meta))
+            with S.lock:
+                if S.grid_id != grid_id:
+                    raise Superseded()               # 算的时候网格换了
+                if mode == "emulator":
+                    meta["tiles"] = {"mode": tile_mode, **grid_tiles()[tile_mode]}
+                return jsonify(status="done", meta=apply_processed(raw, meta))
 
+    with S.lock:
+        if S.grid is None:
+            raise ValueError("先完成体素化。")
+        grid, grid_id = S.grid, S.grid_id
         shape = tiling.tile_shape(grid.shape[0], tile_mode, atlas_bits())
-        if mode == "emulator":
-            # 和 Atlas 用同样的分块，预览才和真正提交的结果对应
-            t0 = time.time()
-            seed = int(hashlib.sha256(run.encode()).hexdigest()[:8], 16)
-            raw = emulator.quantum_blur_tiled(grid, shape, seed=seed, **params)
-            meta.update(seconds=round(time.time() - t0, 3),
-                        tiles={"mode": tile_mode, **grid_tiles()[tile_mode]})
-            return jsonify(status="done", meta=apply_processed(raw, meta))
-
         key, _ = load_key()
         if not key:
             raise ValueError("还没有设置 Atlas API key。点右上角的「设置 API key」。")
@@ -464,7 +527,8 @@ def process():
         if busy:      # 两边同时提交会把还没提交的分块各交一遍
             abort(409, f"「{busy['run']}」还在 Atlas 上运行，等它结束再提交。")
         # 每一块都已经有缓存：直接拼起来，不用再找 Atlas
-        todo = [t for t in tiling.split(grid, shape) if t.data.any()]
+        every = list(tiling.split(grid, shape))
+        todo = [t for t in every if t.data.any()]
         found = [_load_cached(_tile_stem(t, params, run)) for t in todo]
         if all(arr is not None for arr, _ in found):
             raw = np.zeros(grid.shape, dtype=np.float64)
@@ -484,7 +548,7 @@ def process():
                "stale": False, "note": None, "tiles_total": len(todo), "tiles_done": 0,
                "tiles_cached": 0, "tile_shape": list(shape), "version": 0, "partial": None,
                "cancel": False, "lock": threading.Lock(), "run": run, "params": params,
-               "tiling": tile_mode}
+               "tiling": tile_mode, "layers": _layers(grid.shape[0], shape, every), "done": set()}
         S.jobs[job["id"]] = job
         threading.Thread(target=_run_atlas_job, daemon=True,
                          args=(job, grid, grid_id, params, meta, key, tile_mode)).start()
@@ -520,11 +584,13 @@ def _run_atlas_job(job, grid, grid_id, params, meta, key, tile_mode):
         bits = atlas_bits()
         while True:
             shape = tiling.tile_shape(grid.shape[0], tile_mode, bits)
-            todo = [t for t in tiling.split(grid, shape) if t.data.any()]
+            every = list(tiling.split(grid, shape))
+            todo = [t for t in every if t.data.any()]
             raw = np.zeros(grid.shape, dtype=np.float64)
             with job["lock"]:
                 job.update(tiles_total=len(todo), tiles_done=0, tiles_cached=0,
-                           tile_shape=list(shape), partial=grid.copy())   # 没算完的块先显示原样
+                           tile_shape=list(shape), partial=grid.copy(),   # 没算完的块先显示原样
+                           layers=_layers(grid.shape[0], shape, every), done=set())
                 job["version"] += 1
             try:
                 first_id = _run_tiles(client, job, todo, raw, params, meta["run"])
@@ -574,6 +640,7 @@ def _run_tiles(client, job, todo, raw, params, run):
             for tile in group:
                 tiling.place(raw, tile, result)
                 job["partial"][tile.slices] = np.clip(raw[tile.slices], 0.0, 1.0)
+                job["done"].add(tile.index)
             job["tiles_done"] += len(group)
             job["tiles_cached"] += len(group) if cached else len(group) - 1
             job["version"] += 1
@@ -654,6 +721,26 @@ def _atlas_tile(client, job, tile, params, run):
     return result, False, job_id
 
 
+def _layers(n, shape, tiles):
+    """水平方向不切、只沿竖直方向分成一层层的块时：每块几层、共几块、哪几块是空的。别的切法返回 None。"""
+    if shape[0] != n or shape[1] != n or shape[2] == n:
+        return None
+    return {"thickness": shape[2], "count": n // shape[2],
+            "empty": {t.index[2] for t in tiles if not t.data.any()}}
+
+
+def _frontier(job):
+    """一层层往上算的时候，从底下数已经连续算完到第几层（界面上的扫描面就停在这里）。"""
+    layers = job["layers"]
+    if not layers:
+        return None
+    done = {index[2] for index in job["done"]}
+    k = 0
+    while k < layers["count"] and (k in layers["empty"] or k in done):
+        k += 1
+    return k * layers["thickness"]
+
+
 def running_job():
     return next((job for job in S.jobs.values() if job["status"] == "running"), None)
 
@@ -665,7 +752,7 @@ def _job_view(job):
             "error": job["error"], "meta": job["meta"], "stale": job["stale"], "note": job["note"],
             "tiles_total": job["tiles_total"], "tiles_done": job["tiles_done"],
             "tiles_cached": job["tiles_cached"], "tile_shape": job["tile_shape"],
-            "version": job["version"]}
+            "version": job["version"], "frontier": _frontier(job)}
 
 
 @app.get("/api/process/<job_id>/preview")
@@ -678,7 +765,8 @@ def job_preview(job_id):
         partial = job["partial"]
         if partial is None:
             abort(404)
-        return binary(*compact(partial, {"n": int(partial.shape[0]), "version": job["version"]}))
+        return binary(*compact(partial, {"n": int(partial.shape[0]), "version": job["version"],
+                                         "frontier": _frontier(job)}))
 
 
 @app.get("/api/process/<job_id>")
@@ -778,24 +866,35 @@ def atlas_job_detail(job_id):
 
 # ── 第四、五步：转回模型、打印检查、导出 ──────────────────────────────────────
 
-def base_levelset(refine):
-    """原模型的水平集（VDB from Polygons）。同一个模型、网格和细化倍数只算一次。调用方持有 S.lock。"""
-    key = (S.model_id, S.grid_id, refine)
-    if S.levelset_cache is None or S.levelset_cache[0] != key:
-        S.levelset_cache = (key, levelset.from_mesh(S.mesh, S.transform, S.grid.shape[0], refine,
-                                                    fill=S.grid_params["fill"]))
-    return S.levelset_cache[1]
+def snapshot():
+    """现在的模型、网格和处理结果。这些数组只会被整个换掉，不会被就地修改，拿到引用就能在锁外用。"""
+    with S.lock:
+        if S.processed is None:
+            raise ValueError("先运行量子处理。")
+        return SimpleNamespace(
+            mesh=S.mesh, grid=S.grid, processed=S.processed, scale=S.scale, transform=S.transform,
+            grid_params=S.grid_params, meta=S.proc_meta, name=S.name, up=S.up,
+            model_id=S.model_id, grid_id=S.grid_id, proc_id=S.proc_id)
 
 
-def build_mesh(b):
-    """调用方必须已经持有 S.lock。返回 (网格坐标里的模型, 毫米模型, 报告)。
+def base_levelset(now, refine):
+    """原模型的水平集（VDB from Polygons）。同一个模型、网格和细化倍数只算一次。"""
+    key = (now.model_id, now.grid_id, refine)
+    hit = S.levelset_cache
+    if hit is None or hit[0] != key:
+        hit = (key, levelset.from_mesh(now.mesh, now.transform, now.grid.shape[0], refine,
+                                       fill=now.grid_params["fill"]))
+        S.levelset_cache = hit
+    return hit[1]
+
+
+def build_mesh(b, now, check):
+    """返回 (网格坐标里的模型, 毫米模型, 报告)。now 是 snapshot()，check 在每个阶段之间问一次还要不要算。
 
     默认是在量子结果上直接取阈值。用到细化、体素平滑、加厚收缩、闭合或「推动表面」时，
     改走水平集：模型（或量子结果的等值面）→ 有符号距离场 → 在体素上运算 → 取面。
     """
-    if S.processed is None:
-        raise ValueError("先运行量子处理。")
-    n = S.grid.shape[0]
+    n = now.grid.shape[0]
     level = clamp(b.get("level"), 0.01, 0.99, 0.5)
     keep = "all" if b.get("keep") == "all" else "largest"
     smooth = int(clamp(b.get("smooth"), 0, 50, 0))
@@ -813,45 +912,55 @@ def build_mesh(b):
 
     voxel_ops = vfilter != "none" or grow != 0 or close > 0
     if method == "threshold" and refine == 1 and not voxel_ops:
-        mesh, total = pipeline.grid_to_mesh(S.processed, level=level, keep=keep, smooth=smooth)
+        mesh, total = pipeline.grid_to_mesh(now.processed, level=level, keep=keep, smooth=smooth)
     else:
         if method == "advect":
             # 平流最费时间；只调后面的体素运算时不用重算
-            key = (S.model_id, S.grid_id, S.proc_id, refine, amount, field,
+            key = (now.model_id, now.grid_id, now.proc_id, refine, amount, field,
                    level if field == "threshold" else None)
-            if S.advect_cache is None or S.advect_cache[0] != key:
-                S.advect_cache = (key, levelset.advect(base_levelset(refine), S.processed, S.grid,
-                                                       amount, field, level))
-            shape = S.advect_cache[1]
+            hit = S.advect_cache
+            if hit is None or hit[0] != key:
+                hit = (key, levelset.advect(base_levelset(now, refine), now.processed, now.grid,
+                                            amount, field, level))
+                S.advect_cache = hit
+            shape = hit[1]
         else:
-            shape = levelset.from_density(S.processed, level, refine)
+            shape = levelset.from_density(now.processed, level, refine)
+        check()
         shape = levelset.fit(shape, abs(grow) + close + vwidth + 4)
         shape = levelset.smooth(shape, vfilter, vwidth)
         shape = levelset.close(shape, close)
         shape = levelset.offset(shape, grow)
+        check()
         mesh, total = pipeline.finish_mesh(levelset.to_mesh(shape), keep=keep, smooth=smooth)
 
-    printed, report = pipeline.prepare_for_print(mesh, S.scale, height)
+    check()
+    printed, report = pipeline.prepare_for_print(mesh, now.scale, height)
     report.update(total_parts=total, level=level, keep=keep, smooth=smooth, height=height,
                   method=method, refine=refine, amount=amount, field=field, vfilter=vfilter,
-                  vwidth=vwidth, grow=grow, close=close, proc_id=S.proc_id,
+                  vwidth=vwidth, grow=grow, close=close, proc_id=now.proc_id,
                   fine_voxel_mm=round(report["voxel_mm"] / refine, 3))
     return mesh, printed, report
 
 
 @app.post("/api/mesh")
 def mesh_preview():
-    with S.lock:
-        mesh, _, report = build_mesh(body())
-        return binary(mesh_bytes(mesh), report)
+    b = body()
+    snapshot()                                   # 还没有处理结果就马上说，不用排队
+    with heavy(MESH) as check:
+        mesh, _, report = build_mesh(b, snapshot(), check)
+    return binary(mesh_bytes(mesh), report)
 
 
 @app.post("/api/export")
 def export():
-    with S.lock:
-        _, printed, report = build_mesh(body())
-        meta = S.proc_meta
-        n = S.grid.shape[0]
+    b = body()
+    snapshot()
+    with heavy(MESH) as check:
+        now = snapshot()
+        _, printed, report = build_mesh(b, now, check)
+        meta = now.meta
+        n = now.grid.shape[0]
         name = f"{meta['run']}_{meta['mode']}_n{n}_L{int(round(report['level'] * 100)):03d}"
         if report["method"] == "advect":
             name += f"_adv{report['amount']:g}"
@@ -860,7 +969,7 @@ def export():
         OUTPUT.mkdir(exist_ok=True)
         printed.export(OUTPUT / f"{name}.stl")
         # 同名 .json 记下这次用的全部参数，方便复现和提交作品时说明流程
-        sidecar = {"model": S.name, "up": S.up, "grid": {"n": n, **S.grid_params},
+        sidecar = {"model": now.name, "up": now.up, "grid": {"n": n, **now.grid_params},
                    "process": {k: meta.get(k) for k in
                                ("mode", "run", "params", "tiles", "job_id", "min", "max")},
                    "mesh": report, "exported_at": time.strftime("%Y-%m-%d %H:%M:%S")}

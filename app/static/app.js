@@ -16,12 +16,28 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 // 页面上显示的东西它已经不认识，要把模型重新送回去（见 recover）
 let boot = null;
 
-async function request(path, options) {
+// 每个标签页一个编号。服务端凭它知道「这个页面又发来了更新的请求」，把它之前还在算的那一次停掉。
+// 存在 sessionStorage 里，刷新之后还是同一个：嫌慢刷新了页面，刷新前还在算的那一次也会被顶掉
+const CLIENT = (() => {
+  const fresh = Math.random().toString(36).slice(2, 10);
+  try {
+    const kept = sessionStorage.getItem('quantum-sculpting-client') || fresh;
+    sessionStorage.setItem('quantum-sculpting-client', kept);
+    return kept;
+  } catch (e) {
+    return fresh;
+  }
+})();
+
+async function request(path, options = {}) {
   let res;
   try {
-    res = await fetch(path, options);
+    res = await fetch(path, { ...options, headers: { ...options.headers, 'X-Client': CLIENT } });
   } catch (e) {
-    throw new Error('连不上本地服务。确认启动它的窗口还开着，然后刷新页面。');
+    const cancelled = e.name === 'AbortError';         // 自己取消的：控件又动了，这一次的结果不要了
+    const err = new Error(cancelled ? '已取消。' : '连不上本地服务。确认启动它的窗口还开着，然后刷新页面。');
+    err.quiet = cancelled;
+    throw err;
   }
   const seen = res.headers.get('X-Boot');
   const restarted = !!(boot && seen && seen !== boot);
@@ -29,13 +45,17 @@ async function request(path, options) {
   if (restarted) setTimeout(recover, 0);
   if (!res.ok) {
     let message = `请求失败（HTTP ${res.status}）。`;
+    let superseded = false;
     try {
       const data = await res.json();
       if (data.error) message = data.error;
+      superseded = !!data.superseded;
     } catch (e) { /* 不是 JSON，就用上面的通用说明 */ }
     const err = new Error(message);
     err.status = res.status;
-    err.restarted = restarted;                         // 这次失败只是因为服务重启了，恢复之后会重算
+    err.restarted = restarted;
+    // 不用告诉用户的失败：服务重启了（恢复之后会重算），或者被这个页面更新的请求取代了
+    err.quiet = restarted || superseded;
     throw err;
   }
   return res;
@@ -45,7 +65,7 @@ const json = (data, method = 'POST') => ({
   method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data || {}),
 });
 const getJSON = async (path) => (await request(path)).json();
-const postJSON = async (path, data) => (await request(path, json(data))).json();
+const postJSON = async (path, data, signal) => (await request(path, { ...json(data), signal })).json();
 
 // 服务端只发有东西的那个盒子，每个数一个字节；这里铺回 n³ 的数组
 async function getGrid(path) {
@@ -78,6 +98,7 @@ class Viewer {
   constructor(host) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    this.renderer.localClippingEnabled = true;         // 扫描视图用裁剪面把两层体素各切掉一半
     host.prepend(this.renderer.domElement);
 
     this.scene = new THREE.Scene();
@@ -105,11 +126,27 @@ class Viewer {
     this.meshMaterial = new THREE.MeshStandardMaterial({
       roughness: 0.9, metalness: 0, flatShading: true, side: THREE.DoubleSide,
     });
-    this.voxelMaterial = new THREE.MeshLambertMaterial({ color: 0xffffff });
+    // 原来的体素和处理后的体素各用一份材质：扫描时一个只画扫描面以上，一个只画以下
+    this.voxelMaterials = {
+      voxels: new THREE.MeshLambertMaterial({ color: 0xffffff }),
+      processed: new THREE.MeshLambertMaterial({ color: 0xffffff }),
+    };
+    this.cut = {
+      voxels: new THREE.Plane(new THREE.Vector3(0, 0, 1), 0),       // 留下面以上的
+      processed: new THREE.Plane(new THREE.Vector3(0, 0, -1), 0),   // 留下面以下的
+    };
+    this.scanning = false;
+    this.scanner = new THREE.Group();                  // 扫描面：一张半透明的片和它的边
+    this.scanner.visible = false;
+    this.scanFill = new THREE.MeshBasicMaterial({
+      transparent: true, opacity: 0.1, side: THREE.DoubleSide, depthWrite: false,
+    });
+    this.scanEdge = new THREE.LineBasicMaterial();
     this.lineMaterial = new THREE.LineBasicMaterial();
     this.layers = {};
     this.active = null;
     this.n = 0;
+    this.root.add(this.scanner);
     this.applyTheme();
 
     this.framed = false;
@@ -150,7 +187,7 @@ class Viewer {
 
   // 把相机对准某一层的内容：瘦高的模型在整个网格里只占一小条，按网格取景会很小
   focus(name) {
-    const layer = this.layers[name];
+    const layer = this.layers[name === 'scan' ? 'voxels' : name];
     if (!layer) { this.resetView(); return; }
     this.scene.updateMatrixWorld(true);
     const sphere = new THREE.Box3().setFromObject(layer).getBoundingSphere(new THREE.Sphere());
@@ -163,6 +200,8 @@ class Viewer {
     this.colors = { solid: color('--gray-700'), low: color('--gray-500'), high: color('--gray-1000') };
     this.meshMaterial.color.copy(this.colors.solid);
     this.lineMaterial.color.copy(color('--gray-500'));
+    this.scanFill.color.copy(color('--gray-1000'));
+    this.scanEdge.color.copy(color('--gray-1000'));
     this.dirty = true;
   }
 
@@ -187,7 +226,41 @@ class Viewer {
     floor.rotation.x = Math.PI / 2;
     floor.position.set(c, c, -0.5);
     this.frame.add(outline, floor);
+
+    for (const child of [...this.scanner.children]) {
+      this.scanner.remove(child);
+      child.geometry.dispose();
+    }
+    const h = n / 2;
+    const rim = [[-h, -h], [h, -h], [h, h], [-h, h]].map(([x, y]) => new THREE.Vector3(x, y, 0));
+    this.scanner.add(new THREE.Mesh(new THREE.PlaneGeometry(n, n), this.scanFill),
+      new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(rim), this.scanEdge));
+    this.scanner.position.set(c, c, -0.5);
     this.dirty = true;
+  }
+
+  // 扫描面停在第 z 层的底面（z 可以是小数）：它下面画处理后的体素，上面画原来的。null 是不扫描。
+  // 只动裁剪面，不重建体素，所以 256³ 也能一帧一帧地走
+  setScan(z) {
+    const on = z !== null;
+    if (on !== this.scanning) {
+      this.scanning = on;
+      for (const [name, material] of Object.entries(this.voxelMaterials)) {
+        material.clippingPlanes = on ? [this.cut[name]] : null;
+        material.needsUpdate = true;
+      }
+    }
+    if (on && this.n) {
+      // 网格坐标里第 z 层的底面在 z - 0.5，换成画面里的高度正好是 z / n
+      this.cut.processed.constant = z / this.n;
+      this.cut.voxels.constant = -z / this.n;
+      this.scanner.position.z = z - 0.5;
+    }
+    this.dirty = true;
+  }
+
+  shows(name) {
+    return this.active === 'scan' ? name === 'voxels' || name === 'processed' : name === this.active;
   }
 
   clear(name) {
@@ -202,7 +275,7 @@ class Viewer {
 
   put(name, object) {
     this.clear(name);
-    object.visible = name === this.active;
+    object.visible = this.shows(name);
     this.layers[name] = object;
     this.root.add(object);
     this.dirty = true;
@@ -247,7 +320,8 @@ class Viewer {
         }
       }
     }
-    const mesh = new THREE.InstancedMesh(this.box, this.voxelMaterial, cells.length / 4);
+    const material = this.voxelMaterials[name] || this.voxelMaterials.voxels;
+    const mesh = new THREE.InstancedMesh(this.box, material, cells.length / 4);
     const matrix = new THREE.Matrix4();
     const color = new THREE.Color();
     const span = Math.max(1 - threshold, 1e-6);
@@ -264,7 +338,8 @@ class Viewer {
 
   show(name) {
     this.active = name;
-    for (const [key, layer] of Object.entries(this.layers)) layer.visible = key === name;
+    for (const [key, layer] of Object.entries(this.layers)) layer.visible = this.shows(key);
+    this.scanner.visible = name === 'scan';
     this.frame.visible = this.n > 0;
     this.dirty = true;
   }
@@ -272,7 +347,7 @@ class Viewer {
 
 // ── 状态 ────────────────────────────────────────────────────────────────
 
-const VIEWS = ['model', 'voxels', 'processed', 'result'];
+const VIEWS = ['model', 'voxels', 'processed', 'result', 'scan'];
 const MODE_LABEL = { gaussian: '高斯替身', emulator: '本地模拟', atlas: 'Atlas' };
 const MODE_HELP = {
   gaussian: '普通的高斯模糊，只用来检查流程是否走得通，和量子效果无关。',
@@ -438,36 +513,51 @@ function setStatusLine(id, status) {
 
 // ── 重算：模型 → 体素 → 处理 → 模型 ─────────────────────────────────────────
 // 控件一变就把对应的阶段标脏；同一时间只跑一条链，跑的时候又变了就从最早变的那一步重来。
+// 正在等服务算的那一步如果已经没用了（它自己或它的上游又变了），马上放弃，不等它算完：
+// 服务端收到更新的请求后也会把旧的那次停下。调参时拖一下滑块不会被上一次的计算卡住。
 
 const STAGE = { mesh: 1, process: 2, voxel: 3 };
 let dirty = 0, pumping = false, timer = null;
+let flight = null;        // 正在等服务算的那一步：{ stage, abort }
+let quietUntil = 0;       // 控件还在动，过了这个时刻再发请求
+let loading = false;      // 正在换模型：这期间不重算，也不接受再换一个
 
 function invalidate(stage, delay = 0) {
   dirty = Math.max(dirty, stage);
+  quietUntil = performance.now() + delay;
+  if (flight && flight.stage <= stage) flight.abort();
   clearTimeout(timer);
   timer = setTimeout(pump, delay);
 }
 
 async function pump() {
-  if (pumping) return;
+  if (pumping || loading) return;
   pumping = true;
   $('spinner').hidden = false;
   try {
     while (dirty) {
+      const wait = quietUntil - performance.now();
+      if (wait > 0) {
+        await sleep(wait);
+        continue;
+      }
       const stage = dirty;
       dirty = 0;
       try {
-        if (stage >= STAGE.voxel) {
-          await doVoxelize();
-          if (dirty >= STAGE.voxel) continue;
+        for (const [s, run] of [[STAGE.voxel, doVoxelize], [STAGE.process, doProcess], [STAGE.mesh, doMesh]]) {
+          if (s > stage) continue;                     // 这一级没变，不用重算
+          if (dirty > s) break;                        // 上游又变了：从那里重来
+          dirty = 0;                                   // 这一级和下游刚变的，接下来都会算到
+          const ctl = new AbortController();
+          flight = { stage: s, abort: () => ctl.abort() };
+          try {
+            await run(ctl.signal);
+          } finally {
+            flight = null;
+          }
         }
-        if (stage >= STAGE.process) {
-          await doProcess();
-          if (dirty >= STAGE.process) continue;
-        }
-        await doMesh();
       } catch (e) {
-        if (!e.restarted) toast(e.message);
+        if (!e.quiet) toast(e.message);
       }
       render();
     }
@@ -482,14 +572,23 @@ async function idle() {
   while (pumping || dirty) await sleep(30);
 }
 
-async function doVoxelize() {
+// 换模型之前：排着队要算的、正在算的都作废，等手头那一步停下
+async function halt() {
+  dirty = 0;
+  if (flight) flight.abort();
+  while (pumping) await sleep(30);
+}
+
+async function doVoxelize(signal) {
   if (!state.model) return;
-  const info = await postJSON('/api/voxelize', voxelParams());
+  const info = await postJSON('/api/voxelize', voxelParams(), signal);
   const { data } = await getGrid('/api/grid/input');
   state.grid = info;
   state.gridData = data;
   state.proc = state.procData = state.report = state.meshError = null;
   state.adopt = state.partial = false;                 // 服务端换了网格，旧的处理结果已经作废
+  stopScan();
+  scan.z = scan.goal = 0;
   $('pad-input').value = info.pad;
   viewer.setGrid(info.n);
   viewer.setTransform('model', info.transform);
@@ -504,7 +603,7 @@ async function doVoxelize() {
   }
 }
 
-async function doProcess() {
+async function doProcess(signal) {
   if (!state.grid) return;
   if (state.adopt) {
     state.adopt = false;
@@ -523,7 +622,7 @@ async function doProcess() {
     return;
   }
   if (params.axes.length === 0) throw new Error('至少选择一个模糊方向（X、Y 或 Z）。');
-  await postJSON('/api/process', params);
+  await postJSON('/api/process', params, signal);
   await adoptProcessed();
 }
 
@@ -542,14 +641,14 @@ function paintProcessed() {
   state.procCount = viewer.setVoxels('processed', state.procData, state.grid.n, level(), true);
 }
 
-async function doMesh() {
+async function doMesh(signal) {
   state.report = state.meshError = null;
   if (!state.proc) {
     viewer.clear('result');
     return;
   }
   try {
-    const { buffer, meta } = await getBinary('/api/mesh', json(meshParams()));
+    const { buffer, meta } = await getBinary('/api/mesh', { ...json(meshParams()), signal });
     viewer.setMesh('result', buffer);
     state.report = meta;
   } catch (e) {
@@ -562,8 +661,11 @@ async function doMesh() {
 // ── 模型 ────────────────────────────────────────────────────────────────
 
 async function loadModel(send) {
-  await idle();
+  if (loading) return;                                 // 上一个还没载入完，不排队
+  loading = true;
+  await halt();
   $('spinner').hidden = false;
+  render();
   try {
     state.model = await send();
     $('up-select').value = state.model.up;
@@ -581,18 +683,20 @@ async function loadModel(send) {
     invalidate(STAGE.voxel);
   } catch (e) {
     $('spinner').hidden = true;
-    if (!e.restarted) toast(e.message);
+    if (!e.quiet) toast(e.message);
   }
+  loading = false;
+  render();
 }
 
 // 本地服务重启过：把正在用的模型从 input/ 重新打开，再按页面上现在的参数从体素化重算一遍
 let recovering = false;
 
 async function recover() {
-  if (recovering || !state.model) return;
-  recovering = true;
+  if (recovering || loading || !state.model) return;
+  recovering = loading = true;
   try {
-    await idle();
+    await halt();
     const up = $('up-select').value;
     const turned = up !== state.model.up;
     toast('本地服务重启过，正在重新载入模型并重算。', 'info');
@@ -617,7 +721,7 @@ async function recover() {
     $('spinner').hidden = true;
     toast(`本地服务重启过，模型没能重新载入，请重新选择模型。（${e.message}）`);
   }
-  recovering = false;
+  recovering = loading = false;
 }
 
 // input/ 里已有的模型：重启或换机器之后不用再上传
@@ -666,6 +770,8 @@ async function submitAtlas() {
 async function watchAtlas(job) {
   state.atlasJob = job.job_id;
   state.run = job;
+  stopScan();
+  scan.z = scan.goal = 0;                              // 扫描面从底下重新开始
   revealJobs();
   render();
   let seen = -1, lastPartial = 0;
@@ -716,8 +822,10 @@ async function showPartial(jobId) {
     state.proc = state.report = null;
     state.partial = true;
     viewer.clear('result');
-    state.view = 'processed';
+    // 一层一层往上算的：用扫描视图，扫描面走到已经连续算完的那一层。别的切法照旧一块一块显示
+    state.view = meta.frontier == null ? 'processed' : 'scan';
     paintProcessed();
+    if (meta.frontier != null) scanTo(meta.frontier, 2);
   } catch (e) { /* 正好算完了，取不到也没关系 */ }
 }
 
@@ -750,13 +858,83 @@ function atlasFinished(cached, meta) {
   state.atlasStatus = ['ok', cached ? '已读取缓存的结果，没有重新提交。'
     : `完成：${jobs}${reused}用时 ${formatWait(meta.seconds)}。`];
   state.adopt = true;
-  state.view = 'result';
+  // 刚看着它一层层算完的：留在扫描视图，让扫描面走到顶；其他情况直接看结果
+  const watched = !cached && state.view === 'scan' && state.grid;
+  state.view = watched ? 'scan' : 'result';
+  if (watched) scanTo(state.grid.n, 2);
   invalidate(STAGE.process);
 }
 
+// ── 扫描 ────────────────────────────────────────────────────────────────
+// 一个水平面从下往上走，它下面画量子结果，上面画原来的体素。按层分块提交 Atlas 时，这个面跟着
+// 真实的进度走（服务端报告已经连续算完到第几层）；有了结果以后可以重放，也可以拖着它上下看。
+
+const SCAN_SECONDS = 10;                               // 从底到顶放一遍的时间
+const scan = { z: 0, goal: 0, speed: 0, last: 0, frame: null, timer: null };
+
+// 下一步：平时跟着屏幕刷新走；页面没在画的时候（比如切到了后台）屏幕刷新不来，就靠定时器接着走
+function scanNext() {
+  scan.frame = requestAnimationFrame(scanStep);
+  scan.timer = setTimeout(() => scanStep(performance.now()), 300);
+}
+
+// 让扫描面在 seconds 秒里走到 goal 层
+function scanTo(goal, seconds) {
+  const n = state.grid.n;
+  scan.goal = Math.min(Math.max(goal, 0), n);
+  scan.speed = Math.max(Math.abs(scan.goal - scan.z) / seconds, n / 120);
+  if (scan.frame === null && scan.z !== scan.goal) {
+    scan.last = performance.now();
+    scanNext();
+  }
+  renderScan();
+}
+
+function scanStep(now) {
+  stopScan(false);
+  if (!state.grid) return;
+  const step = scan.speed * Math.min((now - scan.last) / 1000, 1);   // 画面卡了也按真实时间走
+  scan.last = now;
+  const left = scan.goal - scan.z;
+  scan.z = Math.abs(left) <= step ? scan.goal : scan.z + Math.sign(left) * step;
+  if (scan.z !== scan.goal) scanNext();
+  renderScan();
+}
+
+function stopScan(here = true) {
+  if (scan.frame !== null) cancelAnimationFrame(scan.frame);
+  clearTimeout(scan.timer);
+  scan.frame = null;
+  if (here) scan.goal = scan.z;                        // 停在现在的位置；false 只是取消已经排好的下一步
+}
+
+function playScan(fromBottom) {
+  if (!state.grid) return;
+  if (fromBottom) scan.z = 0;
+  scanTo(state.grid.n, SCAN_SECONDS * (1 - scan.z / state.grid.n));
+}
+
+function renderScan() {
+  const on = currentView() === 'scan';
+  $('scan-bar').hidden = !on;
+  viewer.setScan(on ? scan.z : null);
+  if (!on) return;
+  const n = state.grid.n;
+  const live = !!state.atlasJob;                       // 跟着 Atlas 的进度走的时候不能自己拖
+  const slider = $('scan-z');
+  slider.max = n;
+  slider.value = Math.round(scan.z);
+  slider.disabled = live;
+  paintSlider(slider);
+  $('scan-out').textContent = `${Math.round(scan.z)} / ${n} 层`;
+  $('scan-play').textContent = scan.frame !== null && !live ? '暂停' : scan.z >= n ? '重放' : '播放';
+  $('scan-play').disabled = live;
+}
+
 // ── Atlas 任务列表 ─────────────────────────────────────────────────────────
-// 账户里的任务，新的在前；本应用提交的标上实验名和分块。只在展开时向 Atlas 要数据：
-// 有任务在跑时 3 秒一次，否则 30 秒一次，页面不在前台时停下。
+// 账户里的任务，新的在前；本应用提交的标上实验名和分块。这一栏只在 Atlas 模式下出现，
+// 用本地模拟调参时页面不会向 Atlas 发任何请求。出现并且展开时：有任务在跑 3 秒更新一次，
+// 否则 30 秒一次，页面不在前台时停下。
 
 const JOB_STATE = {
   queued: ['', '排队中'], pending: ['', '排队中'],
@@ -783,6 +961,7 @@ const jobs = {
   busy: false,
   error: null,
   updated: null,
+  fetched: 0,           // 上一次向 Atlas 要数据的时刻
   timer: null,
   epoch: 0,             // 换 key 之后加一，丢掉还在路上的旧响应
 };
@@ -816,9 +995,17 @@ async function loadJobs(epoch) {
   jobs.loaded = true;
 }
 
+// 回到前台、切回 Atlas 模式时：离上次更新不够久就只把定时器续上，不马上再问一次
+function resumeJobs() {
+  clearTimeout(jobs.timer);
+  const wait = (jobsActive() ? 3000 : 30000) - (Date.now() - jobs.fetched);
+  if (wait > 0 && jobs.loaded) jobs.timer = setTimeout(refreshJobs, wait);
+  else refreshJobs();
+}
+
 async function refreshJobs() {
   clearTimeout(jobs.timer);
-  if (!jobs.open || document.hidden || jobs.busy) return;
+  if ($('jobs').hidden || !jobs.open || document.hidden || jobs.busy) return;
   if (!state.key || !state.key.set) {
     renderJobs();
     return;
@@ -848,6 +1035,7 @@ async function refreshJobs() {
     if (epoch === jobs.epoch) jobs.error = e.message;
   }
   jobs.busy = false;
+  jobs.fetched = Date.now();
   if (epoch !== jobs.epoch) {
     refreshJobs();
     return;
@@ -1269,7 +1457,8 @@ const dims = (extents) => extents.join(' × ');
 
 function available(view) {
   return { model: !!state.model && !!state.grid, voxels: !!state.gridData,
-    processed: !!state.procData, result: !!state.report }[view];
+    processed: !!state.procData, result: !!state.report,
+    scan: !!state.gridData && !!state.procData }[view];
 }
 
 function currentView() {
@@ -1284,6 +1473,12 @@ function footText(view) {
   if (view === 'voxels') return `${g.n}³ 网格 · ${fmt(g.solid)} 个实体格子`;
   if (view === 'processed') return `阈值 ${level().toFixed(2)} · ${fmt(state.procCount)} 个格子在阈值以上`;
   if (view === 'result') return `${fmt(r.faces)} 个面 · ${r.parts} 块 · ${dims(r.extents)} mm`;
+  if (view === 'scan') {
+    if (state.atlasJob) return 'Atlas 正在一层一层往上算，扫描面以下是已经算完的';
+    const t = state.proc && state.proc.tiles;
+    return '扫描面以下是量子结果，以上是原来的体素'
+      + (t && t.mode === 'layers' && t.jobs > 1 ? ' · 这个结果就是这样从下往上一层层算出来的' : '');
+  }
   return '';
 }
 
@@ -1377,8 +1572,18 @@ function render() {
     b.setAttribute('aria-checked', String(b.dataset.value === view));
   }
   viewer.show(view);
-  $('empty').hidden = !!m;
-  $('stage-foot-text').textContent = view ? footText(view) : '';
+  $('empty').hidden = !!m || loading;
+  $('stage-foot-text').textContent = loading ? '正在载入模型…' : view ? footText(view) : '';
+  for (const id of ['pick-file', 'use-test-cup', 'model-select', 'up-select']) $(id).disabled = loading;
+
+  // 任务栏只在 Atlas 模式下（或有一次提交还在跑时）出现
+  const showJobs = mode === 'atlas' || !!state.atlasJob;
+  if ($('jobs').hidden === showJobs) {
+    $('jobs').hidden = !showJobs;
+    if (showJobs) resumeJobs();
+    else clearTimeout(jobs.timer);
+  }
+  renderScan();
   renderRun();
   renderKey();
   drawSlice();
@@ -1407,7 +1612,8 @@ function bind() {
   viewport.addEventListener('drop', (e) => {
     e.preventDefault();
     dragging(false);
-    uploadFile(e.dataTransfer.files[0]);
+    if (loading) toast('上一个模型还在载入，等它好了再换。', 'info');
+    else uploadFile(e.dataTransfer.files[0]);
   });
 
   const voxelChanged = () => { state.view = 'voxels'; invalidate(STAGE.voxel, 120); };
@@ -1427,6 +1633,7 @@ function bind() {
       return;
     }
     if (state.view !== 'result') state.view = 'processed';
+    render();                                          // 模式对应的控件、任务栏马上跟着变，不等算完
     invalidate(STAGE.process, 120);
   };
   bindSeg('mode-seg', processChanged);
@@ -1469,11 +1676,28 @@ function bind() {
       $('export-result').replaceChildren(`已保存到 ${r.folder}/${r.file}，同名 .json 里记着这次的全部参数。`, link);
       $('export-result').hidden = false;
     } catch (e) {
-      if (!e.restarted) toast(e.message);
+      if (!e.quiet) toast(e.message);
     }
   });
 
-  bindSeg('view-seg', (value) => { state.view = value; render(); });
+  bindSeg('view-seg', (value) => {
+    state.view = value;
+    render();
+    if (value === 'scan' && !state.atlasJob) playScan(true);   // 切过来就从底下放一遍
+  });
+  $('scan-play').addEventListener('click', () => {
+    if (scan.frame !== null) {
+      stopScan();
+      renderScan();
+    } else {
+      playScan(scan.z >= state.grid.n);
+    }
+  });
+  $('scan-z').addEventListener('input', (e) => {      // 拖着看：停下播放，面跟着手走
+    stopScan();
+    scan.z = scan.goal = Number(e.target.value);
+    renderScan();
+  });
   $('reset-view').addEventListener('click', () => viewer.focus(currentView()));
 
   bindSeg('slice-source-seg', (value) => { state.slicePref = value; drawSlice(); });
@@ -1500,9 +1724,9 @@ function bind() {
   });
   $('jobs-refresh').addEventListener('click', refreshJobs);
   $('jobs-more').addEventListener('click', moreJobs);
-  document.addEventListener('visibilitychange', refreshJobs);
+  document.addEventListener('visibilitychange', resumeJobs);
   setInterval(() => {                                  // 「几秒前」自己往前走，不用等下一次向 Atlas 要数据
-    if (jobs.open && !document.hidden && jobs.rows.size) renderJobs();
+    if (!$('jobs').hidden && jobs.open && !document.hidden && jobs.rows.size) renderJobs();
   }, 5000);
 
   $('key-button').addEventListener('click', openKeyModal);
@@ -1579,14 +1803,21 @@ async function init() {
   viewer = new Viewer($('viewport'));
   bind();
   render();
+  refreshModels();
   try {
     const saved = await getJSON('/api/state');
     state.key = saved.key;
     try { jobs.pref = localStorage.getItem('quantum-sculpting-jobs'); } catch (e) { /* 用默认的 */ }
     // 有 key 就默认展开任务列表；手机宽度上它会把控件挤到很下面，默认收起
     setJobsOpen(jobs.pref ? jobs.pref === 'open' : saved.key.set && matchMedia('(min-width: 761px)').matches, false);
-    refreshModels();
-    if (saved.model) await restore(saved);
+    if (saved.model && !loading && !state.model) {
+      loading = true;                                  // 接回来的过程中不让别的流程插进来
+      try {
+        await restore(saved);
+      } finally {
+        loading = false;
+      }
+    }
     if (saved.job) {                                   // 有一次提交还在 Atlas 上跑：接回去看着它
       showProcessParams('atlas', saved.job.run, saved.job.params, saved.job.tiling);
       watchAtlas(saved.job);

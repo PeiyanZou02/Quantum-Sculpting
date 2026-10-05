@@ -49,9 +49,29 @@ three.js, same Flask API). After `cd web && pnpm install && pnpm build` it is se
 
 The interface is in Chinese.
 
+## Scan view
+
+The preview has a fifth view, *scan*: a horizontal plane sweeps from the bottom of the grid to
+the top, with the quantum result drawn below it and the original voxels above it, like a CT
+scan or a print growing layer by layer.
+
+- With any processed result, switching to the view plays the sweep once (10 seconds). The bar
+  at the bottom left pauses, replays, or lets you drag the plane to any layer.
+- During an Atlas run tiled in layers, the plane follows the real progress: the service
+  reports the height up to which every slab has come back, and the plane rises to it. This is
+  the one part of a real quantum run that can be shown as it happens — what goes on inside a
+  single job cannot be observed. When the run ends the view stays on the finished sweep.
+- For a result that was not computed in layers the sweep is only a before-and-after
+  comparison; the caption says which case you are looking at.
+
+Only two clipping planes move while it plays, so it is smooth at 256³ as well.
+
 ## Atlas jobs panel
 
-Below the preview there is a panel that lists the jobs in your Atlas account, newest first:
+The panel appears only in Atlas mode (or while a run is in progress). With the Gaussian
+stand-in or local emulation selected, the page makes no requests to Atlas at all.
+
+In Atlas mode, below the preview there is a panel that lists the jobs in your Atlas account, newest first:
 when each was submitted, the engine, the job ID, where it came from and its status. Jobs this
 app submitted are labelled with the run name and the tile they computed; anything else in the
 account shows as "personal account". Click a row for the full job ID, timings, the tile's
@@ -135,8 +155,24 @@ Voxel operations, applied before meshing with either method:
 | Thicken / shrink | Moves the whole surface out or in by a distance | VDB Reshape SDF: dilate, erode |
 | Close gaps | Thickens then shrinks by the same amount; gaps narrower than that are filled | VDB Reshape SDF: close |
 
+Operations that move the surface step by step (pushing, thickening, closing, Laplacian flow)
+work in a narrow band: only the voxels within four of the surface are recomputed at each
+step, inside a box that follows the surface as it moves, and a push stops as soon as the
+surface has arrived at the iso-surface it is heading for. On the statue used during
+development (500k faces, 256³ fine grid) every setting takes 1–3 seconds; a model that fills
+the whole 256³ grid takes 10–20 seconds, mostly for meshing about a million faces.
+
 `research/openvdb-level-sets.md` documents how OpenVDB does each of these, with sources, and
 where this implementation departs from it.
+
+## Staying responsive while tuning
+
+Voxelising, emulating and meshing run one at a time, outside the lock that guards the
+service's state, so reloading the page or choosing another model never waits for a
+computation. When a control changes while its result is still being computed, the page drops
+the request and the service stops that computation at its next step and starts the new one.
+A page reloaded mid-computation takes over from where the old page was. Use one page at a
+time: all pages share the one model the service holds.
 
 ## Layout
 

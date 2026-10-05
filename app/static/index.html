@@ -347,6 +347,7 @@
         <button type="button" role="radio" data-value="voxels" aria-checked="false" disabled>体素</button>
         <button type="button" role="radio" data-value="processed" aria-checked="false" disabled>处理后</button>
         <button type="button" role="radio" data-value="result" aria-checked="false" disabled>结果</button>
+        <button type="button" role="radio" data-value="scan" aria-checked="false" disabled>扫描</button>
       </div>
       <button type="button" id="reset-view" class="btn btn-sm btn-secondary">重置视角</button>
     </div>
@@ -358,13 +359,18 @@
       </div>
       <div class="drop-hint" id="drop-hint" hidden>松开以载入模型</div>
     </div>
+    <div class="scan-bar" id="scan-bar" hidden>
+      <button type="button" id="scan-play" class="btn btn-sm btn-secondary">播放</button>
+      <input type="range" class="slider" id="scan-z" min="0" max="32" step="1" value="0" aria-label="扫描面的高度">
+      <output id="scan-out" class="mono muted"></output>
+    </div>
     <div class="stage-foot">
       <span class="spinner" id="spinner" hidden></span>
       <span id="stage-foot-text"></span>
     </div>
   </main>
 
-  <section class="jobs" id="jobs" aria-label="Atlas 任务">
+  <section class="jobs" id="jobs" aria-label="Atlas 任务" hidden>
     <div class="jobs-bar">
       <button type="button" id="jobs-toggle" class="btn btn-sm btn-tertiary" aria-expanded="false" aria-controls="jobs-body">
         <svg class="icon chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 10 4-4 4 4"/></svg>

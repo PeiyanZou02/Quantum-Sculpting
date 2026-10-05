@@ -8,6 +8,7 @@ import os
 import struct
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from pathlib import Path
@@ -400,10 +401,26 @@ class ServerTest(unittest.TestCase):
         self.assertEqual((again["status"], again["meta"]["cached"]), ("done", True))
         self.assertEqual(self.fake.submits, before + 4)
 
-        # 换成按层分块：又是 4 个新任务，每个是 64×64×16
-        job = self.wait_for_job(self.post("/api/process", {**body, "tiling": "layers"}).get_json()["job_id"])
+        self.assertIsNone(job["frontier"], "立方块不是一层一层往上算的")
+
+        # 换成按层分块：又是 4 个新任务，每个是 64×64×16。算到第几层会报出来，只升不降
+        running = self.post("/api/process", {**body, "tiling": "layers"}).get_json()
+        seen = [running["frontier"]]
+        for _ in range(400):
+            job = self.c.get(f"/api/process/{running['job_id']}").get_json()
+            seen.append(job["frontier"])
+            preview = self.c.get(f"/api/process/{running['job_id']}/preview")
+            if preview.status_code == 200:
+                seen.append(json.loads(preview.headers["X-Meta"])["frontier"])
+            if job["status"] != "running":
+                break
+            time.sleep(0.01)
+        self.assertEqual(job["status"], "done", job["error"])
         self.assertEqual(job["meta"]["tiles"]["shape"], [64, 64, 16])
         self.assertEqual(self.fake.submits, before + 8)
+        self.assertEqual(seen, sorted(seen))
+        self.assertTrue(set(seen) <= {0, 16, 32, 48, 64}, seen)
+        self.assertEqual((seen[0], seen[-1]), (0, 64))
 
     def test_identical_and_uniform_tiles_are_not_submitted_twice(self):
         self.post("/api/key", {"key": TEST_KEY})
@@ -523,6 +540,7 @@ class ServerTest(unittest.TestCase):
         self.assertEqual(job["status"], "done")
 
     def test_atlas_result_for_an_old_grid_is_not_applied(self):
+        self.fake.polls_needed = 100           # 任务要比下面那次体素化晚结束
         self.post("/api/key", {"key": TEST_KEY})
         self.ready(16)
         job = self.post("/api/process", {"mode": "atlas", "run": "stale"}).get_json()
@@ -640,6 +658,95 @@ class ServerTest(unittest.TestCase):
         self.assertIsNone(self.c.get("/api/state").get_json()["job"])
         second = self.post("/api/process", {**body, "run": "second"}).get_json()
         self.assertEqual(self.wait_for_job(second["job_id"])["status"], "done")
+
+    # ── 算得久的时候 ──
+
+    def test_a_long_computation_does_not_freeze_the_page_and_stops_when_superseded(self):
+        self.ready(16)
+        self.post("/api/process", {"mode": "emulator"})
+        original = server.pipeline.grid_to_mesh
+        started, release, calls = threading.Event(), threading.Event(), []
+
+        def slow(*args, **kwargs):
+            calls.append(1)
+            if len(calls) in (1, 3):                    # 这两次要算很久，每一小步问一次还要不要算
+                started.set()
+                while not release.is_set():
+                    server.levelset.checkpoint()
+                    time.sleep(0.005)
+            return original(*args, **kwargs)
+
+        def mesh(page, level, out):
+            out.append(server.app.test_client().post(
+                "/api/mesh", json={"level": level}, headers={"X-Client": page}))
+
+        server.pipeline.grid_to_mesh = slow
+        try:
+            first = []
+            worker = threading.Thread(target=mesh, args=("page-a", 0.5, first))
+            worker.start()
+            self.assertTrue(started.wait(5))
+            t0 = time.time()                            # 正在算的时候，刷新页面要用到的接口照样马上回来
+            self.assertEqual(self.c.get("/api/state").status_code, 200)
+            self.assertEqual(self.c.get("/api/grid/processed").status_code, 200)
+            self.assertEqual(self.c.get("/api/models").status_code, 200)
+            self.assertLess(time.time() - t0, 1.0)
+
+            # 同一个页面又发来一次（滑块又动了）：旧的那次停下，新的算完
+            second = []
+            mesh("page-a", 0.4, second)
+            worker.join(5)
+            self.assertEqual(second[0].status_code, 200)
+            self.assertEqual(json.loads(second[0].headers["X-Meta"])["level"], 0.4)
+            self.assertEqual(first[0].status_code, 409)
+            self.assertTrue(first[0].get_json()["superseded"])
+
+            # 别的页面的请求不会把它顶掉，只是排在后面
+            started.clear()
+            third, fourth = [], []
+            worker = threading.Thread(target=mesh, args=("page-a", 0.5, third))
+            worker.start()
+            self.assertTrue(started.wait(5))
+            other = threading.Thread(target=mesh, args=("page-b", 0.5, fourth))
+            other.start()
+            time.sleep(0.15)
+            self.assertEqual(fourth, [], "另一个页面的请求应该在排队")
+            release.set()
+            worker.join(5)
+            other.join(5)
+            self.assertEqual((third[0].status_code, fourth[0].status_code), (200, 200))
+        finally:
+            release.set()
+            server.pipeline.grid_to_mesh = original
+
+    def test_changing_the_model_stops_what_was_being_computed_for_the_old_one(self):
+        self.ready(16)
+        self.post("/api/process", {"mode": "emulator"})
+        original = server.pipeline.grid_to_mesh
+        started = threading.Event()
+
+        def slow(*args, **kwargs):
+            started.set()
+            for _ in range(2000):
+                server.levelset.checkpoint()
+                time.sleep(0.005)
+            return original(*args, **kwargs)
+
+        out = []
+        server.pipeline.grid_to_mesh = slow
+        try:
+            worker = threading.Thread(target=lambda: out.append(server.app.test_client().post(
+                "/api/mesh", json={"level": 0.5}, headers={"X-Client": "page-a"})))
+            worker.start()
+            self.assertTrue(started.wait(5))
+            t0 = time.time()
+            r = self.c.post("/api/model/test-cup", headers={"X-Client": "page-a"})
+            self.assertEqual(r.status_code, 200)
+            worker.join(5)
+            self.assertLess(time.time() - t0, 2.0, "换模型不用等旧的算完")
+            self.assertEqual(out[0].status_code, 409)
+        finally:
+            server.pipeline.grid_to_mesh = original
 
     # ── 服务重启之后 ──
 
