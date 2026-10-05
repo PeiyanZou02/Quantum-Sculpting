@@ -133,6 +133,43 @@ class LevelSetTest(unittest.TestCase):
         mean, _ = radius_of(levelset.to_mesh(self.ls.with_sdf(fixed)), self.t)
         self.assertAlmostEqual(mean, RADIUS, delta=0.1 * self.voxel)
 
+    def test_the_quick_tidy_matches_the_full_rebuild_near_the_surface(self):
+        """一步一步推表面时用的窄带整理：表面附近和完整的整理一样准，远处只留正负号。"""
+        distorted = self.ls.sdf * 3.0
+        quick, full = levelset._tidy(distorted), levelset.rebuild(distorted)
+        near = np.abs(full) < 2.5
+        self.assertLess(float(np.abs(quick - full)[near].mean()), 0.03)
+        self.assertLess(float(np.abs(quick - full)[near].max()), 0.3)
+        np.testing.assert_array_equal(quick < 0, full < 0)
+        self.assertEqual(float(np.abs(quick).max()), float(levelset.REACH))
+        mean, spread = radius_of(levelset.to_mesh(self.ls.with_sdf(quick)), self.t)
+        self.assertAlmostEqual(mean, RADIUS, delta=0.1 * self.voxel)
+        self.assertLess(spread, 0.1 * self.voxel)
+
+    def test_advection_follows_the_surface_far_beyond_its_first_box_and_stops_when_it_arrives(self):
+        """小球被吸到大得多的球面上。盒子要跟着表面走；到了以后剩下的步数不用走完。"""
+        small = trimesh.creation.icosphere(subdivisions=4, radius=RADIUS * 0.3)
+        start = levelset.from_mesh(small, self.t, 32, 2)
+        self.assertLess(max(start.sdf.shape), 44, "一开始的盒子只围着小球")
+        occupancy, _, _ = self._grid_of(small)
+        target, _, _ = self._grid_of(self.sphere)
+        tidies = []
+        original = levelset._tidy
+        levelset._tidy = lambda sdf: (tidies.append(1), original(sdf))[1]
+        try:
+            arrived = levelset.advect(start, target, occupancy, 24.0, "threshold")
+            used = len(tidies)
+            del tidies[:]
+            late = levelset.advect(start, target, occupancy, 150.0, "threshold")
+        finally:
+            levelset._tidy = original
+        for moved in (arrived, late):
+            mean, spread = radius_of(levelset.to_mesh(moved), self.t)
+            self.assertAlmostEqual(mean, RADIUS, delta=0.5 * self.voxel)
+            self.assertLess(spread, 0.3 * self.voxel)
+        self.assertGreater(min(arrived.sdf.shape), 56, "盒子跟着长大了")
+        self.assertLess(len(tidies), used + 6, "多给六倍的量，不应该多算多少步")
+
     def test_offset_moves_the_surface_by_that_many_fine_voxels(self):
         fine = self.voxel / 2
         for distance in (2.0, -3.0):

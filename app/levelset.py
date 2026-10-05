@@ -22,8 +22,17 @@ import pipeline
 
 SAMPLES_PER_VOXEL = 12        # 每平方体素的表面采样点数：够密，窄带里的距离才准
 BAND = 3                      # 表面两侧各几个体素用精确距离，再远用近似的
+REACH = 4                     # 一步一步推表面时，只在表面两侧这么多格里算，再远的只留正负号
 FIELDS = ("difference", "threshold", "gradient")
 FILTERS = ("none", "gaussian", "mean", "median", "curvature")
+
+
+def keep_going():
+    pass
+
+
+# 循环的每一步会调用一次。服务把它换成「结果已经没人要了就抛异常」的函数，算到一半的就能停下
+checkpoint = keep_going
 
 
 @dataclass
@@ -64,26 +73,36 @@ def _slope(sdf):
     return np.sqrt(total)
 
 
+def _gradient_at(sdf, index):
+    """sdf 在这些体素上的梯度（中心差分，盒子边上用单侧差分）。只算这些点。"""
+    parts = []
+    for axis in range(3):
+        lo, hi = list(index), list(index)
+        lo[axis] = np.maximum(index[axis] - 1, 0)
+        hi[axis] = np.minimum(index[axis] + 1, sdf.shape[axis] - 1)
+        parts.append((sdf[tuple(hi)] - sdf[tuple(lo)]) / np.maximum(hi[axis] - lo[axis], 1))
+    return np.stack(parts, axis=1)
+
+
 def _crossings(sdf):
     """表面穿过网格棱的那些点（亚体素位置），以及每个点处的单位法线。"""
-    grads = np.gradient(sdf)
     points, normals = [], []
     for axis in range(3):
         field = np.moveaxis(sdf, axis, 0)
         low, high = field[:-1], field[1:]
-        where = np.nonzero((low < 0) != (high < 0))
+        where = np.nonzero((low < 0) != (high < 0))            # 第 0 维是 axis 方向
         a, b = np.abs(low[where]), np.abs(high[where])
         t = (a / (a + b + 1e-12)).astype(np.float32)
-        index = list(where)                                   # 第 0 维是 axis 方向
-        point = np.stack([index[0] + t, index[1], index[2]], axis=1)
-        upper = (index[0] + 1, index[1], index[2])
-        normal = np.stack([(1 - t) * np.moveaxis(g, axis, 0)[where] + t * np.moveaxis(g, axis, 0)[upper]
-                           for g in grads], axis=1)
-        order = [1, 2, 3]
-        order.insert(axis, 0)                                 # 把坐标换回原来的轴顺序
-        back = np.argsort([axis] + [x for x in range(3) if x != axis])
-        points.append(point[:, back])
-        normals.append(normal)
+        lower = [None] * 3
+        lower[axis] = where[0]
+        for other, values in zip([x for x in range(3) if x != axis], where[1:]):
+            lower[other] = values
+        upper = list(lower)
+        upper[axis] = where[0] + 1
+        point = np.stack(lower, axis=1).astype(np.float32)
+        point[:, axis] += t
+        points.append(point)
+        normals.append((1 - t)[:, None] * _gradient_at(sdf, lower) + t[:, None] * _gradient_at(sdf, upper))
     points = np.concatenate(points).astype(np.float32)
     normals = np.concatenate(normals).astype(np.float32)
     normals /= np.maximum(np.linalg.norm(normals, axis=1, keepdims=True), 1e-9)
@@ -97,6 +116,7 @@ def rebuild(sdf):
     对平面是精确的，也只用到表面的位置，所以已经是距离场的再整理一遍基本不变，输入不必本来就是距离。
     窄带以外用到对面最近体素的距离顶上，只要求单调，不要求准。
     """
+    checkpoint()
     sdf = np.asarray(sdf, dtype=np.float32)
     inside = sdf < 0
     if not inside.any() or inside.all():
@@ -112,6 +132,63 @@ def rebuild(sdf):
     out = far.copy()
     out[tuple(centers.T)] = np.where(inside[tuple(centers.T)], -plane, plane)
     return out
+
+
+def _tidy(sdf):
+    """一步一步推表面时用的快速整理：只重算表面两侧 REACH 格以内的距离，不做整盒的距离变换。
+
+    这一圈里的体素取到最近的「表面穿过网格棱的点」处切平面的距离，和 rebuild 一样；更远的只留
+    正负号（固定在 ±REACH）。所以两次整理之间表面不能走出这一圈，全部推完后要用 rebuild 把远处补上。
+    大网格上 rebuild 的两次整盒距离变换是最费时间的部分，推几十步就要做几十次。
+    """
+    checkpoint()
+    sdf = np.asarray(sdf, dtype=np.float32)
+    inside = sdf < 0
+    if not inside.any() or inside.all():
+        return sdf
+    points, normals = _crossings(sdf)
+    size = 2 * REACH + 1
+    near = ndimage.maximum_filter(inside, size=size) != ndimage.minimum_filter(inside, size=size)
+    centers = np.argwhere(near)
+    distance, nearest = cKDTree(points).query(centers, workers=-1)
+    plane = np.abs(np.einsum("ij,ij->i", centers - points[nearest], normals[nearest]))
+    # 切平面距离在表面拐弯处会偏小，不让它比到那个交点的直线距离小太多
+    plane = np.minimum(np.maximum(plane, distance - 1.0), REACH).astype(np.float32)
+    at = tuple(centers.T)
+    out = np.where(inside, -float(REACH), float(REACH)).astype(np.float32)
+    out[at] = np.where(inside[at], -plane, plane)
+    return out
+
+
+def _window(sdf, origin, size, margin=REACH + 4):
+    """把盒子换成正好围住表面、四周留 margin 格的那一个。返回 (新盒子里的场, 新起点)。
+
+    推表面的时候让盒子跟着表面走，每一步只在它周围算，而不是一开始就把「最远能走到的地方」全留出来。
+    盒子外面补出来的地方都算外部：调用之前表面离旧盒子的边还有距离，或者那一面已经是整个网格的边。
+    """
+    lo, hi = _box(sdf < 0, 10 ** 9, margin=0)
+    lo = [max(a + o - margin, 0) for a, o in zip(lo, origin)]
+    hi = [min(b + o + margin, size) for b, o in zip(hi, origin)]
+    out = np.full([b - a for a, b in zip(lo, hi)], float(REACH), dtype=np.float32)
+    source, target = [], []
+    for a, b, o, s in zip(lo, hi, origin, sdf.shape):
+        start, stop = max(a, o), min(b, o + s)
+        source.append(slice(start - o, stop - o))
+        target.append(slice(start - a, stop - a))
+    out[tuple(target)] = sdf[tuple(source)]
+    return out, tuple(lo)
+
+
+def _crowded(sdf, origin, size):
+    """表面是不是快碰到盒子的边了（那一面已经是整个网格的边就不算），或者盒子比需要的大太多。"""
+    lo, hi = _box(sdf < 0, 10 ** 9, margin=0)
+    for a, b, o, s in zip(lo, hi, origin, sdf.shape):
+        before, after = a, s - b
+        if (before < REACH + 2 and o > 0) or (after < REACH + 2 and o + s < size):
+            return True
+        if before > 3 * REACH + 8 or after > 3 * REACH + 8:
+            return True
+    return False
 
 
 def _box(mask_any_axes, size, margin):
@@ -191,6 +268,7 @@ def from_mesh(mesh, transform, n, refine=1, fill="holes"):
     cell = np.clip(np.rint(points).astype(int) - lo, 0, np.array(shape) - 1)
     touched[cell[:, 0], cell[:, 1], cell[:, 2]] = True
     band = ndimage.distance_transform_edt(~touched) <= BAND + 1
+    checkpoint()
     centers = np.argwhere(band)
     distance, nearest = cKDTree(points).query(centers + lo, workers=-1)
     distance = distance.astype(np.float32)
@@ -198,6 +276,7 @@ def from_mesh(mesh, transform, n, refine=1, fill="holes"):
     # 壳 = 中心离表面不到一格的体素。只用「采样点落到的格子」当壳会漏：表面只擦过一个角的格子
     # 可能一个点都没落到，填充时外面就从这些小孔灌进去了。表面穿过的格子中心离它最多 0.87 格，
     # 所以按距离取一定是封闭的。
+    checkpoint()
     shell = np.zeros(shape, dtype=bool)
     shell[tuple(centers.T)] = distance <= 1.0
     if fill == "holes":
@@ -288,45 +367,80 @@ def advect(ls, density, occupancy, amount, field="threshold", level=0.5):
     total = float(amount) * ls.refine                        # 细网格体素
     if total <= 0:
         return ls
-    whole = ls
-    ls = fit(ls, total + 6)                                  # 速度最大是 1，表面走不出这个范围
-    shape = ls.sdf.shape
-    sdf = ls.sdf.astype(np.float32)
+    size = ls.n * ls.refine
+    density = np.asarray(density, dtype=np.float32)
 
     if field == "gradient":
         # 矢量场：半拉格朗日法，每个体素沿速度往回找它原来的值
-        grads = np.gradient(ndimage.gaussian_filter(np.asarray(density, dtype=np.float32), 0.7))
+        grads = np.gradient(ndimage.gaussian_filter(density, 0.7))
         peak = max(float(np.sqrt(sum(g * g for g in grads)).max()), 1e-9)
-        velocity = [upsample(g / peak, ls.refine, ls.origin, shape) for g in grads]
-        steps = max(1, int(np.ceil(total)))
+        grads = [g / peak for g in grads]
+        steps = max(1, int(np.ceil(total)))                  # 速度最大是 1，每步最多走一个体素
         dt = total / steps
-        grid = np.meshgrid(*[np.arange(s, dtype=np.float32) for s in shape], indexing="ij")
+        sdf, origin = _window(ls.sdf, ls.origin, size)
+        pull = None
         for step in range(steps):
-            coords = [g - v * dt for g, v in zip(grid, velocity)]
-            sdf = ndimage.map_coordinates(sdf, coords, order=1, mode="nearest")
-            if step % 3 == 2:
-                sdf = rebuild(sdf)
-        return ls.with_sdf(rebuild(sdf))
+            checkpoint()
+            if pull is None:                                 # 盒子换了：这个盒子里每个体素往回找的位置
+                grid = np.meshgrid(*[np.arange(s, dtype=np.float32) for s in sdf.shape], indexing="ij")
+                pull = [g - upsample(v, ls.refine, origin, sdf.shape) * dt for g, v in zip(grid, grads)]
+                del grid
+            sdf = ndimage.map_coordinates(sdf, pull, order=1, mode="nearest")
+            if step % 2 == 1 or step == steps - 1:
+                sdf = _tidy(sdf)
+                if _crowded(sdf, origin, size):
+                    (sdf, origin), pull = _window(sdf, origin, size), None
+        return replace(ls, sdf=rebuild(sdf), origin=origin)
 
-    # 标量速度：水平集方程 ∂φ/∂t + F|∇φ| = 0，每步之后重新整理成距离场
-    density = np.asarray(density, dtype=np.float32)
+    # 标量速度：水平集方程 ∂φ/∂t + F|∇φ| = 0
     source = density - (np.asarray(occupancy, dtype=np.float32) if field == "difference" else level)
-    speed = upsample(source, ls.refine, ls.origin, shape)
-    fastest = float(np.abs(speed).max())
+    fastest = float(np.abs(source).max())
     if fastest < 1e-6:
-        return whole                                        # 没有量子效果：原样不动
-    shift = fatness(whole, occupancy) * ls.refine           # 输入比真实表面胖出来的量
-    sdf = sdf - shift
+        return ls                                           # 没有量子效果：原样不动
+    shift = fatness(ls, occupancy) * ls.refine              # 输入比真实表面胖出来的量
+    sdf, origin = _window(ls.sdf.astype(np.float32) - shift, ls.origin, size)
     steps = max(1, int(np.ceil(total * fastest / 0.75)))    # 每步最多移动不到一个体素
     dt = total / steps
+    speed = anchor = trend = None
+    tidied = 0
     for step in range(steps):
+        checkpoint()
+        if speed is None:
+            speed = upsample(source, ls.refine, origin, sdf.shape)
         sdf = sdf - dt * speed * np.minimum(_slope(sdf), 2.0)
         if step % 2 == 1 or step == steps - 1:               # 整理距离场最费时间，隔一步做一次
-            sdf = rebuild(sdf)
-    return ls.with_sdf(rebuild(sdf + shift))
+            sdf = _tidy(sdf)
+            if _crowded(sdf, origin, size):
+                (sdf, origin), speed, anchor, trend = _window(sdf, origin, size), None, None, None
+            elif anchor is None:
+                anchor, tidied = sdf, 0
+            else:
+                tidied += 1
+                if tidied == 4:
+                    # 表面到了它要去的等值面就停下，不用把剩下的步数走完。它是越走越慢地靠过去的：
+                    # 每隔几步量一次这段时间走了多远，按变慢的比例估计剩下的路，不到四分之一格就算到了
+                    near = np.abs(sdf) < 1.0
+                    moved = float(np.percentile(np.abs(sdf - anchor)[near], 99)) if near.any() else 0.0
+                    slowing = trend is not None and moved < trend
+                    if moved < 0.02 or (slowing and moved * moved / (trend - moved) < 0.25):
+                        break
+                    anchor, trend, tidied = sdf, moved, 0
+    sdf = _shift(sdf, shift)
+    return replace(ls, sdf=rebuild(sdf), origin=origin)
 
 
 # ── 平滑（VDB Smooth SDF）和改形（VDB Reshape SDF） ───────────────────────────
+
+def _shift(sdf, distance):
+    """把表面沿法线挪 distance 格（正数向里）。每次最多挪两格再整理，保证它一直在算得准的那一圈里。
+
+    进来的场只要表面两侧 REACH 格以内是准的就行；出去的也是（远处要用 rebuild 补）。
+    """
+    steps = int(np.ceil(abs(distance) / (REACH - 2.0)))
+    for _ in range(steps):
+        sdf = _tidy(sdf + float(distance) / steps)
+    return sdf
+
 
 def smooth(ls, kind="gaussian", width=1.0):
     """在体素上平滑表面。width 以细网格体素为单位。
@@ -345,10 +459,11 @@ def smooth(ls, kind="gaussian", width=1.0):
         sdf = ndimage.uniform_filter(sdf, size=2 * max(1, int(round(width))) + 1)
     elif kind == "median":
         for _ in range(max(1, int(round(width)))):
+            checkpoint()
             sdf = ndimage.median_filter(sdf, size=3)
     else:
         for _ in range(int(np.clip(round(2 * width * width), 1, 12))):
-            sdf = rebuild(ndimage.gaussian_filter(sdf, 0.7))
+            sdf = _tidy(ndimage.gaussian_filter(sdf, 0.7))
     return ls.with_sdf(rebuild(sdf))
 
 
@@ -356,12 +471,7 @@ def offset(ls, distance):
     """正数整体加厚（dilate），负数收缩（erode）。以细网格体素为单位。"""
     if distance == 0:
         return ls
-    # 一次最多挪不到一个体素再整理一遍，这样每一步表面都落在距离算得准的那一圈里
-    steps = max(1, int(np.ceil(abs(distance) / 0.75)))
-    sdf = ls.sdf
-    for _ in range(steps):
-        sdf = rebuild(sdf - float(distance) / steps)
-    return ls.with_sdf(sdf)
+    return ls.with_sdf(rebuild(_shift(ls.sdf, -float(distance))))
 
 
 def close(ls, radius):
