@@ -221,10 +221,12 @@ function padOf(chosen: HudModule[]): Pad {
 }
 
 /** Draws the chosen modules over the view. `chrome` lets the host put its own controls into slots. */
-export function HudLayer({ ctx, compose, chrome, positions = {}, fit = 1, arrange = false, edit, looks = {}, hl = null, ghost = null, texts = [], autoArrange = false, onCrowded, onLeftOut, tidyKey = 0, reserve = 0, inset, onHero, onMove, onText }: {
+export function HudLayer({ ctx, compose, chrome, positions = {}, fit = 1, terse = false, arrange = false, edit, looks = {}, hl = null, ghost = null, texts = [], autoArrange = false, onCrowded, onLeftOut, tidyKey = 0, reserve = 0, inset, onHero, onMove, onText }: {
   ctx: HudCtx; compose: Composition; chrome?: Partial<Record<(typeof SLOTS)[number], ReactNode>>
   /** Scale of pieces placed by hand (see Piece). */
   fit?: number
+  /** Data only: captions and notes inside the pieces are hidden. */
+  terse?: boolean
   positions?: Record<string, Placement>; arrange?: boolean; edit?: Edit; looks?: Record<string, Look>; hl?: string | null
   /** The piece being previewed from the library (outlined, the rest dimmed). */
   ghost?: string | null
@@ -303,7 +305,7 @@ export function HudLayer({ ctx, compose, chrome, positions = {}, fit = 1, arrang
     run()
   })
   return (
-    <div ref={root} className={'hud-layer' + (arrange ? ' hud-layer--arrange' : '') + (edit ? ' hud-layer--edit' : '')}>
+    <div ref={root} className={'hud-layer' + (arrange ? ' hud-layer--arrange' : '') + (edit ? ' hud-layer--edit' : '') + (terse ? ' hud-layer--terse' : '')}>
       {free.map((m) => <Free key={key(m)} k={key(m)} live={m.interactive} look={looks[key(m)]} dim={dim(key(m))} ghost={ghost === key(m)}>{m.render(ctx)}</Free>)}
       {SLOTS.map((s) => {
         const mods = slotted(s)

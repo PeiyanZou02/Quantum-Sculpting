@@ -8,6 +8,7 @@ import { SectionMap } from '../screens/SectionMap'
 import { useSliceScheme } from '../qs/sectionColor'
 import { LevelHistogram } from '../qs/LevelHistogram'
 import { PresentStyle } from '../screens/presentStyle'
+import { Count } from './Num'
 import './cards.css'
 
 export function SliceCard({ layers }: { layers?: boolean }) {
@@ -23,7 +24,7 @@ export function SliceCard({ layers }: { layers?: boolean }) {
       <SectionMap size={232} grid={g} input={procData ? gridData : null} axis={slice.axis} index={slice.index} level={procData ? m.level : 0.5} scheme={colors.scheme} owner={colors.owner} />
       <div className="hud-card__plane">
         <span className="hud-card__k">Cutting plane</span>
-        <span className="hud-card__v">{slice.index} · {(slice.index * (grid?.voxel_size ?? 0)).toFixed(1)} mm</span>
+        <span className="hud-card__v"><Count>{slice.index}</Count> · <Count>{`${(slice.index * (grid?.voxel_size ?? 0)).toFixed(1)} mm`}</Count></span>
         <span className="hud-card__bar"><span style={{ width: `${(slice.index / Math.max(1, n - 1)) * 100}%` }} /></span>
       </div>
       {layers && counts.length > 0 && (
@@ -46,7 +47,7 @@ export function DensityCard() {
   if (!bins) return null
   return (
     <div className="hud-card">
-      <div className="hud-card__head"><span className="hud-card__t">Density</span><span className="hud-card__n">level {level.toFixed(2)}</span></div>
+      <div className="hud-card__head"><span className="hud-card__t">Density</span><span className="hud-card__n"><Count>{`level ${level.toFixed(2)}`}</Count></span></div>
       <div style={{ pointerEvents: 'none' }}><LevelHistogram bins={bins} level={level} onLevel={() => {}} height={60} /></div>
     </div>
   )

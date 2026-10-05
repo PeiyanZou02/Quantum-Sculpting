@@ -8,6 +8,7 @@ import type { CSSProperties, ErrorInfo, ReactNode, PointerEvent as RPointerEvent
 import { histogram, section, type Axis } from '../qs/grid'
 import type { HudCtx } from './types'
 import { useNow } from '../useNow'
+import { Count } from './Num'
 import './datamarks.css'
 
 type G = { n: number; data: Float32Array }
@@ -19,7 +20,8 @@ const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v))
 const int = (v: number) => Math.round(v).toLocaleString('en-US')
 const f2 = (v: number) => v.toFixed(2)
 const minus = (v: number, d = 2) => (v < 0 ? '−' : v > 0 ? '+' : '') + Math.abs(v).toFixed(d)
-const N = ({ children }: { children: ReactNode }) => <span className="qdm-n">{children}</span>
+// figures count to their value when the data changes (a turn, a scrub, a new run)
+const N = ({ children }: { children: ReactNode }) => <span className="qdm-n"><Count>{children}</Count></span>
 
 /** Seconds as a short duration. */
 function dur(s: number) {
@@ -286,7 +288,7 @@ export function Readout({ ctx }: { ctx: HudCtx }) {
   return (
     <div className="qdm" style={{ width: 236, gap: 12 }}>
       <div className="qdm-head"><span className="qdm-t">Level</span><span className="qdm-r">{ctx.report?.method === 'advect' ? 'push' : 'threshold'}</span></div>
-      <span className="qdm-big">{f2(L)}</span>
+      <span className="qdm-big"><Count>{f2(L)}</Count></span>
       <div className="qdm-ruler">
         {Array.from({ length: 19 }, (_, i) => (
           <span key={i} className={'qdm-ruler__t' + (i % 3 === 0 ? ' qdm-ruler__t--major' : '') + (0.05 + i * 0.05 <= L + 1e-6 ? ' qdm-ruler__t--on' : '')} style={{ left: `${(i / 18) * 100}%` }} />
@@ -492,7 +494,7 @@ export function RunHeader({ ctx }: { ctx: HudCtx }) {
     <Box title="Runtime" sub={<><N>{run}</N> · {modeWord(mode)}</>} right={<Live on={!!job} label={job ? 'live' : proc?.cached ? 'cached' : 'done'} />} w={300}>
       <div className="qdm-counters">
         {counters.map(([v, k]) => (
-          <div key={k} className="qdm-counter"><span className="qdm-counter__v">{v}</span><span className="qdm-counter__k">{k}</span></div>
+          <div key={k} className="qdm-counter"><span className="qdm-counter__v"><Count>{v}</Count></span><span className="qdm-counter__k">{k}</span></div>
         ))}
       </div>
     </Box>

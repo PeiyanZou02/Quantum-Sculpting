@@ -4,7 +4,7 @@
 // and motion (shots, turntable, slice sweep).
 import { useState, type ReactNode } from 'react'
 import { useStore, type Tool } from '../store'
-import { isDirty, usePresent, type Sweep } from '../present'
+import { clockOf, isDirty, usePresent, type Sweep } from '../present'
 import { CATEGORIES } from '../hud/registry'
 import { countOn, sameComposition, savePng } from '../hud/compose'
 import { Icon, IconButton } from '../qs/Icon'
@@ -20,7 +20,8 @@ import { DEFAULT_COMPOSITION, DEFAULT_HUD, DEFAULT_ID } from '../hud/defaultComp
 import { FloorSize, LibRow, MarkLibrary } from './MarkLibrary'
 import { PRESENT_TOOLS } from './presentTools'
 import { PARAMS, paramOf } from '../hud/paramDefs'
-import { passLength, recordPass } from './animator'
+import { passLength, recordPass, storySegments } from './animator'
+import { useNow } from '../useNow'
 import type { Track } from '../present'
 
 /** The library's categories as tabs: the scene's own guides and text first, then the Quicksilver sheets. */
@@ -173,6 +174,7 @@ function OnTheView() {
           <Checkbox label="Info" tip="What the view shows, top left." checked={hud.caption} onChange={(v) => setHud({ caption: v })} />
           <Checkbox label="Value scale" tip="In the shaded views, bottom right." checked={hud.legend} onChange={(v) => setHud({ legend: v })} />
           <Checkbox label="Corners" tip="The view's corner marks, when no frame piece is on." checked={hud.frame} onChange={(v) => setHud({ frame: v })} />
+          <Checkbox label="Explanations in pieces" tip="Captions and notes inside the pieces. Off, they show data only." checked={p.notes} onChange={p.setNotes} />
         </div>
       </Panel>
       <Panel id="cmp-guides" title="Guides" sub>
@@ -345,12 +347,41 @@ function TrackCard({ tr }: { tr: Track }) {
   )
 }
 
-/** Compose · Animate: values with keyframes, the stage reel, the look cycling, the camera and the
- *  slice; play them together, or record one pass. */
+/** The pass on one line: the story's segments to scale, the playhead; drag anywhere on it to scrub. */
+function Timeline({ len }: { len: number }) {
+  const p = usePresent()
+  const now = useNow(p.playing, 50)
+  const raw = clockOf(p, now)
+  const t = len ? (p.loop ? raw % len : Math.min(raw, len)) : 0
+  const segs = storySegments(p.stageReel)
+  const seekAt = (e: React.PointerEvent<HTMLDivElement>) => {
+    const r = e.currentTarget.getBoundingClientRect()
+    p.seek(Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * len)
+  }
+  return (
+    <div className="anim-time">
+      <div className="anim-time__bar" role="slider" aria-label="Time" aria-valuemin={0} aria-valuemax={len} aria-valuenow={+t.toFixed(1)} tabIndex={0}
+        onPointerDown={(e) => { if (!len) return; e.preventDefault(); e.currentTarget.setPointerCapture(e.pointerId); seekAt(e) }}
+        onPointerMove={(e) => { if (e.buttons & 1 && len) seekAt(e) }}
+        onKeyDown={(e) => { if (e.key === 'ArrowRight') p.seek(Math.min(len, t + 1)); if (e.key === 'ArrowLeft') p.seek(Math.max(0, t - 1)) }}>
+        {segs.map((x) => (
+          <span key={x.stage} className={'anim-time__seg' + (t >= x.start && t < x.start + x.dur ? ' anim-time__seg--on' : '')} style={{ left: `${(x.start / (len || 1)) * 100}%`, width: `${(x.dur / (len || 1)) * 100}%` }}>{x.t}</span>
+        ))}
+        {!segs.length && <span className="anim-time__empty">{len ? 'values and look' : 'nothing to play'}</span>}
+        <span className="anim-time__head" style={{ left: `${len ? (t / len) * 100 : 0}%` }} />
+      </div>
+      <div className="anim-time__read"><span>{t.toFixed(1)} s</span><span>{len.toFixed(1)} s</span></div>
+    </div>
+  )
+}
+
+/** Compose · Animate: one clock for everything: the story of the run (geometry to mesh, Evolve turn by
+ *  turn), values with keyframes, the look, the camera and the slice. Play, scrub, speed, loop, record. */
 function Animate() {
   const p = usePresent()
   const s = useStore()
   const len = passLength(p.tracks, p.stageReel, p.cycles)
+  const evolve = s.q.mode === 'nations'
   const free = PARAMS.filter((d) => d.set && d.get(s) != null && !p.tracks.some((t) => t.param === d.id))
   const add = (id: string) => {
     const d = paramOf(id)
@@ -358,28 +389,37 @@ function Animate() {
     const lo = d.min(s), hi = d.max(s), snap = (v: number) => +(Math.round(v / d.step) * d.step).toFixed(4)
     p.addTrack({ param: id, keys: id === 'turn' ? [0, hi] : [snap(lo + (hi - lo) * 0.2), snap(lo + (hi - lo) * 0.8)], sec: id === 'turn' ? 10 : 4, mode: id === 'turn' ? 'once' : 'bounce' })
   }
+  const segs = p.stageReel.segs
   return (
     <>
-      <Buttons>
-        <Button kind="primary" active={p.playing} onClick={() => p.setPlaying(!p.playing)} tip={p.playing ? 'Stop' : 'Play'} desc="Plays the values, the stage reel and the look cycles below together, from the start. Key: P">{p.playing ? 'Stop' : 'Play'}</Button>
-        <Button disabled={!len || p.recording} onClick={() => { recordPass().catch(() => {}) }} tip="Record one pass" desc="Starts a recording, plays everything once from the start, then stops and saves the WebM.">Record a pass</Button>
-      </Buttons>
-      <Note>{len ? `One pass takes ${len.toFixed(1)} s.` : 'Animate a value, the stages or the look to make a pass.'}</Note>
+      <Timeline len={len} />
+      <div className="anim-transport">
+        <Button kind="primary" active={p.playing} disabled={!len} onClick={() => p.setPlaying(!p.playing)} tip={p.playing ? 'Pause' : 'Play'} desc="Key: P">{p.playing ? 'Pause' : 'Play'}</Button>
+        <Button onClick={() => p.seek(0)} tip="Back to the start">Start</Button>
+        <Button disabled={!len || p.recording} onClick={() => { recordPass().catch(() => {}) }} tip="Record a pass" desc="Records one pass from the start to a WebM.">Record</Button>
+      </div>
+      <Pills<string> label="Speed" value={String(p.speed)} onChange={(v) => p.setSpeed(+v)} options={[0.25, 0.5, 1, 2, 4].map((v) => ({ id: String(v), t: `${v}×` }))} />
+      <div className="pd-checks"><Checkbox label="Loop" checked={p.loop} onChange={p.setLoop} /></div>
+      <Panel id="anim-stages" title="Story" sub aside={p.stageReel.on ? 'on' : undefined}>
+        <div className="pd-checks">
+          <Checkbox label="Tell the run, step by step" tip="From the original geometry to the mesh; Evolve plays every turn." checked={p.stageReel.on} onChange={(v) => p.setStageReel({ on: v })} />
+          <Checkbox label="Model" checked={segs.model} onChange={(v) => p.setStageReel({ segs: { ...segs, model: v } })} />
+          <Checkbox label="Voxels" checked={segs.voxels} onChange={(v) => p.setStageReel({ segs: { ...segs, voxels: v } })} />
+          <Checkbox label={evolve ? 'Evolve, turn by turn' : 'Quantum'} checked={segs.quantum} onChange={(v) => p.setStageReel({ segs: { ...segs, quantum: v } })} />
+          <Checkbox label="Mesh" checked={segs.mesh} onChange={(v) => p.setStageReel({ segs: { ...segs, mesh: v } })} />
+        </div>
+        <Slider label="Seconds per step" value={p.stageReel.sec} min={0.5} max={12} step={0.5} format={(v) => `${v} s`} onChange={(v) => p.setStageReel({ sec: v })} />
+        {evolve && <Slider label="Turns per second" value={p.stageReel.tps} min={1} max={30} step={1} format={(v) => `${v} / s · ${(s.evolve.turns / v).toFixed(1)} s`} onChange={(v) => p.setStageReel({ tps: v })} />}
+      </Panel>
       <Panel id="anim-values" title="Values" sub aside={p.tracks.length || undefined}>
         {p.tracks.map((tr) => <TrackCard key={tr.id} tr={tr} />)}
         <Select label={p.tracks.length ? 'Animate another value' : 'Animate a value'} value="" onChange={add}
           options={[{ value: '', label: free.length ? 'Choose…' : 'Every value is animated' }, ...free.map((d) => ({ value: d.id, label: d.t }))]} />
       </Panel>
-      <Panel id="anim-stages" title="Stages" sub>
-        <div className="pd-checks">
-          <Checkbox label="Step through the stages" tip="Model, voxels, quantum or Evolve (its turns play), mesh, one after another." checked={p.stageReel.on} onChange={(v) => p.setStageReel({ on: v })} />
-        </div>
-        <Slider label="Seconds per stage" value={p.stageReel.sec} min={1} max={12} step={0.5} format={(v) => `${v} s`} onChange={(v) => p.setStageReel({ sec: v })} />
-      </Panel>
       <Panel id="anim-look" title="Look" sub>
         <div className="pd-checks">
-          <Checkbox label="Cycle the shading" tip="Solid, value, wireframe, entanglement." checked={p.cycles.shading} onChange={(v) => p.setCycles({ shading: v })} />
-          <Checkbox label="Cycle the light" tip="Key, soft, rim, flat." checked={p.cycles.light} onChange={(v) => p.setCycles({ light: v })} />
+          <Checkbox label="Cycle the shading" checked={p.cycles.shading} onChange={(v) => p.setCycles({ shading: v })} />
+          <Checkbox label="Cycle the light" checked={p.cycles.light} onChange={(v) => p.setCycles({ light: v })} />
           <Checkbox label="Cycle the backdrop" checked={p.cycles.backdrop} onChange={(v) => p.setCycles({ backdrop: v })} />
         </div>
         <Slider label="Seconds each" value={p.cycles.sec} min={1} max={10} step={0.5} format={(v) => `${v} s`} onChange={(v) => p.setCycles({ sec: v })} />

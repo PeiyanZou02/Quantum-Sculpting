@@ -3,7 +3,7 @@
 // has taken, or what the workspace is waiting for; then the latest line of the runtime log.
 import { useState } from 'react'
 import { useStore } from '../store'
-import { usePresent } from '../present'
+import { clockOf, usePresent } from '../present'
 import { useNow } from '../useNow'
 import { passLength } from './animator'
 import { Spinner } from './parts'
@@ -23,7 +23,7 @@ function activity(s: ReturnType<typeof useStore.getState>, p: ReturnType<typeof 
   if (busy.export) return { id: 'export', t: 'Exporting the STL', busy: true, tone: 'busy' }
   if (ev.playing) return { id: 'play', t: `Playing turn ${ev.turn} of ${ev.turns}`, busy: true, tone: 'busy', share: ev.turns ? ev.turn / ev.turns : null }
   if (p.playing) {
-    const len = passLength(p.tracks, p.stageReel, p.cycles), t = (now - p.playFrom) / 1000
+    const len = passLength(p.tracks, p.stageReel, p.cycles), t = clockOf(p, now)
     return { id: 'anim', t: `Animation playing${len ? ` · ${(t % len).toFixed(0)} of ${len.toFixed(0)} s` : ''}`, busy: true, tone: 'busy', share: len ? (t % len) / len : null }
   }
   if (!model) return { id: 'w0', t: 'Waiting · start from a shape or import a model', busy: false, tone: 'wait' }

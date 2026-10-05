@@ -87,3 +87,5 @@
 .hud-piece__pct { position: absolute; left: 20px; top: -1px; white-space: nowrap; font: var(--qs-t-meta); color: var(--qs-ink2); pointer-events: none; }
 /* the selected piece sits above its neighbours, so its handles are never under another piece */
 .hud-piece--sel, .hud-piece--dragging { z-index: 6; }
+/* data only: the sentences inside pieces give way (captions, notes, empty-state lines) */
+.hud-layer--terse :is(.qg-cap, .qdm-cap, .qg-note, .hev-note, .hev-foot, .hev-empty, .hpar__empty, .qs-lab-title__p) { display: none; }

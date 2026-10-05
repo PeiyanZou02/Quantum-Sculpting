@@ -1,8 +1,10 @@
-// Plays the composition's animation: each track's value at the time since Play, the look cycling, and
-// the stage reel. Values that make the service compute (strength, reach, the level's mesh) are written
-// at most a few times a second; the rest every frame they change.
+// Plays the composition's animation on one clock (present.ts · clockOf): the story of the run (model,
+// voxels, the quantum step or Evolve turn by turn, mesh), each value track, and the look cycling. Every
+// piece on the view reads the same state (the turn, the step on screen, the values), so they move
+// together; scrubbing the clock shows any moment of the pass. Values that make the service compute
+// are written at most a few times a second.
 import { useEffect } from 'react'
-import { usePresent, type Cycles, type Reel, type Track } from '../present'
+import { clockOf, usePresent, type Cycles, type Reel, type Track } from '../present'
 import { useStore, type Shading, type Stage } from '../store'
 import { paramOf } from '../hud/paramDefs'
 import { isRecording, toggleRecording } from './capture'
@@ -29,70 +31,104 @@ export function trackAt(tr: Track, t: number): number {
   return k[i] + (k[i + 1] - k[i]) * e
 }
 
-/** The stages the reel walks through, in order. */
-export const reelStages = (): Stage[] => ['model', 'voxels', useStore.getState().q.mode === 'nations' ? 'evolve' : 'quantum', 'mesh']
-
-/** Seconds for one pass of everything that is set to play: the longest track (there and back for a
- *  bounce), the stage reel, and one turn of each look cycle. */
-export function passLength(tracks: Track[], reel: Reel, cycles: Cycles): number {
-  const tr = tracks.map((t) => t.sec * (t.mode === 'bounce' ? 2 : 1))
-  const rl = reel.on ? reel.sec * reelStages().length : 0
-  const cy = cycles.sec * Math.max(cycles.shading ? SHADINGS.length : 0, cycles.light ? LIGHTS.length : 0, cycles.backdrop ? BACKDROPS.length : 0)
-  return Math.max(0, ...tr, rl, cy)
+export interface Segment { stage: Stage; t: string; start: number; dur: number; turns?: number }
+/** The story's segments for the run on screen, in order, with when each starts. */
+export function storySegments(reel: Reel): Segment[] {
+  if (!reel.on) return []
+  const s = useStore.getState()
+  const evolve = s.q.mode === 'nations', h = s.evolve.history
+  const list: Omit<Segment, 'start'>[] = []
+  if (reel.segs.model) list.push({ stage: 'model', t: 'Model', dur: reel.sec })
+  if (reel.segs.voxels) list.push({ stage: 'voxels', t: 'Voxels', dur: reel.sec })
+  if (reel.segs.quantum) {
+    if (evolve && h) list.push({ stage: 'evolve', t: 'Evolve', dur: s.evolve.turns / Math.max(0.5, reel.tps), turns: s.evolve.turns })
+    else list.push({ stage: evolve ? 'evolve' : 'quantum', t: evolve ? 'Evolve' : 'Quantum', dur: reel.sec })
+  }
+  if (reel.segs.mesh) list.push({ stage: 'mesh', t: 'Mesh', dur: reel.sec })
+  let at = 0
+  return list.map((x) => { const seg = { ...x, start: at }; at += x.dur; return seg })
 }
 
-/** Records one pass: starts the recording, plays from the start, stops both at the end. */
+/** Seconds for one pass: the longest track (there and back for a bounce), the story, one turn of each
+ *  look cycle. */
+export function passLength(tracks: Track[], reel: Reel, cycles: Cycles): number {
+  const tr = tracks.map((t) => t.sec * (t.mode === 'bounce' ? 2 : 1))
+  const st = storySegments(reel).reduce((a, x) => a + x.dur, 0)
+  const cy = cycles.sec * Math.max(cycles.shading ? SHADINGS.length : 0, cycles.light ? LIGHTS.length : 0, cycles.backdrop ? BACKDROPS.length : 0)
+  return Math.max(0, ...tr, st, cy)
+}
+
+/** Records one pass: rewinds, starts the recording, plays once from the start, stops both at the end. */
 export async function recordPass() {
   const p = usePresent.getState()
   const len = passLength(p.tracks, p.stageReel, p.cycles)
   if (!len) return
   if (!isRecording()) await toggleRecording()
   if (!isRecording()) return   // the browser's capture was refused
+  const loop = p.loop
+  usePresent.setState({ loop: false })
+  usePresent.getState().seek(0)
   usePresent.getState().setPlaying(true)
   setTimeout(() => {
     usePresent.getState().setPlaying(false)
+    usePresent.setState({ loop })
     if (isRecording()) toggleRecording()
-  }, len * 1000 + 300)
+  }, (len / Math.max(0.1, p.speed)) * 1000 + 300)
 }
 
 /** Mounted once, by the view. */
 export function useAnimator() {
   const playing = usePresent((p) => p.playing)
-  const from = usePresent((p) => p.playFrom)
+  const seekKey = usePresent((p) => p.seekKey)
   useEffect(() => {
-    if (!playing) return
     const last = new Map<string, { v: number; at: number }>()
-    let stage = -1, shade = -1, light = -1, back = -1, raf = 0
-    const tick = () => {
-      const p = usePresent.getState(), st = useStore.getState()
-      const t = (Date.now() - from) / 1000, now = Date.now()
+    let stage = '', turn = -1, shade = -1, light = -1, back = -1, raf = 0
+    // the state of everything at clock time t
+    const apply = (t: number) => {
+      const p = usePresent.getState(), st = useStore.getState(), now = Date.now()
       for (const tr of p.tracks) {
         const def = paramOf(tr.param)
         if (!def?.set || def.get(st) == null) continue
         const v = Math.round(trackAt(tr, t) / def.step) * def.step
         const prev = last.get(tr.id)
         if (prev && Math.abs(prev.v - v) < def.step / 2) continue
-        if (prev && HEAVY.has(tr.param) && now - prev.at < HEAVY_MS) continue
+        if (prev && HEAVY.has(tr.param) && now - prev.at < HEAVY_MS && p.playing) continue
         last.set(tr.id, { v, at: now })
         def.set(+v.toFixed(4))
       }
-      const { cycles: c, stageReel: r } = p
-      if (r.on) {
-        const list = reelStages(), i = Math.floor(t / Math.max(0.5, r.sec)) % list.length
-        if (i !== stage) {
-          stage = i
-          st.setFocus(list[i], `Reel · ${list[i]}`)
-          // Evolve plays its history while it is on screen
-          if (list[i] === 'evolve' && st.evolve.history) { st.setTurn(0); setTimeout(() => useStore.getState().play(), 60) }
+      const segs = storySegments(p.stageReel)
+      if (segs.length) {
+        const seg = segs.find((x) => t < x.start + x.dur) ?? segs[segs.length - 1]
+        if (seg.stage !== stage) { stage = seg.stage; turn = -1; st.pause(); st.setFocus(seg.stage, `Story · ${seg.t}`) }
+        if (seg.turns != null) {
+          // Evolve: the turn follows the clock, so scrubbing goes back and forth through the history
+          const k = Math.max(0, Math.min(seg.turns, Math.floor((t - seg.start) * p.stageReel.tps)))
+          if (k !== turn) { turn = k; st.setTurn(k) }
         }
       }
-      const k = Math.floor(t / Math.max(0.5, c.sec))
+      const c = p.cycles, k = Math.floor(t / Math.max(0.5, c.sec))
       if (c.shading && k % SHADINGS.length !== shade) { shade = k % SHADINGS.length; st.setShading(SHADINGS[shade]) }
       if (c.light && k % LIGHTS.length !== light) { light = k % LIGHTS.length; st.setShading(useStore.getState().shading, { light: LIGHTS[light] }) }
       if (c.backdrop && k % BACKDROPS.length !== back) { back = k % BACKDROPS.length; st.setShading(useStore.getState().shading, { backdrop: BACKDROPS[back] }) }
+    }
+    const p0 = usePresent.getState()
+    if (!playing) {
+      // paused: show the moment the clock is at (after a seek)
+      if (seekKey) apply(p0.t0)
+      return
+    }
+    const tick = () => {
+      const p = usePresent.getState()
+      const len = passLength(p.tracks, p.stageReel, p.cycles)
+      let t = clockOf(p, Date.now())
+      if (len && t >= len) {
+        if (p.loop) { t %= len; usePresent.setState({ t0: t, playFrom: Date.now() }) }
+        else { apply(len - 0.001); usePresent.setState({ playing: false, t0: len }); return }
+      }
+      apply(t)
       raf = requestAnimationFrame(tick)
     }
     raf = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf)
-  }, [playing, from])
+  }, [playing, seekKey])
 }

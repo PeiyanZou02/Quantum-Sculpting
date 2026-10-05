@@ -2,6 +2,7 @@
 // Intrinsically sized; the composer puts them in the tl / tr slots.
 import type { HudCtx } from './types'
 import { base, qubitsPerAxis } from './metaFmt'
+import { Count } from './Num'
 import './lab.css'
 
 type Row = [string, string, boolean?] // key, value, dim
@@ -33,7 +34,7 @@ function Block({ title, tag, rows }: { title: string; tag?: string; rows: Row[] 
       {rows.map(([k, v, dim]) => (
         <div key={k} className="qs-lab-meta__row">
           <span className="qs-lab-meta__k">{k}</span>
-          <span className={'qs-lab-meta__v' + (dim ? ' qs-lab-meta__v--dim' : '')}>{v}</span>
+          <span className={'qs-lab-meta__v' + (dim ? ' qs-lab-meta__v--dim' : '')}><Count>{v}</Count></span>
         </div>
       ))}
     </div>

@@ -40,3 +40,17 @@
 .hev--log { width: 300px; }
 .hev--picked { width: 220px; }
 .hev-pick { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+/* motion: the figures follow the turn */
+.hev-nat circle { transition: r .35s ease-out, opacity .35s; }
+.hev-nat--gone { opacity: .5; }
+.hev-tie { stroke: var(--qs-ink); stroke-width: .75; opacity: .35; stroke-dasharray: 1; stroke-dashoffset: 0; animation: hev-draw .5s ease-out; }
+.hev-tie--ally { stroke-width: 2; opacity: 1; }
+.hev-atk { fill: none; stroke: var(--qs-ink); stroke-dasharray: 3 3; animation: hev-march .6s linear infinite; }
+.hev-glide { transition: transform .25s linear; }
+.hev-bar > span { transition: width .3s ease-out; }
+.hev-log li { animation: hev-in .35s ease-out; }
+@keyframes hev-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+@keyframes hev-march { to { stroke-dashoffset: -6; } }
+@keyframes hev-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .hev-tie, .hev-atk, .hev-log li { animation: none; } .hev-nat circle, .hev-glide, .hev-bar > span { transition: none; } }

@@ -5,6 +5,7 @@ import { useMemo } from 'react'
 import { useStore } from '../store'
 import type { NationEvent, NationsHistory } from '../api'
 import { nationColor, nationName, type Theme } from '../view/nations'
+import { Num } from './Num'
 import './evolve.css'
 
 function useEvolve() {
@@ -63,7 +64,7 @@ export function Nations() {
           <div key={i} className="hev-row">
             <Chip i={i} theme={theme} />
             <span className="hev-bar"><span style={{ width: `${(100 * v) / big}%`, background: nationColor(i, theme) }} /></span>
-            <span className="hev-v">{v.toLocaleString()}</span>
+            <span className="hev-v"><Num v={v} ms={260} /></span>
             <span className="hev-act">{rec.action[i] ?? ''}</span>
           </div>
         ))}
@@ -102,8 +103,8 @@ export function Territory() {
       <Head t="Territory" n={`share of the cells per nation · ${h.turns.length - 1} turns`} />
       <svg width={W} height={H + MARK + 16} viewBox={`0 0 ${W} ${H + MARK + 16}`} className="hev-svg">
         {paths.out.map((p) => <path key={p.i} d={p.d} fill={nationColor(p.i, theme)} opacity={0.9} />)}
-        <rect x={px} width={W - px} height={H} fill="var(--qs-bg)" opacity={0.62} />
-        <line x1={px} x2={px} y1={-2} y2={H + MARK} stroke="var(--qs-ink)" />
+        <rect x={0} width={W} height={H} fill="var(--qs-bg)" opacity={0.62} className="hev-glide" style={{ transform: `translateX(${px}px)` }} />
+        <line x1={0} x2={0} y1={-2} y2={H + MARK} stroke="var(--qs-ink)" className="hev-glide" style={{ transform: `translateX(${px}px)` }} />
         {paths.marks.map((m, k) => m.type === 'war'
           ? <path key={k} d={`M${m.x} ${H + 4}l3 6h-6z`} fill={m.x <= px ? 'var(--qs-ink)' : 'var(--qs-ink3)'} />
           : m.type === 'annex'
@@ -137,7 +138,7 @@ export function Chronicle() {
       {rows.length ? (
         <ol className="hev-log">
           {rows.map(({ t, e }, k) => (
-            <li key={k}>
+            <li key={`${t}-${k}-${e.type}`}>
               <span className="hev-lt">T {String(t).padStart(3, '0')}</span>
               <span className="hev-lw">{text(e).map((w, j) => (typeof w === 'number' ? <Chip key={j} i={w} theme={theme} /> : <span key={j}>{w}</span>))}</span>
             </li>
@@ -148,43 +149,43 @@ export function Chronicle() {
   )
 }
 
-// ── relations: nations on a ring, alliances and this turn's attacks ─────────────────────────────
+// ── relations: every nation in its own place, alliances and this turn's attacks ─────────────────
+// Each nation keeps one slot for the whole history, so the figure moves with the turns rather than
+// reshuffling: sizes ease with territory, the fallen fade, alliances draw in, attacks march.
 const R = 88, S = 220
 export function Relations() {
   const { history: h, turn, theme } = useEvolve()
   if (!h) return <Empty />
   const rec = h.turns[turn]
-  const alive = rec.size.map((v, i) => [i, v] as const).filter(([, v]) => v > 0)
-  const big = Math.max(1, ...alive.map(([, v]) => v))
-  const at = new Map(alive.map(([i], k) => {
-    const a = (k / Math.max(1, alive.length)) * Math.PI * 2 - Math.PI / 2
-    return [i, [S / 2 + R * Math.cos(a), S / 2 + R * Math.sin(a)] as const]
-  }))
+  const big = Math.max(1, ...rec.size)
+  const at = (i: number): [number, number] => {
+    const a = (i / Math.max(1, h.total)) * Math.PI * 2 - Math.PI / 2
+    return [S / 2 + R * Math.cos(a), S / 2 + R * Math.sin(a)]
+  }
+  const alive = (i: number) => (rec.size[i] ?? 0) > 0
   const allies = rec.ties.filter(([, , t]) => t >= 0.5).length
   return (
     <div className="hev hev--relations">
-      <Head t="Relations" n={`${allies} alliance${allies === 1 ? '' : 's'} · ${rec.attacks.length} attack${rec.attacks.length === 1 ? '' : 's'}`} />
+      <Head t="Relations" n={`T ${turn} · ${allies} allied · ${rec.attacks.length} attacks`} />
       <svg width={S} height={S} viewBox={`0 0 ${S} ${S}`} className="hev-svg">
-        <circle cx={S / 2} cy={S / 2} r={R} fill="none" stroke="var(--qs-line)" strokeDasharray="2 4" />
-        {rec.ties.map(([i, j, t]) => {
-          const a = at.get(i), b = at.get(j)
-          if (!a || !b || t < 0.15) return null
-          return <line key={`${i}-${j}`} x1={a[0]} y1={a[1]} x2={b[0]} y2={b[1]} stroke="var(--qs-ink)" strokeWidth={t >= 0.5 ? 2 : 0.75} opacity={t >= 0.5 ? 1 : 0.35} />
-        })}
-        {rec.attacks.map(([i, j], k) => {
-          const a = at.get(i), b = at.get(j)
-          if (!a || !b) return null
-          const mx = (a[0] + b[0]) / 2 + (S / 2 - (a[0] + b[0]) / 2) * 0.35, my = (a[1] + b[1]) / 2 + (S / 2 - (a[1] + b[1]) / 2) * 0.35
-          return <path key={`a${k}`} d={`M${a[0]} ${a[1]} Q${mx} ${my} ${b[0]} ${b[1]}`} fill="none" stroke="var(--qs-ink)" strokeDasharray="3 3" markerEnd="url(#hev-arrow)" />
-        })}
         <defs><marker id="hev-arrow" viewBox="0 0 6 6" refX="5" refY="3" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L6 3L0 6z" fill="var(--qs-ink)" /></marker></defs>
-        {alive.map(([i, v]) => {
-          const p = at.get(i)!
-          const r = 5 + 9 * Math.sqrt(v / big)
+        {rec.ties.map(([i, j, t]) => {
+          if (!alive(i) || !alive(j) || t < 0.15) return null
+          const a = at(i), b = at(j)
+          return <line key={`${i}-${j}`} className={'hev-tie' + (t >= 0.5 ? ' hev-tie--ally' : '')} pathLength={1} x1={a[0]} y1={a[1]} x2={b[0]} y2={b[1]} />
+        })}
+        {rec.attacks.map(([i, j]) => {
+          const a = at(i), b = at(j)
+          const mx = (a[0] + b[0]) / 2 + (S / 2 - (a[0] + b[0]) / 2) * 0.35, my = (a[1] + b[1]) / 2 + (S / 2 - (a[1] + b[1]) / 2) * 0.35
+          return <path key={`${i}>${j}`} className="hev-atk" d={`M${a[0]} ${a[1]} Q${mx} ${my} ${b[0]} ${b[1]}`} markerEnd="url(#hev-arrow)" />
+        })}
+        {Array.from({ length: h.total }, (_, i) => {
+          const p = at(i), v = rec.size[i] ?? 0, on = v > 0
+          const r = on ? 5 + 9 * Math.sqrt(v / big) : 3
           return (
-            <g key={i}>
-              <circle cx={p[0]} cy={p[1]} r={r} fill={nationColor(i, theme)} stroke="var(--qs-bg)" strokeWidth={1.5} />
-              <text x={p[0]} y={p[1] + 4} textAnchor="middle" className="hev-node">{nationName(i)}</text>
+            <g key={i} className={'hev-nat' + (on ? '' : ' hev-nat--gone')}>
+              <circle cx={p[0]} cy={p[1]} style={{ r } as React.CSSProperties} fill={on ? nationColor(i, theme) : 'none'} stroke={on ? 'var(--qs-bg)' : 'var(--qs-ink3)'} strokeWidth={on ? 1.5 : 1} />
+              {on && <text x={p[0]} y={p[1] + 4} textAnchor="middle" className="hev-node">{nationName(i)}</text>}
             </g>
           )
         })}
@@ -209,7 +210,7 @@ export function Record() {
       <Head t="Record" n={`${h.k} founded · to turn ${turn}`} />
       <div className="hev-figs">
         {figs.map(([k, v, note]) => (
-          <div key={k} className="hev-fig"><span className="hev-k">{k}</span><span className="hev-big">{v}</span><span className="hev-note">{note}</span></div>
+          <div key={k} className="hev-fig"><span className="hev-k">{k}</span><span className="hev-big"><Num v={v} ms={260} /></span><span className="hev-note">{note}</span></div>
         ))}
       </div>
     </div>
@@ -264,15 +265,15 @@ export function Picked() {
   const mine = h.turns.slice(1, turn + 1).flatMap((r) => r.events.filter((e) => text(e).includes(i))).length
   return (
     <div className="hev hev--picked">
-      <Head t="Nation" n={sel == null ? 'largest · click one in the view' : 'picked'} />
+      <Head t="Nation" n={sel == null ? 'largest' : 'picked'} />
       <div className="hev-pick">
         <Chip i={i} theme={theme} />
-        <span className="hev-v">{(rec.size[i] ?? 0).toLocaleString()} cells · {Math.round((100 * (rec.size[i] ?? 0)) / total)} %</span>
+        <span className="hev-v"><Num v={rec.size[i] ?? 0} ms={260} /> cells · <Num v={(100 * (rec.size[i] ?? 0)) / total} ms={260} /> %</span>
         <span className="hev-act">{rec.action[i] ?? (rec.size[i] ? '' : 'gone')}</span>
       </div>
       <svg width={w} height={ht + 2} viewBox={`0 -1 ${w} ${ht + 2}`} className="hev-svg">
         <path d={d} fill="none" stroke={nationColor(i, theme)} strokeWidth={1.5} />
-        <line x1={px} x2={px} y1={0} y2={ht} stroke="var(--qs-ink)" />
+        <line x1={0} x2={0} y1={0} y2={ht} stroke="var(--qs-ink)" className="hev-glide" style={{ transform: `translateX(${px}px)` }} />
       </svg>
       <div className="hev-foot">{mine} events so far · territory over {h.turns.length - 1} turns</div>
     </div>

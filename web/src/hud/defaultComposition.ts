@@ -1,7 +1,7 @@
 // The composition Lab opens with, as laid out by hand: title, grid card, level sweep, shots, rotation and
 // the log down the left; the step tabs on top; captures and the run timeline under the object; slice,
-// viewport, relations, the run header and one nation down the right; stations, 3D corners and the frame
-// on the object. Positions are fractions of the view (top-left of each piece), anchored: the view keeps
+// viewport, relations, the run header and one nation down the right; 3D corners and the frame on the
+// object. Positions are fractions of the view (top-left of each piece), anchored: the view keeps
 // each piece there, and moves or shrinks one only when a smaller view leaves it on top of another.
 import type { Saved } from '../present'
 
@@ -10,7 +10,7 @@ export const DEFAULT_COMPOSITION: Saved = {
   id: DEFAULT_ID,
   name: 'Default',
   compose: {
-    frame: 'v3', orbit: 'v3', bounds: 'v1',
+    frame: 'v3', bounds: 'v1',
     meta: 'v5', cards: 'v4', levels: 'v1', shots: 'v1', rotation: 'v1', runtime: 'v3,v1',
     bars: 'v1', captures: 'v3', timeline: 'v1',
     slicecard: 'v2', camera: 'c3', evolve: 'v4,v7',

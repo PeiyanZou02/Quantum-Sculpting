@@ -608,3 +608,15 @@ body.ux-resizing, body.ux-resizing * { user-select: none !important; }
 .kd__btn--danger { background: #DA1E28; color: #FFFFFF; }
 .kd__btn--danger:hover:not(:disabled) { background: #B81921; }
 @media (max-width: 600px) { .ux .top__name { display: none; } .ux .top__brand { padding: 0 16px; } }
+
+/* Compose · Animate: the pass on one line, the transport */
+.anim-time { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+.anim-time__bar { position: relative; height: 32px; background: var(--ux-field); border-bottom: 1px solid var(--ux-strong); cursor: ew-resize; touch-action: none; user-select: none; overflow: hidden; }
+.anim-time__bar:focus-visible { outline: 2px solid var(--qs-ink); outline-offset: -2px; }
+.anim-time__seg { position: absolute; top: 0; bottom: 0; display: flex; align-items: center; padding: 0 6px; box-sizing: border-box; border-right: 1px solid var(--ux-line); font: 400 11px/1 var(--qs-mono); color: var(--qs-ink2); white-space: nowrap; overflow: hidden; }
+.anim-time__seg--on { background: var(--ux-fill); color: var(--qs-ink); }
+.anim-time__empty { position: absolute; left: 8px; top: 50%; transform: translateY(-50%); font: 400 11px/1 var(--qs-mono); color: var(--qs-ink3); }
+.anim-time__head { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--ux-on); pointer-events: none; }
+.anim-time__read { display: flex; justify-content: space-between; font: 400 11px/1 var(--qs-mono); color: var(--qs-ink2); font-variant-numeric: tabular-nums; }
+.anim-transport { display: grid; grid-template-columns: 1fr auto auto; gap: 1px; margin-bottom: 12px; }
+.anim-transport .ux-btn { justify-content: center; }
