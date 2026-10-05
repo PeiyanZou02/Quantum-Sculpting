@@ -125,8 +125,9 @@ export function Stage() {
     if (!engine) return
     const bg = getComputedStyle(document.documentElement).getPropertyValue('--qs-bg').trim()
     if (entMats) for (const mat of Object.values(entMats)) if (mat.uniforms.u_bg) mat.uniforms.u_bg.value = new THREE.Color(bg)
-    engine.setShading(shading === 'entangle' && !entMats ? 'value' : shading, entMats)
-  }, [engine, shading, entMats, theme])
+    // entanglement reads a voxel's colour as film thickness, so Evolve's nation colours keep plain value shading
+    engine.setShading(shading === 'entangle' && (!entMats || nations) ? 'value' : shading, entMats)
+  }, [engine, shading, entMats, theme, !!nations]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { engine?.setLighting(shade.light) }, [engine, shade.light])
   // present: turntable, and a reel that flies through the saved shots
