@@ -489,7 +489,7 @@ export function Stage() {
         {model && engine && (
           <HudLayer ctx={hudCtx(engine)} compose={shown}
             arrange={!present && pr.arrange && !pr.bare}
-            edit={present && pr.composing && !pr.bare && !pr.recording ? { sel: pr.sel, onSelect: pr.setSel, onRemove: pr.removePiece } : undefined}
+            edit={present && pr.composing && !pr.bare && !pr.recording ? { sel: pr.sel, onSelect: pr.setSel, onRemove: pr.removePiece, onResize: (k, size) => pr.setLook(k, { size }) } : undefined}
             looks={present ? pr.looks : undefined} hl={present ? pr.hl : null} ghost={present ? pr.preview : null}
             texts={present ? pr.texts : undefined} onText={pr.setText}
             autoArrange={present} onCrowded={pr.setCrowded} tidyKey={present ? pr.tidyKey : 0} reserve={present && !pr.bare && !framed ? 76 : 0} onHero={present ? (r) => engine.frameInto(r) : undefined}

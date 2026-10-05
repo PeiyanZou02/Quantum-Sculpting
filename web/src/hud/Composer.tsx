@@ -43,7 +43,12 @@ function useStrokes(ref: RefObject<HTMLElement | null>, look?: Look) {
 }
 
 /** What compose mode can do to the pieces (Present). Without it, pieces stay where they are. */
-export interface Edit { sel: string | null; onSelect: (k: string | null) => void; onRemove: (k: string) => void }
+export interface Edit {
+  sel: string | null; onSelect: (k: string | null) => void; onRemove: (k: string) => void
+  /** Set a piece's size (multiple of its own; the corner handle scales it in proportion). */
+  onResize?: (k: string, size: number) => void
+}
+const SIZE_MIN = 0.5, SIZE_MAX = 3
 
 interface PieceProps {
   k: string; label: string; ctx: HudCtx; pos?: Placement; arrange: boolean; edit?: Edit; live?: boolean
@@ -89,6 +94,34 @@ function Piece({ k, label, ctx, pos, arrange, edit, live, look, dim, ghost, onMo
     window.addEventListener('pointermove', move)
     window.addEventListener('pointerup', up)
   }
+  // the corner handle: scales the piece in proportion, live on the element, saved on release
+  const resize = (e: React.PointerEvent<HTMLElement>) => {
+    if (e.button !== 0 || !edit?.onResize) return
+    e.preventDefault()
+    e.stopPropagation()
+    edit.onSelect(k)
+    if (e.detail === 2) { edit.onResize(k, 1); return }
+    const el = body.current
+    if (!el) return
+    const r = el.getBoundingClientRect(), x0 = e.clientX, y0 = e.clientY
+    const s0 = look?.size ?? 1, auto = pos?.z ?? 1
+    const pct = (e.currentTarget as HTMLElement).querySelector<HTMLElement>('.hud-piece__pct')
+    let size = s0
+    const move = (ev: PointerEvent) => {
+      // the diagonal: the larger of the two stretches, so the corner follows the pointer
+      const f = Math.max((r.width + ev.clientX - x0) / r.width, (r.height + ev.clientY - y0) / r.height)
+      size = Math.min(SIZE_MAX, Math.max(SIZE_MIN, s0 * f))
+      el.style.zoom = String(size * auto)
+      if (pct) pct.textContent = `${Math.round(size * 100)}%`
+    }
+    const up = () => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
+      edit.onResize?.(k, Math.round(size * 100) / 100)
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
+  }
   const tier = look?.tier ?? 1
   const sel = edit?.sel === k
   const cls = 'hud-piece' + (live ? ' hud-mod--live' : '') + (arrange ? ' hud-piece--arrange' : '') + (edit ? ' hud-piece--edit' : '') + (sel ? ' hud-piece--sel' : '') + (pos ? ' hud-piece--placed' : '') + (ghost ? ' hud-piece--ghost' : '')
@@ -111,6 +144,12 @@ function Piece({ k, label, ctx, pos, arrange, edit, live, look, dim, ghost, onMo
       <div ref={body} className="hud-piece__body" style={{ opacity: TIER_OPACITY[tier] * (dim ? 0.16 : 1), zoom: zoom !== 1 ? zoom : undefined }}>
         {children}
       </div>
+      {edit?.onResize && !live && (
+        <span className="hud-piece__resize" data-qs-probe-ui onPointerDown={resize}
+          data-tip="Resize" data-tip-desc="Drag the corner to scale this piece in proportion. Double-click for its own size.">
+          <span className="hud-piece__pct">{Math.round((look?.size ?? 1) * 100)}%</span>
+        </span>
+      )}
     </div>
   )
 }

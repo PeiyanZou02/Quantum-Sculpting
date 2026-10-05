@@ -78,3 +78,12 @@
 .hud-piece--ghost > .hud-piece__body, .hud-free--ghost > * { animation: hud-ghost .18s ease-out; }
 @keyframes hud-ghost { from { opacity: 0 } to { opacity: 1 } }
 .hud-piece__body, .hud-free { transition: opacity .15s; }
+
+/* Corner handle (compose mode): drag to scale a piece in proportion; shows its size */
+.hud-piece__resize { position: absolute; right: -9px; bottom: -9px; width: 14px; height: 14px; z-index: 5; pointer-events: auto; cursor: nwse-resize;
+  border-radius: 3px; background: var(--qs-bg); box-shadow: inset 0 0 0 1.5px var(--qs-ink); opacity: 0; transition: opacity .12s; touch-action: none; }
+.hud-piece__resize::after { content: ''; position: absolute; inset: 4px; border-right: 1.5px solid var(--qs-ink); border-bottom: 1.5px solid var(--qs-ink); }
+.hud-piece--edit:hover > .hud-piece__resize, .hud-piece--sel > .hud-piece__resize { opacity: 1; }
+.hud-piece__pct { position: absolute; left: 20px; top: -1px; white-space: nowrap; font: var(--qs-t-meta); color: var(--qs-ink2); pointer-events: none; }
+/* the selected piece sits above its neighbours, so its handles are never under another piece */
+.hud-piece--sel, .hud-piece--dragging { z-index: 6; }
