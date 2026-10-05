@@ -70,6 +70,8 @@ export interface JobView {
   tiles_cached: number
   tile_shape: number[]
   version: number
+  /** Layer-tiled runs: height up to which every slab has come back. */
+  frontier: number | null
 }
 
 export interface MeshReport {
@@ -111,10 +113,33 @@ export interface AtlasJobRow {
 
 export class ApiError extends Error {
   status: number
-  constructor(status: number, message: string) {
+  /** Nothing to tell the user: cancelled by a newer request from this page, or superseded on the service. */
+  quiet: boolean
+  constructor(status: number, message: string, quiet = false) {
     super(message)
     this.status = status
+    this.quiet = quiet
   }
+}
+
+/** One id per tab: the service stops a computation when the same page sends a newer request for that stage. */
+const CLIENT = (() => {
+  const fresh = Math.random().toString(36).slice(2, 12)
+  try {
+    const kept = sessionStorage.getItem('quantum-sculptor-client') ?? fresh
+    sessionStorage.setItem('quantum-sculptor-client', kept)
+    return kept
+  } catch {
+    return fresh
+  }
+})()
+
+export interface NetEvent { method: string; path: string; status: number; ms: number; quiet?: boolean }
+const netListeners = new Set<(e: NetEvent) => void>()
+/** Every request, for the runtime terminal. */
+export const onNet = (fn: (e: NetEvent) => void) => {
+  netListeners.add(fn)
+  return () => { netListeners.delete(fn) }
 }
 
 let boot: string | null = null
@@ -126,29 +151,42 @@ export const onRestart = (fn: () => void) => {
 }
 
 async function request(path: string, init?: RequestInit): Promise<Response> {
-  const res = await fetch(path, init)
+  const t0 = performance.now()
+  const method = init?.method ?? 'GET'
+  let res: Response
+  try {
+    res = await fetch(path, { ...init, headers: { ...(init?.headers as Record<string, string>), 'X-Client': CLIENT } })
+  } catch (e) {
+    const cancelled = e instanceof DOMException && e.name === 'AbortError'
+    netListeners.forEach((fn) => fn({ method, path, status: 0, ms: performance.now() - t0, quiet: cancelled }))
+    throw new ApiError(0, cancelled ? 'Cancelled.' : 'Cannot reach the local service. Check that it is running, then reload.', cancelled)
+  }
+  netListeners.forEach((fn) => fn({ method, path, status: res.status, ms: performance.now() - t0 }))
   const b = res.headers.get('X-Boot')
   if (b) {
     if (boot && b !== boot) bootListeners.forEach((fn) => fn())
     boot = b
   }
   if (!res.ok) {
-    let msg = res.statusText
+    let msg = res.statusText, superseded = false
     try {
-      msg = (await res.json()).error ?? msg
+      const data = await res.json()
+      msg = data.error ?? msg
+      superseded = !!data.superseded
     } catch { /* not JSON */ }
-    throw new ApiError(res.status, msg)
+    throw new ApiError(res.status, superseded ? 'Superseded by a newer request.' : msg, superseded)
   }
   return res
 }
 
-const post = (data?: unknown): RequestInit => ({
+const post = (data?: unknown, signal?: AbortSignal): RequestInit => ({
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify(data ?? {}),
+  signal,
 })
 const getJSON = async <T>(path: string) => (await request(path)).json() as Promise<T>
-const postJSON = async <T>(path: string, data?: unknown) => (await request(path, post(data))).json() as Promise<T>
+const postJSON = async <T>(path: string, data?: unknown, signal?: AbortSignal) => (await request(path, post(data, signal))).json() as Promise<T>
 
 async function binary<M>(path: string, init?: RequestInit) {
   const res = await request(path, init)
@@ -165,8 +203,8 @@ function decodeMesh(buffer: ArrayBuffer): MeshData {
 }
 
 /** The service sends only the occupied box, one byte per cell; expand back to n³. */
-async function compactGrid<M extends { n: number; box: [number, number][] }>(path: string) {
-  const { meta, buffer } = await binary<M>(`${path}?compact=1`)
+async function compactGrid<M extends { n: number; box: [number, number][] }>(path: string, signal?: AbortSignal) {
+  const { meta, buffer } = await binary<M>(`${path}?compact=1`, { signal })
   const n = meta.n, n2 = n * n
   const data = new Float32Array(n * n2)
   const bytes = new Uint8Array(buffer)
@@ -232,21 +270,21 @@ export const api = {
     return { meta, mesh: decodeMesh(buffer) }
   },
 
-  voxelize: (p: VoxelizeParams) => postJSON<GridInfo>('/api/voxelize', p),
-  grid: (which: 'input' | 'processed') =>
-    compactGrid<{ n: number; box: [number, number][]; grid_id: number; proc?: ProcMeta }>(`/api/grid/${which}`),
+  voxelize: (p: VoxelizeParams, signal?: AbortSignal) => postJSON<GridInfo>('/api/voxelize', p, signal),
+  grid: (which: 'input' | 'processed', signal?: AbortSignal) =>
+    compactGrid<{ n: number; box: [number, number][]; grid_id: number; proc?: ProcMeta }>(`/api/grid/${which}`, signal),
 
-  process: (p: ProcessParams) =>
-    postJSON<{ status: 'done'; meta: ProcMeta } | { status: 'missing' } | JobView>('/api/process', p),
+  process: (p: ProcessParams, signal?: AbortSignal) =>
+    postJSON<{ status: 'done'; meta: ProcMeta } | { status: 'missing' } | JobView>('/api/process', p, signal),
   job: (id: string) => getJSON<JobView>(`/api/process/${id}`),
-  jobPreview: (id: string) => compactGrid<{ n: number; box: [number, number][]; version: number }>(`/api/process/${id}/preview`),
+  jobPreview: (id: string) => compactGrid<{ n: number; box: [number, number][]; version: number; frontier: number | null }>(`/api/process/${id}/preview`),
 
   atlasJobs: (limit = 50, cursor?: string) =>
     getJSON<{ jobs: AtlasJobRow[]; next_cursor: string | null }>(
       `/api/atlas/jobs?limit=${limit}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`),
 
-  mesh: async (p: MeshParams) => {
-    const { meta, buffer } = await binary<MeshReport>('/api/mesh', post(p))
+  mesh: async (p: MeshParams, signal?: AbortSignal) => {
+    const { meta, buffer } = await binary<MeshReport>('/api/mesh', post(p, signal))
     return { report: meta, mesh: decodeMesh(buffer) }
   },
   export: (p: MeshParams) => postJSON<{ file: string; folder: string; report: MeshReport }>('/api/export', p),

@@ -1,5 +1,6 @@
 // 344 × 344 processed section with the contour at the level, as in the 03a / 04a inspectors.
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useStore } from '../store'
 import { section, type Axis, type Grid } from '../qs/grid'
 
 export function SectionMap({ grid, input, axis, index, level, onIndex, size: S = 344 }: {
@@ -7,6 +8,7 @@ export function SectionMap({ grid, input, axis, index, level, onIndex, size: S =
   grid: Grid | null; input?: Grid | null; axis: Axis; index: number; level: number; onIndex?: (i: number) => void
 }) {
   const ref = useRef<HTMLCanvasElement>(null)
+  const theme = useStore((st) => st.theme)
   const [hover, setHover] = useState<[number, number] | null>(null)
   const n = grid?.n ?? 32
   const sec = useMemo(() => (grid ? section(grid, axis, Math.min(index, grid.n - 1)) : null), [grid, axis, index])
@@ -18,19 +20,23 @@ export function SectionMap({ grid, input, axis, index, level, onIndex, size: S =
     const dpr = 2
     c.width = S * dpr
     c.height = S * dpr
+    const cs = getComputedStyle(document.documentElement)
+    const css = (k: string) => cs.getPropertyValue(k).trim()
+    const ink = css('--qs-ink')
     const ctx = c.getContext('2d')!
     ctx.scale(dpr, dpr)
     ctx.clearRect(0, 0, S, S)
     const u = S / n
     // faint dot per empty cell
-    ctx.fillStyle = 'rgba(21,22,24,.12)'
+    ctx.globalAlpha = 1
+    ctx.fillStyle = css('--qs-ink4')
     for (let v = 0; v < n; v++) for (let x = 0; x < n; x++) ctx.fillRect(x * u + u / 2 - 0.5, (n - 1 - v) * u + u / 2 - 0.5, 1, 1)
     if (!sec) return
     for (let v = 0; v < n; v++)
       for (let x = 0; x < n; x++) {
         const val = Math.min(1, sec[v * n + x])
         if (val <= 0.02) continue
-        ctx.fillStyle = `rgba(21,22,24,${(0.08 + val * 0.82).toFixed(3)})`
+        ctx.globalAlpha = 0.08 + val * 0.82; ctx.fillStyle = ink
         ctx.fillRect(x * u + 0.5, (n - 1 - v) * u + 0.5, u - 1, u - 1)
       }
     // marching-squares contour at the level, through cell centres
@@ -62,9 +68,9 @@ export function SectionMap({ grid, input, axis, index, level, onIndex, size: S =
         }
       ctx.stroke()
     }
-    contour(f, '#151618', [], 1)
+    ctx.globalAlpha = 1; contour(f, ink, [], 1)
     ctx.setLineDash([])
-  }, [sec, inSec, n, level, S])
+  }, [sec, inSec, n, level, S, theme])
 
   const cell = (e: React.PointerEvent) => {
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect()

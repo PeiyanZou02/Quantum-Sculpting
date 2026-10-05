@@ -8,6 +8,8 @@
 }
 
 :root {
+  --qs-scheme: light;
+  color-scheme: light;
   --qs-bg: #E3E4E7;
   --qs-canvas: #D6D7DA;
   --qs-ink: #151618;
@@ -33,6 +35,24 @@
 
   --qs-snap: 480ms;
   --qs-ease: cubic-bezier(.215, .61, .355, 1);
+}
+
+/* Dark: same structure, ink and ground swapped. Follows the system unless the page sets data-theme. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --qs-scheme: dark; color-scheme: dark;
+    --qs-bg: #141517; --qs-canvas: #0E0F10;
+    --qs-ink: #E8E9EC; --qs-ink2: #A9ABB1; --qs-ink3: #74767C; --qs-ink4: #45474D;
+    --qs-line: rgba(232, 233, 236, .13); --qs-ctl: rgba(232, 233, 236, .24); --qs-sel: #2C2E32;
+    --qs-faint: rgba(232, 233, 236, .07); --qs-dot: #2F3136; --qs-scrim: rgba(20, 21, 23, .86);
+  }
+}
+:root[data-theme="dark"] {
+  --qs-scheme: dark; color-scheme: dark;
+  --qs-bg: #141517; --qs-canvas: #0E0F10;
+  --qs-ink: #E8E9EC; --qs-ink2: #A9ABB1; --qs-ink3: #74767C; --qs-ink4: #45474D;
+  --qs-line: rgba(232, 233, 236, .13); --qs-ctl: rgba(232, 233, 236, .24); --qs-sel: #2C2E32;
+  --qs-faint: rgba(232, 233, 236, .07); --qs-dot: #2F3136; --qs-scrim: rgba(20, 21, 23, .86);
 }
 
 @keyframes qs-blink { 0%, 100% { opacity: 1 } 50% { opacity: .2 } }

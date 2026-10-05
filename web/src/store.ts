@@ -11,14 +11,29 @@ import type { Axis, Grid } from './qs/grid'
 import type { Camera } from './qs/QCam'
 
 export type Step = -1 | 0 | 1 | 2 | 3
-export type View = 'model' | 'voxels' | 'processed' | 'result'
+export type View = 'model' | 'voxels' | 'processed' | 'result' | 'scan'
 export type MeshTab = 'threshold' | 'push' | 'export'
 
 export const HOME_CAM: Camera = { az: 35, el: 22, dist: 2.4 }
 
 interface Busy { [k: string]: boolean }
 
-export interface LogLine { t: number; text: string; level?: 'info' | 'warn' | 'error' }
+export interface LogLine { t: number; text: string; level?: 'info' | 'warn' | 'error' | 'net' }
+
+/** Display overlays and HUD elements over the workspace, each switchable. */
+export interface Hud {
+  bounds: boolean      // dashed n³ grid box
+  floor: boolean       // floor grid
+  slice: boolean       // slice plane through the voxel views
+  probe: boolean       // hover readout and pins
+  axes: boolean        // axis gnomon
+  dims: boolean        // size marks
+  camera: boolean      // az / el readout
+  frame: boolean       // view corners and centre cross
+  legend: boolean      // value scale for shaded views
+  caption: boolean     // what the view shows
+}
+export const HUD_DEFAULT: Hud = { bounds: true, floor: true, slice: false, probe: true, axes: true, dims: false, camera: true, frame: true, legend: true, caption: true }
 
 interface S {
   step: Step
@@ -27,6 +42,14 @@ interface S {
   camera: Camera
   slice: { axis: Axis; index: number }
   showSlice: boolean
+  hud: Hud
+  /** Chosen theme ('system' follows the OS) and the resolved one. */
+  themePref: 'system' | 'light' | 'dark'
+  theme: 'light' | 'dark'
+  setTheme: (t: 'system' | 'light' | 'dark') => void
+  setHud: (p: Partial<Hud>) => void
+  scan: { z: number; playing: boolean }
+  setScan: (p: Partial<S['scan']>) => void
   busy: Busy
   error: string | null
   log: LogLine[]
@@ -99,9 +122,24 @@ const current = (k: string, t: number) => seq[k] === t
 let watching: ReturnType<typeof setTimeout> | null = null
 let initing = false
 
+// One request in flight per stage; a new request cancels its own stage and everything downstream.
+const VOX = 0, PROC = 1, MESH = 2
+const inflight: (AbortController | null)[] = [null, null, null]
+function flight(stage: number) {
+  for (let s = stage; s < inflight.length; s++) inflight[s]?.abort()
+  const c = new AbortController()
+  inflight[stage] = c
+  return c.signal
+}
+
 export const useStore = create<S>()((set, get) => {
-  const busy = (k: string, v: boolean) => set((s) => ({ busy: { ...s.busy, [k]: v } }))
+  const counts: Record<string, number> = {}
+  const busy = (k: string, v: boolean) => {
+    counts[k] = Math.max(0, (counts[k] ?? 0) + (v ? 1 : -1))
+    set((s) => ({ busy: { ...s.busy, [k]: counts[k] > 0 } }))
+  }
   const fail = (e: unknown) => {
+    if (e instanceof ApiError && e.quiet) return       // cancelled or superseded by a newer request
     const msg = e instanceof ApiError || e instanceof Error ? e.message : String(e)
     set({ error: msg })
     get().pushLog(msg, 'error')
@@ -142,8 +180,10 @@ export const useStore = create<S>()((set, get) => {
         if (job.version !== version && job.status === 'running') {
           version = job.version
           try {
-            const { grid } = await api.jobPreview(id)
+            const { grid, meta } = await api.jobPreview(id)
             set({ procData: grid })
+            // layer-tiled runs: the scan plane follows the real progress
+            if (meta.frontier != null) set({ view: 'scan', scan: { z: meta.frontier, playing: false } })
           } catch { /* preview not ready */ }
         }
         if (job.status === 'done') {
@@ -180,6 +220,25 @@ export const useStore = create<S>()((set, get) => {
     camera: HOME_CAM,
     slice: { axis: 'z', index: 16 },
     showSlice: false,
+    hud: (() => {
+      try { return { ...HUD_DEFAULT, ...JSON.parse(localStorage.getItem('qs-hud') ?? '{}') } } catch { return HUD_DEFAULT }
+    })(),
+    setHud: (p) => set((s) => {
+      const hud = { ...s.hud, ...p }
+      try { localStorage.setItem('qs-hud', JSON.stringify(hud)) } catch { /* per-viewer convenience only */ }
+      return { hud }
+    }),
+    themePref: (() => { try { return (localStorage.getItem('qs-theme') as 'light' | 'dark' | null) ?? 'system' } catch { return 'system' } })(),
+    theme: 'light',
+    setTheme: (t) => {
+      try { if (t === 'system') localStorage.removeItem('qs-theme'); else localStorage.setItem('qs-theme', t) } catch { /* per-viewer */ }
+      if (t === 'system') delete document.documentElement.dataset.theme
+      else document.documentElement.dataset.theme = t
+      const dark = t === 'dark' || (t === 'system' && matchMedia('(prefers-color-scheme: dark)').matches)
+      set({ themePref: t, theme: dark ? 'dark' : 'light' })
+    },
+    scan: { z: 0, playing: false },
+    setScan: (p) => set((s) => ({ scan: { ...s.scan, ...p } })),
     busy: {},
     error: null,
     log: [],
@@ -211,7 +270,7 @@ export const useStore = create<S>()((set, get) => {
     exported: null,
 
     set: (p) => set(p),
-    pushLog: (text, level = 'info') => set((s) => ({ log: [...s.log.slice(-199), { t: Date.now(), text, level }] })),
+    pushLog: (text, level = 'info') => set((s) => ({ log: [...s.log.slice(-799), { t: Date.now(), text, level }] })),
 
     init: async () => {
       if (initing) return
@@ -280,8 +339,9 @@ export const useStore = create<S>()((set, get) => {
     },
     voxelize: () => run('vox', async () => {
       const t = ticket('vox')
-      const info = await api.voxelize(get().vox)
-      const { grid } = await api.grid('input')
+      const signal = flight(VOX)
+      const info = await api.voxelize(get().vox, signal)
+      const { grid } = await api.grid('input', signal)
       if (!current('vox', t)) return
       const st = get()
       set({
@@ -308,7 +368,8 @@ export const useStore = create<S>()((set, get) => {
       const mode = opts?.submit || opts?.cachedOnly ? 'atlas' : q.mode
       if (mode === 'atlas' && !opts?.submit && !opts?.cachedOnly) return
       const t = ticket('proc')
-      const res = await api.process({ ...q, mode, shots: q.shots || null, cached_only: opts?.cachedOnly })
+      const signal = mode === 'atlas' && opts?.submit ? undefined : flight(PROC)
+      const res = await api.process({ ...q, mode, shots: q.shots || null, cached_only: opts?.cachedOnly }, signal)
       if (!current('proc', t)) return
       if (res.status === 'missing') {
         set({ proc: null, procData: null, resultMesh: null, report: null })
@@ -347,7 +408,7 @@ export const useStore = create<S>()((set, get) => {
     buildMesh: () => run('mesh', async () => {
       if (!get().proc) return
       const t = ticket('mesh')
-      const { report, mesh } = await api.mesh(get().m)
+      const { report, mesh } = await api.mesh(get().m, flight(MESH))
       if (!current('mesh', t)) return
       set({ report, resultMesh: mesh, step: 3 })
     }),

@@ -21,9 +21,10 @@ enter the key once.
 
 ## Quantum Sculptor interface
 
-A redesigned interface built from the Quicksilver design system lives in `web/` (React +
-three.js, same Flask API). After `cd web && pnpm install && pnpm build` it is served at
-<http://127.0.0.1:8765/studio/>; see `web/README.md`. The design handoff is in `design/handoff/`.
+A redesigned interface built with our design system lives in `web/` (React + three.js, same Flask
+API). `cd web && pnpm install && pnpm dev` runs it and the service together; after `pnpm build` the
+service serves it at <http://127.0.0.1:8765/> and the original interface at `/classic`. See
+`web/README.md`.
 
 ## How to use it
 

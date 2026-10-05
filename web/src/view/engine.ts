@@ -8,6 +8,7 @@ import type { Axis, Grid } from '../qs/grid'
 import type { Camera } from '../qs/QCam'
 
 export type LayerName = 'model' | 'voxels' | 'processed' | 'result'
+export type ViewName = LayerName | 'scan'
 
 const INK = new THREE.Color('#151618')
 const INK3 = new THREE.Color('#8B8D93')
@@ -35,7 +36,20 @@ export class Engine {
   dirty = true
   private box = new THREE.BoxGeometry(0.9, 0.9, 0.9)
   private meshMat = new THREE.MeshStandardMaterial({ color: SURFACE, roughness: 0.85, metalness: 0, flatShading: true, side: THREE.DoubleSide })
-  private voxMat = new THREE.MeshLambertMaterial({ color: 0xffffff })
+  private voxMats: Record<string, THREE.MeshLambertMaterial> = {
+    voxels: new THREE.MeshLambertMaterial({ color: 0xffffff }),
+    processed: new THREE.MeshLambertMaterial({ color: 0xffffff }),
+  }
+  // scan view: processed kept below the plane, input voxels above it
+  private cut = { processed: new THREE.Plane(new THREE.Vector3(0, 0, -1), 0), voxels: new THREE.Plane(new THREE.Vector3(0, 0, 1), 0) }
+  private scanner = new THREE.Group()
+  private scanMat = new THREE.MeshBasicMaterial({ color: INK, transparent: true, opacity: 0.08, side: THREE.DoubleSide, depthWrite: false })
+  private scanEdge = new THREE.LineBasicMaterial({ color: INK })
+  private outline: THREE.Object3D | null = null
+  private floor: THREE.Object3D | null = null
+  private showBounds = true
+  private showFloor = true
+  view: ViewName = 'model'
   private lineMat = new THREE.LineBasicMaterial({ color: INK4, transparent: true, opacity: 0.9 })
   private dashMat = new THREE.LineDashedMaterial({ color: INK3, dashSize: 0.6, gapSize: 0.9 })
   private plane: THREE.Mesh
@@ -66,6 +80,9 @@ export class Engine {
     this.camera.add(key)
 
     this.root.add(this.frame)
+    this.renderer.localClippingEnabled = true
+    this.scanner.visible = false
+    this.root.add(this.scanner)
     this.frame.visible = false
     this.scene.add(this.root)
 
@@ -185,7 +202,16 @@ export class Engine {
     floor.material = this.lineMat
     floor.rotation.x = Math.PI / 2
     floor.position.set(c, c, -0.5)
+    outline.visible = this.showBounds
+    floor.visible = this.showFloor
+    this.outline = outline
+    this.floor = floor
     this.frame.add(outline, floor)
+    for (const c of [...this.scanner.children]) this.scanner.remove(c)
+    const sq = new THREE.Mesh(new THREE.PlaneGeometry(n, n), this.scanMat)
+    const rim = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.PlaneGeometry(n, n)), this.scanEdge)
+    this.scanner.add(sq, rim)
+    this.scanner.position.set(c, c, -0.5)
     this.dirty = true
   }
 
@@ -257,7 +283,7 @@ export class Engine {
           if (exposed) cells.push(x, y, z, data[i])
         }
     const count = cells.length / 4
-    const mesh = new THREE.InstancedMesh(this.box, this.voxMat, Math.max(count, 1))
+    const mesh = new THREE.InstancedMesh(this.box, this.voxMats[name] ?? this.voxMats.voxels, Math.max(count, 1))
     mesh.count = count
     const m = new THREE.Matrix4(), col = new THREE.Color()
     const span = Math.max(1 - threshold, 1e-6)
@@ -273,17 +299,61 @@ export class Engine {
     this.grids[name] = grid
   }
 
-  show(name: LayerName) {
-    this.active = name
-    for (const [k, layer] of Object.entries(this.layers)) layer!.visible = k === name
+  show(name: ViewName) {
+    this.view = name
+    this.active = name === 'scan' ? 'processed' : name
+    const shows = (k: string) => (name === 'scan' ? k === 'voxels' || k === 'processed' : k === name)
+    for (const [k, layer] of Object.entries(this.layers)) layer!.visible = shows(k)
     this.frame.visible = Object.keys(this.layers).length > 0
+    this.scanner.visible = name === 'scan'
+    const on = name === 'scan'
+    for (const [k, mat] of Object.entries(this.voxMats)) {
+      const want = on ? [this.cut[k as 'voxels' | 'processed']] : null
+      if ((mat.clippingPlanes?.length ?? 0) !== (want?.length ?? 0)) {
+        mat.clippingPlanes = want
+        mat.needsUpdate = true
+      }
+    }
+    this.dirty = true
+  }
+
+  /** Scan plane at the bottom face of layer z (may be fractional). Only the clipping planes move. */
+  setScan(z: number) {
+    const f = z / this.n
+    this.cut.processed.constant = f
+    this.cut.voxels.constant = -f
+    this.scanner.position.z = z - 0.5
+    this.dirty = true
+  }
+
+  setFrame(p: { bounds?: boolean; floor?: boolean }) {
+    if (p.bounds != null) this.showBounds = p.bounds
+    if (p.floor != null) this.showFloor = p.floor
+    if (this.outline) this.outline.visible = this.showBounds
+    if (this.floor) this.floor.visible = this.showFloor
+    this.dirty = true
+  }
+
+  /** Colours from the CSS tokens, so the view follows light and dark themes. */
+  setTheme(css: (name: string) => string) {
+    const c = (n: string) => new THREE.Color(css(n).trim() || '#888')
+    const dark = css('--qs-scheme').trim() === 'dark'
+    SURFACE.copy(dark ? new THREE.Color('#9A9CA2') : new THREE.Color('#C9CBD0'))
+    DEEP.copy(dark ? new THREE.Color('#E6E7EA') : new THREE.Color('#5E6066'))
+    this.meshMat.color.copy(SURFACE)
+    this.lineMat.color.copy(c('--qs-ink4'))
+    this.dashMat.color.copy(c('--qs-ink3'))
+    this.scanMat.color.copy(c('--qs-ink'))
+    this.scanEdge.color.copy(c('--qs-ink'))
+    ;(this.plane.material as THREE.MeshBasicMaterial).color.copy(c('--qs-ink'))
+    ;(this.planeEdge.material as THREE.LineBasicMaterial).color.copy(c('--qs-ink'))
     this.dirty = true
   }
 
   /** The slice plane in the voxel views; null hides it. */
   setSlice(s: { axis: Axis; index: number } | null) {
     const p = this.plane
-    p.visible = !!s && (this.active === 'voxels' || this.active === 'processed')
+    p.visible = !!s && (this.view === 'voxels' || this.view === 'processed')
     if (!s) return void (this.dirty = true)
     const n = this.n, c = (n - 1) / 2
     p.scale.set(n, n, 1)
@@ -318,6 +388,31 @@ export class Engine {
     const g = this.grids[this.active] ?? this.grids.voxels ?? null
     const value = g ? g.data[(cell[0] * g.n + cell[1]) * g.n + cell[2]] : null
     return { cell, value, layer: this.active, point }
+  }
+
+  /** Screen directions of the world X, Y, Z axes (for the 2D gnomon). */
+  axes2D(): [number, number][] {
+    const m = this.camera.matrixWorldInverse
+    return [new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 1)].map((v) => {
+      const d = v.transformDirection(m)
+      return [d.x, -d.y] as [number, number]
+    })
+  }
+
+  /** Screen rectangle of what is showing, or null. */
+  bounds2D(): { l: number; r: number; t: number; b: number } | null {
+    const layer = this.layers[this.active] ?? this.layers.model
+    if (!layer) return null
+    this.scene.updateMatrixWorld(true)
+    const box = new THREE.Box3().setFromObject(layer)
+    if (box.isEmpty()) return null
+    let l = Infinity, r = -Infinity, t = Infinity, b = -Infinity
+    for (const x of [box.min.x, box.max.x]) for (const y of [box.min.y, box.max.y]) for (const z of [box.min.z, box.max.z]) {
+      const v = new THREE.Vector3(x, y, z).project(this.camera)
+      const px = (v.x + 1) / 2 * this.host.clientWidth, py = (1 - v.y) / 2 * this.host.clientHeight
+      l = Math.min(l, px); r = Math.max(r, px); t = Math.min(t, py); b = Math.max(b, py)
+    }
+    return { l, r, t, b }
   }
 
   /** Project a grid-space point to host pixels (for marks that follow the model). */

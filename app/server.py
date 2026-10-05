@@ -995,10 +995,18 @@ def state():
 
 @app.get("/")
 def index():
+    # Quantum Sculptor 界面（web/，构建到 static/studio/）；没有构建时用原来的界面
+    if (STATIC / "studio" / "index.html").exists():
+        return send_from_directory(STATIC / "studio", "index.html")
     return send_from_directory(STATIC, "index.html")
 
 
-# Quantum Sculptor 界面（web/ 用 Vite 构建到 static/studio/）
+@app.get("/classic")
+def classic():
+    """原来的界面，方便对照。"""
+    return send_from_directory(STATIC, "index.html")
+
+
 @app.get("/studio/")
 @app.get("/studio/<path:name>")
 def studio(name="index.html"):

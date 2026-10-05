@@ -35,14 +35,14 @@
 .qs-pill--disabled { border: 1px dashed var(--qs-ink4); background: transparent; color: var(--qs-ink4); cursor: default; }
 
 /* hover: rgba(21,22,24,.06) fill, text to ink; ghost gains a ctl hairline */
-.qs-pill:not(.qs-pill--disabled):not(.qs-pill--loading):hover { background: rgba(21, 22, 24, .06); color: var(--qs-ink); }
+.qs-pill:not(.qs-pill--disabled):not(.qs-pill--loading):hover { background: var(--qs-faint); color: var(--qs-ink); }
 .qs-pill--ghost:not(.qs-pill--loading):hover { border-color: var(--qs-ctl); }
-.qs-pill--faint:not(.qs-pill--loading):hover { background: rgba(21, 22, 24, .11); }
+.qs-pill--faint:not(.qs-pill--loading):hover { background: var(--qs-line); }
 .qs-pill--active:not(.qs-pill--loading):hover { background: var(--qs-sel); }
 /* pressed: sel fill, 1px drop */
 .qs-pill:not(.qs-pill--disabled):not(.qs-pill--loading):active { background: var(--qs-sel); color: var(--qs-ink); transform: translateY(1px); }
 /* focus */
-.qs-pill:focus-visible { box-shadow: 0 0 0 3px rgba(21, 22, 24, .14); }
+.qs-pill:focus-visible { box-shadow: 0 0 0 3px var(--qs-line); }
 /* loading: spinner + ink2 text, border kept */
 .qs-pill--loading { color: var(--qs-ink2); cursor: progress; }
 
@@ -92,7 +92,7 @@
 .qs-seg--s .qs-seg__item { height: 22px; padding: 0 10px; }
 .qs-seg__item:hover { color: var(--qs-ink); }
 .qs-seg__item--on { border-color: var(--qs-ink); background: var(--qs-sel); color: var(--qs-ink); }
-.qs-seg__item:focus-visible { box-shadow: 0 0 0 3px rgba(21, 22, 24, .14); }
+.qs-seg__item:focus-visible { box-shadow: 0 0 0 3px var(--qs-line); }
 .qs-seg__item:disabled { color: var(--qs-ink4); cursor: default; }
 
 .qs-axes { display: flex; gap: 6px; }
@@ -139,7 +139,7 @@
   transition: opacity .15s, box-shadow .15s;
 }
 .qs-dial--hover .qs-dial__ring { opacity: 1; }
-.qs-dial__hit:focus-visible + .qs-dial__ring { opacity: 1; box-shadow: 0 0 0 3px rgba(21, 22, 24, .14); }
+.qs-dial__hit:focus-visible + .qs-dial__ring { opacity: 1; box-shadow: 0 0 0 3px var(--qs-line); }
 .qs-dial__flag {
   position: absolute;
   left: 50%;
@@ -173,7 +173,7 @@
 .qs-fader--drag .qs-fader__hit { cursor: grabbing; }
 .qs-fader__puck { transition: box-shadow .15s; }
 .qs-fader--hover .qs-fader__puck { box-shadow: 0 1px 1.5px rgba(20, 22, 28, .3), 0 7px 14px rgba(20, 22, 28, .16) !important; }
-.qs-fader--focus .qs-fader__puck { box-shadow: 0 1px 1.5px rgba(20, 22, 28, .24), 0 6px 12px rgba(20, 22, 28, .12), 0 0 0 3px rgba(21, 22, 24, .14) !important; }
+.qs-fader--focus .qs-fader__puck { box-shadow: 0 1px 1.5px rgba(20, 22, 28, .24), 0 6px 12px rgba(20, 22, 28, .12), 0 0 0 3px var(--qs-line) !important; }
 
 /* ---------- Stepper ---------- */
 .qs-stepper {
@@ -188,7 +188,7 @@
   color: var(--qs-ink);
   transition: box-shadow .15s;
 }
-.qs-stepper:has(:focus-visible) { box-shadow: 0 0 0 3px rgba(21, 22, 24, .14); }
+.qs-stepper:has(:focus-visible) { box-shadow: 0 0 0 3px var(--qs-line); }
 .qs-stepper__btn {
   appearance: none;
   margin: 0;
@@ -203,7 +203,7 @@
   outline: none;
   transition: color .15s, background .15s;
 }
-.qs-stepper__btn:hover:not(:disabled) { color: var(--qs-ink); background: rgba(21, 22, 24, .06); }
+.qs-stepper__btn:hover:not(:disabled) { color: var(--qs-ink); background: var(--qs-faint); }
 .qs-stepper__btn:active:not(:disabled) { background: var(--qs-sel); }
 .qs-stepper__btn:disabled { color: var(--qs-ink4); cursor: default; }
 .qs-stepper__val { text-align: center; }
