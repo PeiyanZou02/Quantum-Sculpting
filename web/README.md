@@ -1,4 +1,4 @@
-# Quantum Sculptor — interface
+# Quantum Sculpting — interface
 
 The design layer for Quantum Sculpting: the Quicksilver component library and the Quantum Sculptor
 screens (design handoff in `../design/handoff/`), built in React + TypeScript + three.js on top of
@@ -6,11 +6,19 @@ the Flask service in `../app/`. The research pipeline (voxelising, Quantum Blur 
 Evolve) lives in `../app/` and is documented in the top-level `README.md`; this folder only talks to
 it through `/api`.
 
-The interface has two modes, switched at the top of the window:
+It is laid out as an app with four tabs over one workspace (the 3D view stays loaded between them):
 
-- **Lab**, the research workspace: parameters, algorithms, readouts and the runtime log.
-- **Present**, the display: the same geometry in a HUD you compose yourself, for screenshots,
-  recordings and diagrams.
+- **Lab** makes the geometry: inputs left, the view, outputs right, the runtime drawer under it.
+- **Explore** looks into the quantum step: its settings left, the circuit explorer (blur modes) or
+  Evolve's nations turn by turn right, the Evolve log under the view.
+- **Compose** composes the display and its output (Present mode): presets, layers, library and
+  annotation left; frame, export, view and motion right.
+- **Notes** holds the research behind the project (a placeholder, being written by Peiyan).
+
+Every tab uses one control language (`src/ui/`), after Blender's properties editor: panels with a
+header bar that fold, property rows (label | control), number fields that fill to their value
+(drag across, double-click or Enter to type, arrows to step), flat segments, rectangular buttons,
+square checkboxes. 11 px mono, sentence case, never all caps; light and dark.
 
 ## Run it
 
@@ -42,9 +50,10 @@ pnpm lint       # oxlint
 
 ## Lab
 
-- **Input** (left): only parameters, 01 model → 04 mesh. Steps fold to a one-line summary; the
-  scrollbar carries an index to jump between them. Evolve (Peiyan's nations mode) adds its
-  parameters here and its own panel: turns, nations, relationships and the chronicle.
+- **Input** (left): only parameters. A rail of steps (01 Model, 02 Voxelise, 03 Quantum or
+  Evolve, 04 Mesh) shows one step at a time, made of panels in Peiyan's order (source and
+  orientation; grid and fill; engine, blur or nations, circuit and run; surface, voxel operations,
+  mesh and print). The rail follows the focus: open a step and the view shows it.
 - **Display** (centre): the workspace, with the layers, lighting, and the overlays and HUD elements,
   each switchable under *Overlays*. What it shows is not picked by hand; it follows the focus (below).
 - **Output** (right): readouts only: model, grid, slice, quantum result, print check, export.
@@ -53,28 +62,25 @@ pnpm lint       # oxlint
 
 ### Focus: what the workspace shows
 
-There is no Model / Voxels / Processed / Result switch. The workspace follows the step you are
-working on, and the strip over it says which step that is and what you just did ("Grid size 64³").
+The workspace follows the step you are working on, and the strip over it says which step that is
+and what you just did ("Grid size 64³"). Its steps (Model, Voxels, Quantum or Evolve, Mesh, Scan)
+are also buttons: a click shows that step until you work on another. The input rail follows too.
 
-| You… | Workspace shows | Side tab | Drawer |
-| --- | --- | --- | --- |
-| open a model or the test cup | each stage in turn as it finishes, ending on the surface (on Evolve's history in Evolve mode) | Properties | Runtime |
-| touch Model or change the up axis | the original mesh | Properties | Runtime |
-| touch Voxelise or change a setting there | the input voxels | Properties | Runtime |
-| touch Quantum or change a setting there | the quantum result | Quantum | Runtime (Atlas jobs in Atlas mode) |
-| an Atlas run tiled in layers comes back | the scan, following the run | Quantum | Atlas jobs |
-| choose Evolve, change its settings, play or scrub turns | the nations, turn by turn | Evolve | Evolve log |
-| touch Mesh, change a setting there, or export | the surface | Properties | Runtime |
-| press the sweep or scan button under Slice | the scan sweep | Quantum | Runtime |
+| You… | Workspace and input rail | Drawer |
+| --- | --- | --- |
+| open a model or the test cup | each stage in turn as it finishes, ending on the surface (on Evolve's history in Evolve mode) | Runtime |
+| open Model or change the up axis | the original mesh | Runtime |
+| open Voxelise or change a setting there | the input voxels | Runtime |
+| open Quantum or change a setting there | the quantum result | Runtime (Atlas jobs in Atlas mode) |
+| an Atlas run tiled in layers comes back | the scan, following the run | Atlas jobs |
+| choose Evolve, change its settings, play or scrub turns | the nations, turn by turn | Evolve log |
+| open Mesh, change a setting there, or export | the surface | Runtime |
 
 Downstream steps still update silently (a new grid is processed and meshed again), but the view
 stays on the step you are working on. When that step's own result is not ready yet, the strip says
-what is shown meanwhile. Moving a panel elsewhere in the dock is fine: the tab is brought forward
-wherever it is.
-
-Panels live in a dock: drag them between zones, resize the zones, show or hide them. The layout is
-remembered per browser. A new tab starts empty, on the landing guide; a reload during work picks up
-the model the service holds.
+what is shown meanwhile. The side panels are resizable and the drawer folds; both are remembered per
+browser. A new tab starts empty, on the landing guide; a reload during work picks up the model the
+service holds.
 
 Viewport tools (also in Present):
 
@@ -136,16 +142,17 @@ on smaller windows (checked at 1280, 1440 and 1920 wide).
 
 ## What is kept, and where
 
-All of it is in the browser's local storage, per machine and per browser: the dock layout, theme,
+All of it is in the browser's local storage, per machine and per browser: the open tab, panel widths,
+which panels are folded, theme,
 HUD settings, saved compositions and their pieces, and which Input steps are folded. Nothing of the
 interface is written to the service or to the repo. Models, Atlas results and exports are the
 service's, in `input/`, `grids/` and `output/`.
 
 ## Font
 
-TWK Everett is commercially licensed and not in the repo. Put `TWKEverett-Book.ttf` in
-`web/public/fonts/` (git-ignored). Without it the page falls back to system sans. Geist Mono
-comes from Google Fonts.
+One family throughout: TWK Everett Mono, commercially licensed and not in the repo. Put
+`TWKEverettMono-Regular.woff2`, `-Medium.woff2` and `-Bold.woff2` in `web/public/fonts/`
+(git-ignored). Without them the page falls back to the system monospace.
 
 ## Code layout
 
@@ -156,9 +163,11 @@ src/hud/         HUD pieces (frame, orbit, camera, dial, bounds, focus, callouts
                  cards, stages, …) and the Composer that places them
 src/view/        three.js engine (grid coordinates, controlled camera, picking), entanglement
                  shading (entangle.ts, hdr.ts), nation colours for Evolve
-src/dock/        the dockable panel layout
-src/screens/     TopBar, InputPane, Stage (display + HUD), OutputPane, Terminal, KeyDialog,
-                 EvolvePanel, PresentBar, PresentPanel, MarkLibrary, capture
+src/ui/          the control language: Panel, Row, Fact, Button, Checkbox (ui.css)
+src/screens/     TopBar, Shell (drawer, resizers, Notes), InputPane, Stage (display + HUD),
+                 OutputPane, QuantumPanel, EvolvePanel, Terminal, EvolveLog, KeyDialog,
+                 PresentBar, PresentPanel (Compose left and right), MarkLibrary, capture
+src/shell.ts     the open tab, panel sizes and the drawer
 src/api.ts       typed client for every route in app/server.py
 src/store.ts     pipeline state (zustand), mirroring the handoff's "State" section
 src/present.ts   Present state: compositions, pieces, shots, motion, capture
