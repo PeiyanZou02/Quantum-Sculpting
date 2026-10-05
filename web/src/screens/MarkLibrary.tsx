@@ -1,10 +1,9 @@
 // The component library and the layer list. Components are grouped (frames, camera, data, pointers);
 // each tile is a live preview of the mark, drawn from the current view and cropped to where it sits.
-// Hovering a tile opens a larger preview beside the panel (nothing changes on the view). In Present,
-// tiles are dragged onto the view or clicked to drop them in their usual place; the layer list is what
-// is on the view, with visibility, emphasis, line weight, dash spacing and size for each.
+// Hovering a tile shows the component on the view; a click turns it on, another click turns it off.
+// In Present a tile can also be dragged onto the view. The layer list is what is on the view, with
+// visibility, emphasis, line weight, dash spacing and size for each.
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { createPortal } from 'react-dom'
 import { useStore } from '../store'
 import { usePresent, type Look } from '../present'
 import { FAMILIES, MarkThumb, chosenOf, keyOf, savePng, variantsOf } from '../hud/Composer'
@@ -29,14 +28,6 @@ export const GROUPS: { id: string; title: string; fams: string[] }[] = [
   { id: 'point', title: 'Pointers and scan', fams: ['selection', 'callout', 'scan'] },
 ]
 
-const SLOT_NAME: Record<string, string> = {
-  tl: 'the top-left corner', tr: 'the top-right corner', bl: 'the bottom-left corner', br: 'the bottom-right corner',
-  top: 'the top edge', bottom: 'the bottom edge', left: 'the left edge', right: 'the right edge',
-}
-/** Where a component goes, in words. */
-export const whereOf = (m: HudModule) =>
-  m.slot === 'object' ? 'Follows the model as it turns' : m.slot === 'full' ? 'Fills the frame' : `Starts in ${SLOT_NAME[m.slot] ?? 'its corner'}; drag it anywhere`
-
 /** A still of the view and the HUD context, taken when asked and when what is shown changes. */
 export function useSnap() {
   const [snap, setSnap] = useState<{ ctx: HudCtx | undefined; bg: string | null }>(() => ({ ctx: live.ctx, bg: live.engine?.snapshot(420) ?? null }))
@@ -45,8 +36,8 @@ export function useSnap() {
   const turn = useStore((s) => s.evolve.frameTurn)
   const take = () => setSnap({ ctx: live.ctx, bg: live.engine?.snapshot(420) ?? null })
   useEffect(() => {
-    const t = setTimeout(take, 450)
-    return () => clearTimeout(t)
+    const t = [setTimeout(take, 450), setTimeout(take, 1600)]   // the second catches a view still settling after a load
+    return () => t.forEach(clearTimeout)
   }, [view, proc, grid, shading, theme, model, turn])
   // a still taken while the page was hidden or another size is stale: take it again
   useEffect(() => {
@@ -79,37 +70,23 @@ export const TIERS: { v: 1 | 2 | 3; t: string; d: string }[] = [
   { v: 3, t: 'Tertiary', d: 'Faint: structure and context.' },
 ]
 
-/** The larger preview beside the panel while a tile is hovered. */
-function HoverCard({ m, at, edge, ctx, bg, on }: { m: HudModule; at: DOMRect; edge: number; ctx: HudCtx | undefined; bg: string | null; on: boolean }) {
-  const W = 320, H = 200
-  const top = Math.max(12, Math.min(window.innerHeight - H - 120, at.top + at.height / 2 - (H + 90) / 2))
-  const left = Math.max(12, edge - (W + 24) - 14)   // beside the panel, never over it
-  return createPortal(
-    <div className="mk-pop" style={{ top, left, width: W + 24 }} aria-hidden>
-      {ctx ? <MarkThumb m={m} ctx={ctx} bg={bg} w={W} h={H} /> : <span className="mini mk-tile__empty" style={{ width: W, height: H }}>Open a model to preview</span>}
-      <span className="mk-pop__t">{nameOf(m)}{on && <span className="mk-pop__on">On the view</span>}</span>
-      <span className="mk-pop__d">{m.desc}</span>
-      <span className="mk-pop__w">{whereOf(m)}</span>
-    </div>,
-    document.body,
-  )
-}
-
-/** Every component as a preview tile, grouped. Present: drag onto the view, or click to drop it in its
- *  usual place (a tile already on the view selects it). Lab: click to turn it on or off. */
-export function MarkLibrary({ compose, looks = {}, cols = 2, tile = 146, drag = false, onAdd, onRemove, onSelect, onDragStart, extra }: {
+/** Every component as a preview tile, grouped. Hover a tile to see it on the view (one already on is
+ *  singled out instead); click to turn it on, click again to turn it off. In Present a tile can also be
+ *  dragged onto the view to put it exactly there. */
+export function MarkLibrary({ compose, looks = {}, cols = 2, tile = 146, drag = false, onToggle, onPreview, onDragStart, extra }: {
   compose: Record<string, string>; looks?: Record<string, Look>; cols?: number; tile?: number; drag?: boolean
-  onAdd: (fam: string, id: string) => void; onRemove?: (fam: string, id: string) => void; onSelect?: (key: string) => void
+  onToggle: (fam: string, id: string, on: boolean) => void
+  /** Hovering: the tile's key and whether it is on already; null when the pointer leaves. */
+  onPreview?: (key: string | null, on: boolean) => void
   onDragStart?: () => void
   /** Tiles that are not marks (Present: free text), shown first. */
   extra?: ReactNode
 }) {
   const { ctx, bg, refresh } = useSnap()
-  const [hover, setHover] = useState<{ m: HudModule; at: DOMRect; edge: number } | null>(null)
   const th = Math.round(tile * 0.62)
   const jump = (id: string) => document.getElementById(`mk-g-${id}`)?.scrollIntoView({ block: 'start', behavior: 'smooth' })
   return (
-    <div className="mk" onPointerEnter={refresh} onPointerLeave={() => setHover(null)}>
+    <div className="mk" onPointerEnter={refresh} onPointerLeave={() => onPreview?.(null, false)}>
       <div className="mk-groups" role="navigation" aria-label="Library groups">
         {GROUPS.map((g) => <button key={g.id} className="pd-chip pd-chip--s" onClick={() => jump(g.id)}>{g.title}</button>)}
       </div>
@@ -125,25 +102,20 @@ export function MarkLibrary({ compose, looks = {}, cols = 2, tile = 146, drag = 
               <div key={f.id} className="mk-fam">
                 <div className="mk-fam__head">
                   <span className="mk-fam__t">{f.title}</span>
-                  <span className="mk-fam__d">{on.length ? `${on.length} on the view` : f.desc}</span>
+                  <span className="mk-fam__d">{on.length ? `${on.length} on` : f.desc}</span>
                 </div>
                 <Lazy h={Math.ceil(f.modules.length / cols) * (th + 30)}>
                   <div className="mk-tiles" style={{ gridTemplateColumns: `repeat(${cols}, ${tile}px)` }}>
                     {f.modules.map((m) => {
                       const isOn = on.includes(m.id)
                       const tier = looks[keyOf(m)]?.tier ?? 1
-                      const click = () => {
-                        setHover(null)
-                        if (!isOn) onAdd(f.id, m.id)
-                        else if (onSelect) onSelect(keyOf(m))
-                        else onRemove?.(f.id, m.id)
-                      }
+                      const click = () => { onToggle(f.id, m.id, !isOn); onPreview?.(isOn ? null : keyOf(m), !isOn) }
                       return (
-                        <div key={m.id} role="button" tabIndex={0} aria-pressed={isOn} aria-label={nameOf(m)}
+                        <div key={m.id} role="switch" tabIndex={0} aria-checked={isOn} aria-label={nameOf(m)}
                           className={'mk-tile' + (isOn ? ' mk-tile--on mk-tile--t' + tier : '') + (drag ? ' mk-tile--drag' : '')}
                           draggable={drag}
                           onDragStart={(e) => {
-                            setHover(null)
+                            onPreview?.(null, false)
                             e.dataTransfer.setData(MARK_MIME, keyOf(m))
                             e.dataTransfer.effectAllowed = 'copy'
                             const img = e.currentTarget.querySelector('.mini')
@@ -152,10 +124,17 @@ export function MarkLibrary({ compose, looks = {}, cols = 2, tile = 146, drag = 
                           }}
                           onClick={click}
                           onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); click() } }}
-                          onPointerEnter={(e) => { const at = e.currentTarget.getBoundingClientRect(); setHover({ m, at, edge: e.currentTarget.closest('.pd, .qs-pop__panel')?.getBoundingClientRect().left ?? at.left }) }}
-                          onPointerLeave={() => setHover(null)}>
+                          onPointerEnter={() => onPreview?.(keyOf(m), isOn)}
+                          onFocus={() => onPreview?.(keyOf(m), isOn)}
+                          onPointerLeave={() => onPreview?.(null, false)}>
                           {ctx ? <MarkThumb m={m} ctx={ctx} bg={bg} w={tile} h={th} look={looks[keyOf(m)]} /> : <span className="mini mk-tile__empty" style={{ width: tile, height: th }}>Open a model to preview</span>}
-                          <span className="mk-tile__t">{cap(m.label)}{isOn && <span className="mk-tile__on">on</span>}</span>
+                          <span className="mk-tile__t">
+                            <span className="mk-tile__name">{cap(m.label)}</span>
+                            <span className={'mk-tile__state' + (isOn ? ' mk-tile__state--on' : '')}>
+                              <span className="mk-tile__is">{isOn ? 'On' : ''}</span>
+                              <span className="mk-tile__act">{isOn ? 'Turn off' : drag ? 'Click or drag' : 'Turn on'}</span>
+                            </span>
+                          </span>
                         </div>
                       )
                     })}
@@ -166,7 +145,6 @@ export function MarkLibrary({ compose, looks = {}, cols = 2, tile = 146, drag = 
           })}
         </div>
       ))}
-      {hover && <HoverCard m={hover.m} at={hover.at} edge={hover.edge} ctx={ctx} bg={bg} on={variantsOf(compose, hover.m.family).includes(hover.m.id)} />}
     </div>
   )
 }

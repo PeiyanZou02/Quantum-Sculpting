@@ -295,9 +295,16 @@
 .mk-tile--t1 { border-color: var(--qs-ink); }
 .mk-tile--t2 { border-color: var(--qs-ink3); }
 .mk-tile--t3 { border-color: var(--qs-ink4); border-style: dashed; }
-.mk-tile__t { display: flex; gap: 6px; align-items: baseline; font: 400 12px/1.1 var(--qs-sans); color: var(--qs-ink2); padding: 0 3px; }
-.mk-tile--on .mk-tile__t { color: var(--qs-ink); font-weight: 500; }
-.mk-tile__on { margin-left: auto; font: italic 300 11px/1 var(--qs-sans); color: var(--qs-ink2); }
+.mk-tile__t { display: flex; gap: 6px; align-items: center; justify-content: space-between; min-height: 20px; padding: 0 3px; }
+.mk-tile__name { font: 400 12px/1.1 var(--qs-sans); color: var(--qs-ink2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mk-tile--on .mk-tile__name { color: var(--qs-ink); font-weight: 600; }
+/* the state on the right: "On" while it is on; on hover, what a click will do */
+.mk-tile__state { display: inline-flex; flex: none; }
+.mk-tile__is { display: none; height: 18px; padding: 0 8px; border-radius: 999px; background: var(--qs-ink); color: var(--qs-bg); font: 600 10.5px/18px var(--qs-sans); }
+.mk-tile__state--on .mk-tile__is { display: inline-block; }
+.mk-tile__act { display: none; font: italic 300 11px/18px var(--qs-sans); color: var(--qs-ink2); white-space: nowrap; }
+.mk-tile:hover .mk-tile__is, .mk-tile:focus-visible .mk-tile__is { display: none; }
+.mk-tile:hover .mk-tile__act, .mk-tile:focus-visible .mk-tile__act { display: inline-block; }
 .mk-tile__empty { display: flex; align-items: center; justify-content: center; font: italic 300 11px/1 var(--qs-sans); color: var(--qs-ink3); }
 .mk-tile:focus-visible, .pd-save:focus-visible, .mk-text:focus-visible { outline: 2px solid var(--qs-ink); outline-offset: 2px; }
 .qs-pop__panel .mk-tiles { gap: 6px; }
@@ -305,18 +312,6 @@
 .mk-text:hover { background: var(--qs-faint); border-color: var(--qs-ink3); }
 .mk-text em { display: block; font: italic 300 11px/1.2 var(--qs-sans); color: var(--qs-ink3); }
 .mk-text__aa { width: 52px; height: 34px; border-radius: 8px; box-shadow: inset 0 0 0 1px var(--qs-line); display: flex; align-items: center; justify-content: center; font: 500 16px/1 var(--qs-sans); }
-/* hovering a tile: a larger preview beside the panel, nothing changes on the view */
-.mk-pop {
-  position: fixed; z-index: 60; display: flex; flex-direction: column; gap: 6px; padding: 12px 12px 14px; border-radius: 20px; pointer-events: none;
-  background: var(--qs-bg); border: 1px solid var(--qs-line); box-shadow: 0 12px 40px rgba(0, 0, 0, .28); animation: mk-pop .12s ease-out;
-}
-@keyframes mk-pop { from { opacity: 0; transform: translateX(6px) } to { opacity: 1; transform: none } }
-.mk-pop .mini { border-radius: 12px; box-shadow: inset 0 0 0 1px var(--qs-line); }
-.mk-pop__t { display: flex; align-items: baseline; gap: 8px; font: 700 13.5px/1.2 var(--qs-sans); color: var(--qs-ink); padding: 6px 4px 0; }
-.mk-pop__on { font: italic 300 11px/1 var(--qs-sans); color: var(--qs-ink2); }
-.mk-pop__d { font: 400 12px/1.35 var(--qs-sans); color: var(--qs-ink2); padding: 0 4px; }
-.mk-pop__w { font: italic 300 11.5px/1.3 var(--qs-sans); color: var(--qs-ink3); padding: 0 4px; }
-
 /* layers: what is on the view */
 .ly { display: flex; flex-direction: column; gap: 2px; }
 .ly-row { border-radius: 14px; transition: background .15s; scroll-margin: 12px; }

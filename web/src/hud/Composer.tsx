@@ -150,12 +150,12 @@ export interface Edit { sel: string | null; onSelect: (k: string | null) => void
 
 interface PieceProps {
   k: string; label: string; ctx: HudCtx; pos?: Placement; arrange: boolean; edit?: Edit; live?: boolean
-  look?: Look; dim?: boolean; onMove?: (k: string, p: Placement | null) => void; children: ReactNode
+  look?: Look; dim?: boolean; ghost?: boolean; onMove?: (k: string, p: Placement | null) => void; children: ReactNode
 }
 /** A piece in a slot or at a dragged position. In Lab's arrange mode every piece shows its handle. In
  *  compose mode a piece is selected by a click, dragged by its body or handle, saved as a PNG, deleted
  *  with ×, or dragged onto the compose panel to take it off. */
-function Piece({ k, label, ctx, pos, arrange, edit, live, look, dim, onMove, children }: PieceProps) {
+function Piece({ k, label, ctx, pos, arrange, edit, live, look, dim, ghost, onMove, children }: PieceProps) {
   const body = useRef<HTMLDivElement>(null)
   useStrokes(body, look)
   const start = (e: React.PointerEvent<HTMLElement>) => {
@@ -194,7 +194,7 @@ function Piece({ k, label, ctx, pos, arrange, edit, live, look, dim, onMove, chi
   }
   const tier = look?.tier ?? 1
   const sel = edit?.sel === k
-  const cls = 'hud-piece' + (live ? ' hud-mod--live' : '') + (arrange ? ' hud-piece--arrange' : '') + (edit ? ' hud-piece--edit' : '') + (sel ? ' hud-piece--sel' : '') + (pos ? ' hud-piece--placed' : '')
+  const cls = 'hud-piece' + (live ? ' hud-mod--live' : '') + (arrange ? ' hud-piece--arrange' : '') + (edit ? ' hud-piece--edit' : '') + (sel ? ' hud-piece--sel' : '') + (pos ? ' hud-piece--placed' : '') + (ghost ? ' hud-piece--ghost' : '')
   const place = pos ? { left: pos.x * ctx.w, top: pos.y * ctx.h, transform: pos.c ? 'translate(-50%, -50%)' : undefined } : undefined
   return (
     <div className={cls} data-hud={k} style={place} onPointerDown={edit && !live ? start : undefined}>
@@ -218,11 +218,11 @@ function Piece({ k, label, ctx, pos, arrange, edit, live, look, dim, onMove, chi
 }
 
 /** Object and full-view marks: drawn over the whole view, styled like pieces but not draggable. */
-function Free({ k, live, look, dim, children }: { k: string; live?: boolean; look?: Look; dim?: boolean; children: ReactNode }) {
+function Free({ k, live, look, dim, ghost, children }: { k: string; live?: boolean; look?: Look; dim?: boolean; ghost?: boolean; children: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null)
   useStrokes(ref, look)
   return (
-    <div ref={ref} className={'hud-free' + (live ? ' hud-free--live' : '')} data-hud={k} style={{ opacity: TIER_OPACITY[look?.tier ?? 1] * (dim ? 0.16 : 1) }}>
+    <div ref={ref} className={'hud-free' + (live ? ' hud-free--live' : '') + (ghost ? ' hud-free--ghost' : '')} data-hud={k} style={{ opacity: TIER_OPACITY[look?.tier ?? 1] * (dim ? 0.16 : 1) }}>
       {children}
     </div>
   )
@@ -280,9 +280,11 @@ function fitStrips(el: HTMLElement | null) {
 }
 
 /** Draws the chosen modules over the view. `chrome` lets the host put its own controls into slots. */
-export function HudLayer({ ctx, compose, chrome, positions = {}, arrange = false, edit, looks = {}, hl = null, texts = [], onMove, onText }: {
+export function HudLayer({ ctx, compose, chrome, positions = {}, arrange = false, edit, looks = {}, hl = null, ghost = null, texts = [], onMove, onText }: {
   ctx: HudCtx; compose: Composition; chrome?: Partial<Record<(typeof SLOTS)[number], ReactNode>>
   positions?: Record<string, Placement>; arrange?: boolean; edit?: Edit; looks?: Record<string, Look>; hl?: string | null
+  /** The piece being previewed from the library: drawn with a "Preview" tag. */
+  ghost?: string | null
   texts?: { id: string; text: string }[]
   onMove?: (k: string, p: Placement | null) => void; onText?: (id: string, t: string | null) => void
 }) {
@@ -293,7 +295,7 @@ export function HudLayer({ ctx, compose, chrome, positions = {}, arrange = false
   const slotted = (s: string) => chosen.filter((m) => m.slot === s && !positions[key(m)])
   const dim = (k: string) => !!hl && hl !== k
   const piece = (m: HudModule, pos?: Placement) => (
-    <Piece key={key(m)} k={key(m)} label={m.label} ctx={ctx} pos={pos} arrange={arrange} edit={edit} onMove={onMove} live={m.interactive} look={looks[key(m)]} dim={dim(key(m))}>{m.render(ctx)}</Piece>
+    <Piece key={key(m)} k={key(m)} label={m.label} ctx={ctx} pos={pos} arrange={arrange} edit={edit} onMove={onMove} live={m.interactive} look={looks[key(m)]} dim={dim(key(m))} ghost={ghost === key(m)}>{m.render(ctx)}</Piece>
   )
   const chromeAt = (s: (typeof SLOTS)[number]) => (chrome?.[s] && !positions[`chrome:${s}`] ? (
     <Piece k={`chrome:${s}`} label="controls" ctx={ctx} arrange={arrange} onMove={onMove} live>{chrome[s]}</Piece>
@@ -302,7 +304,7 @@ export function HudLayer({ ctx, compose, chrome, positions = {}, arrange = false
   useLayoutEffect(() => fitStrips(root.current))
   return (
     <div ref={root} className={'hud-layer' + (arrange ? ' hud-layer--arrange' : '') + (edit ? ' hud-layer--edit' : '')}>
-      {free.map((m) => <Free key={key(m)} k={key(m)} live={m.interactive} look={looks[key(m)]} dim={dim(key(m))}>{m.render(ctx)}</Free>)}
+      {free.map((m) => <Free key={key(m)} k={key(m)} live={m.interactive} look={looks[key(m)]} dim={dim(key(m))} ghost={ghost === key(m)}>{m.render(ctx)}</Free>)}
       {SLOTS.map((s) => {
         const mods = slotted(s)
         const c = chromeAt(s)

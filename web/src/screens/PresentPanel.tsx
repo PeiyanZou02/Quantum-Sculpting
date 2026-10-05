@@ -147,7 +147,7 @@ export function PresentPanel() {
   }
   const on = Object.values(p.compose).filter((v) => v && v !== 'off').reduce((n, v) => n + v.split(',').length, 0) + p.texts.length
   return (
-    <aside className={'pd' + (p.composing ? ' pd--composing' : '')} aria-label="Compose the present view" onPointerLeave={() => p.setHl(null)}>
+    <aside className={'pd' + (p.composing ? ' pd--composing' : '')} aria-label="Compose the present view" onPointerLeave={() => { p.setHl(null); p.setPreview(null) }}>
       <header className="pd__head">
         <span className="pd__title">Compose</span>
         <button className={'pd-mode' + (p.composing ? ' pd-mode--on' : '')} onClick={() => p.setComposing(!p.composing)} aria-pressed={p.composing}
@@ -165,11 +165,15 @@ export function PresentPanel() {
           <LayerList />
         </Blk>
 
-        <Blk id="pd-library" label="Component library" note={p.composing ? 'drag onto the view' : 'click or drag to add'}>
+        <Blk id="pd-library" label="Component library" note="hover to preview · click to turn on or off">
           <MarkLibrary compose={p.compose} looks={p.looks} drag
-            onAdd={(f, id) => { p.place(f, id); p.setComposing(true) }}
-            onSelect={(k) => { p.setSel(k); p.setComposing(true) }}
-            onDragStart={() => p.setComposing(true)}
+            onToggle={(f, id, on) => (on ? p.place(f, id) : p.removePiece(`${f}:${id}`))}
+            onPreview={(k, on) => {
+              // hovering shows the component on the view; one already on is singled out instead
+              p.setPreview(k && !on ? k : null)
+              p.setHl(k && on ? k : null)
+            }}
+            onDragStart={() => { p.setPreview(null); p.setComposing(true) }}
             extra={
               <div className="mk-extra">
                 <div role="button" tabIndex={0} className="mk-text" draggable

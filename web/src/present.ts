@@ -36,6 +36,9 @@ interface P {
   /** The piece whose layer row is hovered: the others dim so you can see which is which. */
   hl: string | null
   setHl: (k: string | null) => void
+  /** A component ("family:variant") shown on the view while its library tile is hovered; not part of the composition. */
+  preview: string | null
+  setPreview: (k: string | null) => void
   /** Put a component on the view: at a point (centre, fractions of the view) or in its usual place. */
   place: (family: string, id: string, at?: { x: number; y: number }) => void
   /** Take a piece off the view. */
@@ -131,7 +134,7 @@ export const usePresent = create<P>()((set, get) => {
   }
   return {
     mode: (saved.mode as Mode) ?? 'lab',
-    setMode: (m) => up({ mode: m, arrange: false, bare: false, composing: false, sel: null }),
+    setMode: (m) => up({ mode: m, arrange: false, bare: false, composing: false, sel: null, preview: null, hl: null }),
     compose: saved.compose ?? {},
     setCompose: (c) => up({ compose: { ...get().compose, ...c } }),
     pos: saved.pos ?? {},
@@ -149,6 +152,8 @@ export const usePresent = create<P>()((set, get) => {
     setSel: (k) => set({ sel: k }),
     hl: null,
     setHl: (k) => set({ hl: k }),
+    preview: null,
+    setPreview: (k) => set({ preview: k }),
     place: (family, id, at) => {
       const s = get()
       const cur = variants(s.compose[family])
@@ -187,7 +192,7 @@ export const usePresent = create<P>()((set, get) => {
     spinDir: saved.spinDir ?? 1,
     setSpinDir: (d) => up({ spinDir: d }),
     drawer: saved.drawer ?? true,
-    setDrawer: (v) => up({ drawer: v }),
+    setDrawer: (v) => up(v ? { drawer: v } : { drawer: v, preview: null, hl: null }),
     cycle: false,
     setCycle: (v) => set({ cycle: v }),
     sweep: false,

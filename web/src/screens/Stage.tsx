@@ -72,7 +72,10 @@ export function Stage() {
   const pr = usePresent()
   const present = pr.mode === 'present'
   const labCompose = Object.keys(st.compose).length ? st.compose : (PRESETS.find((p) => p.id === 'clean')!.set() as Record<string, string>)
-  const shown: Record<string, string> = present ? pr.compose : labCompose
+  // a component previewed from the library is drawn on top of the composition as it is now
+  const pv = present && pr.preview ? pr.preview.split(':') : null
+  const shown: Record<string, string> = !present ? labCompose
+    : pv && !variantsOf(pr.compose, pv[0]).includes(pv[1]) ? { ...pr.compose, [pv[0]]: toggleVariant(pr.compose, pv[0], pv[1]) } : pr.compose
   const { model, modelMesh, grid, gridData, procData, resultMesh, view, slice, m, hud, scan, theme, tool, shading, shade, layers } = st
 
   useEffect(() => {
@@ -104,7 +107,7 @@ export function Stage() {
   useEffect(() => { engine?.show(view as ViewName) }, [engine, view, gridData, procData, resultMesh, modelMesh])
   useEffect(() => { engine?.setGhosts((Object.keys(layers) as Layer[]).filter((k) => layers[k].visible)) }, [engine, layers, gridData, procData, resultMesh, modelMesh])
   useEffect(() => { engine?.setFrame({ bounds: hud.bounds, floor: hud.floor }) }, [engine, hud.bounds, hud.floor, grid])
-  const planeOn = hud.slice || tool === 'slice' || (present && (pr.sweep || (pr.compose.slicecard ?? 'off') !== 'off'))
+  const planeOn = hud.slice || tool === 'slice' || (present && (pr.sweep || (shown.slicecard ?? 'off') !== 'off'))
   useEffect(() => { engine?.setSlice(planeOn ? slice : null) }, [engine, slice, view, planeOn])
   useEffect(() => { if (engine && view === 'scan') engine.setScan(slice.axis === 'z' ? slice.index + 1 : 0) }, [engine, view, slice, grid])
   useEffect(() => { if (view === 'scan' && slice.axis !== 'z') st.setSlice({ axis: 'z' }) }, [view]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -454,7 +457,7 @@ export function Stage() {
           <HudLayer ctx={(live.ctx = hudCtx(engine))} compose={shown}
             arrange={!present && pr.arrange && !pr.bare}
             edit={present && pr.composing && !pr.bare && !pr.recording ? { sel: pr.sel, onSelect: pr.setSel, onRemove: pr.removePiece } : undefined}
-            looks={present ? pr.looks : undefined} hl={present ? pr.hl : null}
+            looks={present ? pr.looks : undefined} hl={present ? pr.hl : null} ghost={present ? pr.preview : null}
             texts={present ? pr.texts : undefined} onText={pr.setText}
             positions={Object.fromEntries(Object.entries(pr.pos).filter(([k]) => k.startsWith(pr.mode + '|')).map(([k, v]) => [k.slice(pr.mode.length + 1), v]))}
             onMove={(k, p) => pr.setPos(`${pr.mode}|${k}`, p)}
@@ -530,7 +533,7 @@ export function ComposeMenu({ compose, setCompose, guides = true, align = 'right
         </div>
       </PopSection>
       <PopSection label="Marks · several per family">
-        <MarkLibrary compose={compose} tile={160} onAdd={(f, id) => setCompose({ [f]: toggleVariant(compose, f, id) })} onRemove={(f, id) => setCompose({ [f]: toggleVariant(compose, f, id) })} />
+        <MarkLibrary compose={compose} tile={160} onToggle={(f, id) => setCompose({ [f]: toggleVariant(compose, f, id) })} />
       </PopSection>
       {guides && <PopSection label="Guides">
         <Check label="Grid box" note="dashed n³ outline" checked={hud.bounds} onChange={(v) => st.setHud({ bounds: v })} />

@@ -80,3 +80,14 @@
 .mini .hud-layer { z-index: 1; }
 .hud-slot--bottom.hud-slot--lean-l { left: 36px; transform: none; align-items: flex-start; }
 .hud-slot--bottom.hud-slot--lean-r { left: auto; right: 36px; transform: none; align-items: flex-end; }
+
+/* a component previewed from the library: on the view, tagged, until it is clicked on */
+.hud-piece--ghost { outline: 1px dashed var(--qs-ink2); outline-offset: 6px; border-radius: 4px; }
+.hud-piece--ghost::after, .hud-free--ghost::after {
+  content: 'Preview'; position: absolute; height: 20px; padding: 0 10px; border-radius: 999px; border: 1px dashed var(--qs-ink2);
+  background: var(--qs-bg); color: var(--qs-ink2); font: 500 11px/18px var(--qs-sans); white-space: nowrap; pointer-events: none;
+}
+.hud-piece--ghost::after { left: -6px; top: -32px; }
+.hud-free--ghost::after { left: 50%; top: 14px; transform: translateX(-50%); }
+.hud-piece--ghost > .hud-piece__body, .hud-free--ghost > * { animation: hud-ghost .18s ease-out; }
+@keyframes hud-ghost { from { opacity: 0 } to { opacity: 1 } }
