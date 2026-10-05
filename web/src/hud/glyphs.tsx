@@ -773,7 +773,7 @@ export function PulseExplore({ ctx }: { ctx: HudCtx }) {
             <g key={k}>
               <line x1={L0} y1={y(k)} x2={R0} y2={y(k)} className="qg-k4" strokeWidth={1} />
               <text x={0} y={y(k) + 3.5} className="qg-tx">q{k}</text>
-              <rect x={R0 + 5} y={y(k) - 6} width={24} height={12} rx={6} className="qg-k1" strokeWidth={1} />
+              <rect x={R0 + 5} y={y(k) - 6} width={24} height={12} className="qg-k1" strokeWidth={1} />
               <text x={R0 + 17} y={y(k) + 3} className="qg-tx2" textAnchor="middle">M</text>
             </g>
           ))}
@@ -838,7 +838,7 @@ export function PulseDrag({ ctx }: { ctx: HudCtx }) {
             <g key={k}>
               <line x1={L0} y1={y(k)} x2={R0} y2={y(k)} className={lane(k)} strokeWidth={1} opacity={0.5} />
               <text x={2} y={y(k) + 3.5} className={sel === k ? 'qg-tx2' : 'qg-tx'}>q{k}</text>
-              <rect x={R0 + 8} y={y(k) - 7} width={26} height={14} rx={7} className={lane(k)} strokeWidth={1} />
+              <rect x={R0 + 8} y={y(k) - 7} width={26} height={14} className={lane(k)} strokeWidth={1} />
               <text x={R0 + 21} y={y(k) + 3} className={sel == null || sel === k ? 'qg-tx2' : 'qg-tx'} textAnchor="middle">M</text>
               <rect x={0} y={y(k) - 12} width={L0 - 4} height={24} className="qg-lane-hit" fill="transparent"
                 onPointerDown={(e) => { e.stopPropagation(); setSel(sel === k ? null : k) }} />

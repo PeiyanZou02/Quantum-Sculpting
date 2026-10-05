@@ -40,7 +40,7 @@ export function IndexBar({ ctx }: { ctx: HudCtx }) {
       {pill && (
         <div
           className="qs-lab-slide"
-          style={{ position: 'absolute', top: 0, height: 30, left: pill.l, width: pill.w, borderRadius: 999, border: '1px solid var(--qs-ink)', background: 'var(--qs-sel)', boxSizing: 'border-box' }}
+          style={{ position: 'absolute', top: 0, height: 30, left: pill.l, width: pill.w, border: '1px solid var(--qs-ink)', background: 'var(--qs-sel)', boxSizing: 'border-box' }}
         />
       )}
       {list.map((it) => (

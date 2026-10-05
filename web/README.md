@@ -18,9 +18,15 @@ It is laid out as an app with two tabs:
 - **Research** holds the research behind the project (a placeholder, being written by Peiyan).
 
 Start from a built-in shape (the test cup, a sphere, cube, pyramid, cylinder, cone or torus) or
-import your own model. The quantum step's action sits at the foot of Parameters: Run (local modes
-also run as their dials turn), Run on Atlas (with a key; Set API key otherwise), or Run Evolve and
-Play turns.
+import your own model. Each step's action sits at the foot of Parameters: Voxelise, Run (Run on Atlas
+with a key, Set API key otherwise; Run Evolve and Play turns), Build the mesh. The built-in shapes run
+their steps by themselves, one into the next as settings change; your own models wait for each Run
+(or *Run all*, which does whatever is missing or out of date), since they can be large. The switch
+*Run steps by themselves* sits under the actions.
+
+The drawer's row is the status line: what is running and how far along (Atlas tiles and Evolve turns
+as a share, with a bar; other steps with the time they have taken), or what the workspace waits for,
+then the latest line of the runtime log.
 
 Every tab uses one control language (`src/ui/`), after Blender's properties editor: panels with a
 header bar that fold, property rows (label | control), number fields that fill to their value
@@ -128,11 +134,13 @@ Shading:
 The view carries a composition: pieces from the Quicksilver library laid out around the object, which
 always stays in the centre. **Properties · Compose** holds it:
 
-1. **Presets** — Clean, Lab, Quantum, Evolve, Measure, Camera, Specimen, Atlas, Plate, one per row. A
-   preset lays its pieces out on a grid around the object at a small, even scale; in a small view
-   the whole plate scales down rather than lose pieces. *Lay out again* re-runs the layout for the
-   frame (all pieces, without repeats, or only the essentials); *Arrange* (C) lets you drag, resize by
-   the corner, select and remove pieces on the view.
+1. **Presets** — one per category of the library, each with one piece from every family in it on
+   top of the scene's guides: **Marks**, **Navigation**, **Evolve**, **Glyphs**, **Data**, and
+   **Composite**, the most telling piece of each together (it follows the engine in use). A preset lays
+   its pieces out around the object, which stays in the centre; in a small view the whole plate scales
+   down rather than lose pieces. *Lay out again* re-runs the layout for the frame (all pieces, without
+   repeats, or only the essentials); *Arrange* (C) lets you drag, resize by the corner, select and
+   remove pieces on the view; *Clear* takes them all off.
 2. **On the view** — the view's own controls (tool shelf, navigation, axis gizmo, camera, info, value
    scale, corners) and the scene guides (grid box, print grid with its cell size, cutting plane).
 3. **Library** — the full Quicksilver library, by category, family and variant. Hover a row to

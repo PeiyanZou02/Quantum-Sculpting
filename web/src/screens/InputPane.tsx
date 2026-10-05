@@ -64,7 +64,7 @@ export function InputPane({ only }: { only?: Step }) {
           {step === 'mesh' && <MeshIn />}
           <div style={{ height: 24 }} />
         </ScrollArea>
-        {step === 'quantum' && <RunBar />}
+        <RunBar step={step} />
       </div>
     </div>
   )

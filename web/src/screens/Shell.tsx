@@ -6,7 +6,7 @@ import { useStore } from '../store'
 import { RuntimePanel, AtlasPanel } from './Terminal'
 import { EvolveLog } from './EvolveLog'
 import { Icon } from '../qs/Icon'
-import { Now } from './TopBar'
+import { Status } from './Status'
 
 /** A drag handle on a panel edge. `dir` is the side the panel grows toward when dragged that way. */
 export function Resizer({ edge, value, min, max, set }: { edge: 'left' | 'right' | 'top'; value: number; min: number; max: number; set: (v: number) => void }) {
@@ -53,8 +53,8 @@ export function Column({ side, title, icon, open, width, onWidth, onFold, onSwap
       <header className="ux-col__h">
         <span className="ux-col__t">{title}</span>
         <span className="ux-col__tools">
-          {onSwap && <button className="ux-ib" onClick={onSwap} data-tip="Move to the other side" aria-label="Move to the other side">⇄</button>}
-          <button className="ux-ib" onClick={() => onFold(false)} data-tip={`Fold ${title.toLowerCase()}`} aria-label={`Fold ${title}`}>{side === 'left' ? '‹' : '›'}</button>
+          {onSwap && <button className="ux-ib" onClick={onSwap} data-tip="Move to the other side" aria-label="Move to the other side"><Icon name="swap" /></button>}
+          <button className="ux-ib" onClick={() => onFold(false)} data-tip={`Fold ${title.toLowerCase()}`} aria-label={`Fold ${title}`}><Icon name={side === 'left' ? 'chevLeft' : 'chevRight'} /></button>
         </span>
       </header>
       <div className="ux-col__b">{children}</div>
@@ -79,11 +79,11 @@ export function Drawer({ content = true }: { content?: boolean }) {
             <Icon name={d.icon} size={12} />{d.t}{d.id === 'runtime' && errors > 0 && <span className="ux-tab__n">{errors}</span>}
           </button>
         ))}
-        <div className="ux-drawer__status"><Now /></div>
+        <div className="ux-drawer__status"><Status /></div>
         {content && <button className="ux-ib" onClick={() => sh.setLayout({ dock: sh.dock === 'view' ? 'full' : 'view' })}
-          data-tip={sh.dock === 'view' ? 'Dock along the whole window' : 'Dock under the view'} aria-label="Change where the drawer docks">{sh.dock === 'view' ? '⤓' : '⤒'}</button>}
-        <button className="ux-drawer__fold" onClick={() => sh.setDrawerOpen(!sh.drawerOpen)} aria-label={sh.drawerOpen ? 'Fold the drawer' : 'Open the drawer'} data-tip={sh.drawerOpen ? 'Fold' : 'Open'}>
-          <span className={'ux-chev' + (sh.drawerOpen ? ' ux-chev--down' : ' ux-chev--up')} />
+          data-tip={sh.dock === 'view' ? 'Dock along the whole window' : 'Dock under the view'} aria-label="Change where the drawer docks"><Icon name={sh.dock === 'view' ? 'dockFull' : 'dockView'} /></button>}
+        <button className="ux-ib" onClick={() => sh.setDrawerOpen(!sh.drawerOpen)} aria-label={sh.drawerOpen ? 'Fold the drawer' : 'Open the drawer'} data-tip={sh.drawerOpen ? 'Fold' : 'Open'}>
+          <Icon name={sh.drawerOpen ? 'chevDown' : 'chevUp'} />
         </button>
       </div>
       {sh.drawerOpen && <div className="ux-drawer__b">{cur.render()}</div>}

@@ -23,7 +23,8 @@ export function ShapePicker({ big }: { big?: boolean }) {
   const testCup = useStore((s) => s.useTestCup)
   const upload = useStore((s) => s.upload)
   const busy = useStore((s) => s.busy.model)
-  const open = (id: ShapeId) => (id === 'cup' ? testCup() : upload(shapeFile(id), '+z'))
+  // the built-in shapes are small: their steps run by themselves
+  const open = (id: ShapeId) => (id === 'cup' ? testCup() : upload(shapeFile(id), '+z', true))
   return (
     <div className={'shapes' + (big ? ' shapes--big' : '')} role="group" aria-label="Start from a shape">
       {SHAPES.map((s) => (

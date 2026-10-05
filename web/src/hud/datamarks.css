@@ -34,7 +34,7 @@
 
 /* L3 chip */
 .qdm-chip {
-  display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 14px; box-sizing: border-box; border-radius: 999px;
+  display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 14px; box-sizing: border-box; border-radius: 0;
   border: 1px solid var(--qs-ink); font: 400 12px/1 var(--qs-sans); color: var(--qs-ink); white-space: nowrap;
 }
 
@@ -43,7 +43,7 @@
 .qdm-plot--held { cursor: grabbing; }
 .qdm-flag {
   position: absolute; top: 0; transform: translateX(-50%); display: inline-flex; align-items: center; height: 18px; padding: 0 8px;
-  box-sizing: border-box; border-radius: 999px; border: 1px solid var(--qs-ink); color: var(--qs-ink); background: none;
+  box-sizing: border-box; border-radius: 0; border: 1px solid var(--qs-ink); color: var(--qs-ink); background: none;
   font: 400 11px/1 var(--qs-mono); white-space: nowrap; pointer-events: none;
 }
 .qdm-flag--held { background: var(--qs-ink); color: var(--qs-bg); }
@@ -84,9 +84,9 @@
 .qdm-runs__c { color: var(--qs-ink3); }
 
 /* tiles */
-.qdm-seg { display: inline-flex; padding: 2px; border-radius: 999px; border: 1px solid var(--qs-line); }
+.qdm-seg { display: inline-flex; padding: 2px; border-radius: 0; border: 1px solid var(--qs-line); }
 .qdm-seg__i {
-  all: unset; display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 10px; box-sizing: border-box; border-radius: 999px;
+  all: unset; display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 10px; box-sizing: border-box; border-radius: 0;
   border: 1px solid transparent; font: 400 11px/1 var(--qs-sans); color: var(--qs-ink2); cursor: pointer; white-space: nowrap;
   transition: border-color .15s, color .15s;
 }

@@ -49,6 +49,11 @@ const P: Record<string, string> = {
   dots: 'M3.5 8h.1M8 8h.1M12.5 8h.1',
   drag: 'M6 3.5h.1M10 3.5h.1M6 8h.1M10 8h.1M6 12.5h.1M10 12.5h.1',
   reset: 'M3 8a5 5 0 1 0 1.6-3.7M3 2.5v2.6h2.6',
+  chevLeft: 'M9.5 4l-4 4 4 4',
+  chevUp: 'M4 9.5l4-4 4 4',
+  swap: 'M2 5h11M10.5 2.5 13 5l-2.5 2.5M14 11H3M5.5 8.5 3 11l2.5 2.5',
+  dockFull: 'M2 2.5h12v11H2zM2 10h12',
+  dockView: 'M2 2.5h12v11H2zM6 2.5v11M6 10h8',
 }
 
 export type IconName = keyof typeof P

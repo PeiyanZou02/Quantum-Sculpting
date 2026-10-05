@@ -75,45 +75,41 @@ export function toRemove(keys: string[], level: TidyLevel, mode: string): string
 }
 
 // ── presets ──────────────────────────────────────────────────────────────────────────────────────
-// One list for the whole app. Each lays out several small pieces around the object, which stays in the
-// centre. Titles are one word; the description is one short line.
-export interface Curated { id: string; title: string; desc: string; mode?: 'nations' | 'blur'; compose: Record<string, string> }
+// One per category of the library, each with one piece from every family in it (the most telling
+// variant), on top of the scene's guides; and Composite, the most telling pieces of every category
+// together. Evolve and the quantum glyphs read their own runs; Composite picks by the engine in use.
+export interface Curated { id: string; title: string; desc: string; mode?: 'nations' | 'blur'; compose: Record<string, string> | ((mode: string) => Record<string, string>) }
 export const CURATED: Curated[] = [
-  { id: 'clean', title: 'Clean', desc: 'Corner brackets only; nothing over the object.', compose: { frame: 'v2' } },
   {
-    id: 'lab', title: 'Lab', desc: 'Steps, readouts, the probed cell and the result card.',
-    compose: { frame: 'v1', steps: 'v2', meta: 'v3', bounds: 'v1', selection: 'v3', callout: 'v2', cards: 'v1', captures: 'v1' },
+    id: 'marks', title: 'Marks', desc: 'Frame, orbit, camera, dial, bounds, focus, selection, callouts, slice.',
+    compose: { frame: 'v1', orbit: 'v1', camera: 'c4', dial: 'o1', bounds: 'v2', focus: 'v2', selection: 'v3', callout: 'v3', scan: 'v2' },
   },
   {
-    id: 'quantum', title: 'Quantum', mode: 'blur', desc: 'Qubits, the register, pulses and the result.',
-    compose: { frame: 'v2', meta: 'v5', blur: 'v2', register: 'v1', pulse: 'v2', cards: 'v1' },
+    id: 'navigation', title: 'Navigation', desc: 'Steps, run timeline, progress, index and captures.',
+    compose: { frame: 'v2', steps: 'v2', timeline: 'v1', bars: 'v2', indexes: 'v1', captures: 'v3' },
   },
   {
-    id: 'evolve', title: 'Evolve', mode: 'nations', desc: 'Record, roster, territory, chronicle and relations.',
-    compose: { frame: 'v3', meta: 'v5', bounds: 'v1', evolve: 'v5,v1,v2,v3,v4' },
+    id: 'evolve', title: 'Evolve', mode: 'nations', desc: 'Record, roster, territory, chronicle, relations, log, one nation.',
+    compose: { frame: 'v3', meta: 'v5', evolve: 'v5,v1,v2,v3,v4,v6,v7' },
   },
   {
-    id: 'story', title: 'Story', mode: 'nations', desc: 'Territory, the log, one nation and the turn, as it plays.',
-    compose: { frame: 'v2', meta: 'v5', evolve: 'v2,v6,v7', param: 'turn,nations' },
+    id: 'glyphs', title: 'Glyphs', mode: 'blur', desc: 'Backend, register, rotation, shots, engine, qubits, pulses, usage.',
+    compose: { frame: 'v2', backend: 'v1', register: 'v1', rotation: 'v1', shots: 'v1', processing: 'v1', blur: 'v2', pulse: 'v2', usage: 'v1' },
   },
   {
-    id: 'measure', title: 'Measure', desc: 'Extents, numbered callouts, kept volume and the print check.',
-    compose: { frame: 'v2', meta: 'v1', bounds: 'v2', callout: 'v3', figures: 'v2', cards: 'v2' },
+    id: 'data', title: 'Data', desc: 'Readouts, the result card, level against kept, the slice and the stages.',
+    compose: { frame: 'v2', meta: 'v3', cards: 'v1', figures: 'v4', slicecard: 'v1', stages: 'v1' },
   },
   {
-    id: 'camera', title: 'Camera', desc: 'Stations, the az/el chart, a tick ring and the plan.',
-    compose: { frame: 'v2', meta: 'v2', orbit: 'v3', camera: 'c4', dial: 'o1', viewcam: 'v2' },
+    id: 'composite', title: 'Composite', desc: 'The most telling piece of every category, together.',
+    compose: (mode): Record<string, string> => mode === 'nations'
+      ? { frame: 'v2', meta: 'v5', bounds: 'v2', steps: 'v2', evolve: 'v2,v7', param: 'turn' }
+      : { frame: 'v2', meta: 'v5', bounds: 'v2', steps: 'v2', blur: 'v2', cards: 'v1', param: 'level' },
   },
-  {
-    id: 'specimen', title: 'Specimen', desc: 'Provenance, extents, four stages and the print check.',
-    compose: { frame: 'v2', meta: 'v3', bounds: 'v2', stages: 'v1', figures: 'v4', cards: 'v2' },
-  },
-  {
-    id: 'atlas', title: 'Atlas', desc: 'Engine, backend path, tiles, timeline and usage.',
-    compose: { frame: 'v2', meta: 'v4', processing: 'v1', backend: 'v1', tiles: 'v1', timeline: 'v2', usage: 'v1' },
-  },
-  { id: 'plate', title: 'Plate', desc: 'A title, the extents and one line of provenance.', compose: { frame: 'v3', meta: 'v5', bounds: 'v2' } },
 ]
+
+/** A preset's pieces for the engine in use. */
+export const presetCompose = (c: Curated, mode: string) => (typeof c.compose === 'function' ? c.compose(mode) : c.compose)
 
 // ── layout ───────────────────────────────────────────────────────────────────────────────────────
 // A plate: one margin all round (inside the frame marks), one gutter between pieces, one scale for

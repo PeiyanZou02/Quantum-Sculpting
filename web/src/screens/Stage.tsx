@@ -801,18 +801,15 @@ function Legend({ level, mode }: { level: number; mode: Shading }) {
   )
 }
 
-/** What the workspace is showing and why. It follows what you do — the step whose
- *  parameters you touch, a model being opened, Evolve's turns, an Atlas run coming back in layers —
- *  and a click on a step shows that step until you work on another. */
+/** The four steps the view can show. It follows what you do (the step whose parameters you touch, a
+ *  model being opened, Evolve's turns); a click on a step shows that step until you work on another.
+ *  What is running, and what the workspace waits for, is on the drawer's status line. */
 function FocusStrip() {
   const focus = useStore((s) => s.focus)
-  const view = useStore((s) => s.view)
   const st = {
-    model: useStore((s) => !!s.model), grid: useStore((s) => !!s.gridData), proc: useStore((s) => !!s.procData),
-    mesh: useStore((s) => !!s.resultMesh), mode: useStore((s) => s.q.mode), shown: useStore((s) => s.proc?.mode ?? null),
+    grid: useStore((s) => !!s.gridData), proc: useStore((s) => !!s.procData), mesh: useStore((s) => !!s.resultMesh),
+    model: useStore((s) => !!s.model), mode: useStore((s) => s.q.mode),
   }
-  const working = useStore((s) => s.busy.model ? 'opening' : s.busy.vox ? 'voxelising' : s.busy.proc || s.busy.evolve ? (s.q.mode === 'nations' ? 'evolving' : 'processing') : s.busy.mesh ? 'meshing' : null)
-  const ev = useStore((s) => s.evolve)
   const setFocus = useStore((s) => s.setFocus)
   const evolve = st.mode === 'nations'
   const steps: { id: StageName; t: string; done: boolean }[] = [
@@ -821,33 +818,21 @@ function FocusStrip() {
     { id: evolve ? 'evolve' : 'quantum', t: evolve ? 'Evolve' : 'Quantum', done: st.proc },
     { id: 'mesh', t: 'Mesh', done: st.mesh },
   ]
+  // the scan sweep belongs to the quantum step (and is a piece in the library)
   const at = focus.stage === 'scan' ? (evolve ? 'evolve' : 'quantum') : focus.stage
-  // the stage's own view may not exist yet: say what is on screen meanwhile
-  const VIEW_T: Record<View, string> = { model: 'original mesh', voxels: 'input voxels', processed: evolve ? 'nations' : 'quantum result', result: 'surface', scan: 'scan sweep' }
-  const wanted: Record<StageName, View> = { model: 'model', voxels: 'voxels', quantum: 'processed', evolve: 'processed', mesh: 'result', scan: 'scan' }
-  // the stage's own result is not the one on screen yet: another view, or the previous mode's result
-  const stale = (focus.stage === 'evolve' && st.shown !== 'nations') || (focus.stage === 'quantum' && st.shown === 'nations')
-  const waiting = st.model && (wanted[focus.stage] !== view || stale)
-  if (!st.model) return <div className="focus-strip"><span className="focus-strip__why">Open a model to begin</span></div>
   return (
-    <div className="focus-strip" aria-live="polite">
+    <div className="focus-strip">
       <ol className="focus-strip__steps" aria-label="Show">
         {steps.map((x) => {
-          // the scan sweep belongs to the quantum step (and is a piece in the library)
-          const on = x.id === at
+          const on = st.model && x.id === at
           return (
             <li key={x.id}>
               <button className={'focus-strip__s' + (on ? ' focus-strip__s--on' : '') + (x.done ? ' focus-strip__s--done' : '')}
-                disabled={!x.done} aria-pressed={on} onClick={() => setFocus(x.id, `Showing the ${VIEW_T[wanted[x.id]]}`)}>{x.t}</button>
+                disabled={!x.done} aria-pressed={on} onClick={() => setFocus(x.id, `Showing ${x.t.toLowerCase()}`)}>{x.t}</button>
             </li>
           )
         })}
       </ol>
-      <span key={focus.t} className="focus-strip__why">
-        {focus.why || `Showing the ${VIEW_T[view]}`}
-        {focus.stage === 'evolve' && ev.history ? <em> · turn {ev.turn} / {ev.turns}</em> : null}
-        {waiting ? <em> · showing the {stale ? 'previous result' : VIEW_T[view]} until {working ? `${working} is done` : 'it is ready'}</em> : null}
-      </span>
     </div>
   )
 }

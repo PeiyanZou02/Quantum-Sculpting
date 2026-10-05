@@ -4,7 +4,7 @@
 // compositions you like are saved by name.
 import { create } from 'zustand'
 import type { FrameId } from './frames'
-import { CURATED, toRemove, type TidyLevel } from './hud/tidy'
+import { CURATED, presetCompose, toRemove, type TidyLevel } from './hud/tidy'
 import { useStore } from './store'
 
 export interface Shot { az: number; el: number; dist: number }
@@ -234,7 +234,8 @@ export const usePresent = create<P>()((set, get) => {
       const c = CURATED.find((x) => x.id === id)
       if (!c) return
       const s = get()
-      up({ compose: { ...c.compose }, pos: withOthers(s.pos, {}), looks: {}, current: null, sel: null })
+      // every preset stands on the scene: the grid box and the print grid
+      up({ compose: { ...presetCompose(c, useStore.getState().q.mode) }, pos: withOthers(s.pos, {}), looks: {}, current: null, sel: null, guides: { ...s.guides, box: true, floor: true } })
       set({ tidyKey: get().tidyKey + 1, aim: get().aim + 1 })
     },
     frame: saved.frame ?? 'window',

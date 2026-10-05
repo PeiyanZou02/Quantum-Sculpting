@@ -12,8 +12,8 @@
 
 .hev-roster { display: flex; flex-direction: column; gap: 5px; }
 .hev-row { display: grid; grid-template-columns: 30px 1fr 48px 56px; align-items: center; gap: 8px; }
-.hev-bar { height: 4px; background: var(--qs-faint); border-radius: 999px; overflow: hidden; }
-.hev-bar > span { display: block; height: 100%; border-radius: 999px; }
+.hev-bar { height: 4px; background: var(--qs-faint); border-radius: 0; overflow: hidden; }
+.hev-bar > span { display: block; height: 100%; border-radius: 0; }
 .hev-v { font: var(--qs-t-meta); text-align: right; }
 .hev-act { font: var(--qs-t-meta); color: var(--qs-ink2); }
 .hev-foot { font: var(--qs-t-meta); color: var(--qs-ink2); }

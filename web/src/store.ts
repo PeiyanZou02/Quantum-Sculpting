@@ -186,7 +186,15 @@ interface S {
   useTestCup: () => Promise<void>
   openRecent: (name: string) => Promise<void>
   /** Open a mesh file; `up` overrides the up axis (the built-in shapes are made with +Z up). */
-  upload: (f: File, up?: UpAxis) => Promise<void>
+  upload: (f: File, up?: UpAxis, auto?: boolean) => Promise<void>
+  /** Steps run by themselves, one after another, as settings change (the built-in shapes); off, each
+   *  step waits for its Run (your own models, which can be large). `stale` marks a step whose
+   *  settings changed since it last ran. */
+  auto: boolean
+  setAuto: (v: boolean) => void
+  stale: { vox: boolean; proc: boolean; mesh: boolean }
+  /** Every step that is missing or out of date, in order (Atlas reads its cache; it submits on its own button). */
+  runAll: () => Promise<void>
   setUp: (up: UpAxis) => Promise<void>
 
   setVox: (p: Partial<S['vox']>) => void
@@ -302,7 +310,9 @@ export const useStore = create<S>()((set, get) => {
     set({ step: 0 })
     if (chain) get().setFocus('model', `Opened ${info.builtin ? 'the test cup' : info.file}`, true)
     get().pushLog(`Model ${info.file} · ${info.faces.toLocaleString()} faces`)
-    if (chain) get().voxelize()
+    set({ stale: { vox: false, proc: false, mesh: false } })
+    if (chain && get().auto) get().voxelize()
+    else if (chain) get().pushLog('Waiting: voxelise the model when its settings are right')
   }
 
   async function adoptProcessed() {
@@ -538,8 +548,9 @@ export const useStore = create<S>()((set, get) => {
           }
           // land where the work was: Evolve's history, or the furthest stage the service has
           get().setFocus(st.processed?.mode === 'nations' ? 'evolve' : st.processed ? 'mesh' : st.grid ? 'voxels' : 'model', 'Picked up where you left off', true)
-          // run only the steps the service doesn't already have
-          if (!st.grid) get().voxelize()
+          // run only the steps the service doesn't already have (when steps run by themselves)
+          if (!get().auto) { if (st.processed) get().buildMesh() }
+          else if (!st.grid) get().voxelize()
           else if (!st.processed) get().process(get().q.mode === 'atlas' ? { cachedOnly: true } : undefined)
           else get().buildMesh()
         }
@@ -567,15 +578,30 @@ export const useStore = create<S>()((set, get) => {
       try { localStorage.setItem('qs-slice-color', c) } catch { /* per-viewer */ }
       set({ sliceColor: c })
     },
+    auto: (() => { try { return localStorage.getItem('qs-auto') !== '0' } catch { return true } })(),
+    setAuto: (v) => {
+      try { localStorage.setItem('qs-auto', v ? '1' : '0') } catch { /* per-viewer */ }
+      set({ auto: v })
+    },
+    stale: { vox: false, proc: false, mesh: false },
+    runAll: async () => {
+      const g = get
+      if (!g().model) return
+      if (!g().grid || g().stale.vox) await g().voxelize()
+      if (!g().grid) return
+      if (!g().proc || g().stale.proc) await g().process(g().q.mode === 'atlas' ? { cachedOnly: true } : undefined)
+      if (g().proc && (!g().resultMesh || g().stale.mesh)) await g().buildMesh()
+    },
 
     refreshRecent: async () => {
       try {
         set({ recent: await api.models() })
       } catch { /* list is optional */ }
     },
-    useTestCup: () => run('model', async () => adoptModel(await api.testCup())),
-    openRecent: (name) => run('model', async () => adoptModel(await api.openModel(name, get().up))),
-    upload: (f, up) => run('model', async () => {
+    useTestCup: () => run('model', async () => { get().setAuto(true); await adoptModel(await api.testCup()) }),
+    openRecent: (name) => run('model', async () => { get().setAuto(false); await adoptModel(await api.openModel(name, get().up)) }),
+    upload: (f, up, auto = false) => run('model', async () => {
+      get().setAuto(auto)
       if (up) set({ up })
       await adoptModel(await api.upload(f, up ?? get().up))
       get().refreshRecent()
@@ -589,7 +615,8 @@ export const useStore = create<S>()((set, get) => {
     setVox: (p) => {
       set((s) => ({ vox: { ...s.vox, ...p } }))
       if (get().model) get().setFocus('voxels', why(VOX_WHY, p))
-      if (get().model) debounce('vox', 250, () => get().voxelize())
+      if (get().model && get().auto) debounce('vox', 250, () => get().voxelize())
+      else if (get().grid) set((s) => ({ stale: { ...s.stale, vox: true } }))
     },
     voxelize: () => run('vox', async () => {
       const t = ticket('vox')
@@ -605,9 +632,10 @@ export const useStore = create<S>()((set, get) => {
       })
       set({ step: Math.max(st.step, 1) as Step })
       get().pushLog(`Voxelised ${info.n}³ · ${info.solid.toLocaleString()} solid cells`)
+      set((s) => ({ stale: { ...s.stale, vox: false } }))
       if (get().focus.follow) get().setFocus('voxels', `Voxelised ${info.n}³`, true)
       // Atlas waits for an explicit submit; it may still find a cached result for these settings
-      get().process(get().q.mode === 'atlas' ? { cachedOnly: true } : undefined)
+      if (get().auto) get().process(get().q.mode === 'atlas' ? { cachedOnly: true } : undefined)
     }),
 
     setQ: (p) => {
@@ -616,7 +644,8 @@ export const useStore = create<S>()((set, get) => {
       if (get().grid) get().setFocus(q.mode === 'nations' ? 'evolve' : 'quantum', why(Q_WHY, p))
       // Local modes update live as the dials turn; Atlas waits for an explicit submit
       // Evolve computes a whole history: wait a little longer for the slider to settle
-      if (get().grid) debounce('proc', q.mode === 'nations' ? 400 : 120, () => get().process(q.mode === 'atlas' ? { cachedOnly: true } : undefined))
+      if (get().grid && get().auto) debounce('proc', q.mode === 'nations' ? 400 : 120, () => get().process(q.mode === 'atlas' ? { cachedOnly: true } : undefined))
+      else if (get().grid) set((s) => ({ stale: { ...s.stale, proc: true } }))
       else if (proc) set({ proc: null })
     },
     process: (opts) => run('proc', async () => {
@@ -658,7 +687,9 @@ export const useStore = create<S>()((set, get) => {
         if (get().focus.follow) get().setFocus(evolved ? 'evolve' : 'quantum', evolved ? `Evolved ${pp.k} nations` : `${mt.mode === 'emulator' ? 'Emulation' : mt.mode} done`, !evolved)
         if (get().step < 2) set({ step: 2 })
         if (res.meta.cached) get().pushLog(`Atlas result for ${res.meta.run} read from cache`)
-        debounce('mesh', 150, () => get().buildMesh())
+        set((s) => ({ stale: { ...s.stale, proc: false } }))
+        if (get().auto) debounce('mesh', 150, () => get().buildMesh())
+        else set((s) => ({ stale: { ...s.stale, mesh: !!s.resultMesh } }))
       }
     }),
     evolve: EVOLVE_EMPTY,
@@ -725,14 +756,15 @@ export const useStore = create<S>()((set, get) => {
     setM: (p) => {
       set((s) => ({ m: { ...s.m, ...p } }))
       if (get().proc) get().setFocus('mesh', why(M_WHY, p))
-      debounce('mesh', 200, () => get().buildMesh())
+      if (get().auto) debounce('mesh', 200, () => get().buildMesh())
+      else if (get().proc) set((s) => ({ stale: { ...s.stale, mesh: true } }))
     },
     buildMesh: () => run('mesh', async () => {
       if (!get().proc) return
       const t = ticket('mesh')
       const { report, mesh } = await api.mesh(get().m, flight(MESH))
       if (!current('mesh', t)) return
-      set({ report, resultMesh: mesh, step: 3 })
+      set((s) => ({ report, resultMesh: mesh, step: 3, stale: { ...s.stale, mesh: false } }))
       if (get().focus.follow) get().setFocus('mesh', `Surface · ${report.faces.toLocaleString()} faces`)
     }),
     exportStl: () => run('export', async () => {

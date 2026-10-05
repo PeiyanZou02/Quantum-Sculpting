@@ -15,7 +15,7 @@ import { Check } from '../qs/Popover'
 import { useLive } from '../live'
 import { exportFrame, exportGlb, renderStill, screenshot, toggleRecording } from './capture'
 import { FRAMES, frameOf, type FrameId } from '../frames'
-import { CURATED, TIDY_LEVELS } from '../hud/tidy'
+import { CURATED, TIDY_LEVELS, presetCompose } from '../hud/tidy'
 import { FloorSize, LibRow, MarkLibrary } from './MarkLibrary'
 import { PRESENT_TOOLS } from './presentTools'
 import { PARAMS, paramOf } from '../hud/paramDefs'
@@ -115,14 +115,15 @@ function TidyRow() {
 /** The presets, one per row: put one on and it lays itself out around the object, which stays in the centre. */
 function Presets() {
   const p = usePresent()
-  const evolve = useStore((s) => s.q.mode === 'nations')
+  const mode = useStore((s) => s.q.mode)
+  const evolve = mode === 'nations'
   const hasGrid = useStore((s) => !!s.grid)
   const setQ = useStore((s) => s.setQ)
   return (
     <>
       <div className="pd-plist" role="radiogroup" aria-label="Presets">
         {CURATED.map((c) => {
-          const on = sameComposition(p.compose, c.compose)
+          const on = sameComposition(p.compose, presetCompose(c, mode))
           const off = c.mode === 'nations' ? !evolve : c.mode === 'blur' ? evolve : false
           return (
             <button key={c.id} role="radio" aria-checked={on} className={'pd-prow' + (on ? ' pd-prow--on' : '')} onClick={() => p.applyCurated(c.id)}>
@@ -132,10 +133,10 @@ function Presets() {
           )
         })}
       </div>
-      {!evolve && CURATED.some((c) => c.mode === 'nations' && sameComposition(p.compose, c.compose)) && (
+      {!evolve && CURATED.some((c) => c.mode === 'nations' && sameComposition(p.compose, presetCompose(c, mode))) && (
         <div className="pd-need">
           <Note>These pieces read an Evolve run. The quantum step is set to another engine.</Note>
-          <Buttons><Button kind="primary" disabled={!hasGrid} onClick={() => setQ({ mode: 'nations' })} tip="Run Evolve" desc="Switch the quantum step to Evolve; it runs on the voxel grid straight away.">Run Evolve</Button></Buttons>
+          <Buttons><Button kind="primary" disabled={!hasGrid} onClick={() => { setQ({ mode: 'nations' }); if (!useStore.getState().auto) useStore.getState().process() }} tip="Run Evolve" desc="Switch the quantum step to Evolve; it runs on the voxel grid straight away.">Run Evolve</Button></Buttons>
         </div>
       )}
       {p.crowded > 0 && <Note warn>{p.crowded === 1 ? 'One piece has' : `${p.crowded} pieces have`} no free room left and overlap others. Remove some, or make them smaller.</Note>}
@@ -469,7 +470,8 @@ export function ComposeSections() {
   const p = usePresent()
   // hovering a library row: it shows on the view and everything else dims
   const hover = (k: string | null, on: boolean) => { p.setPreview(k && !on ? k : null); p.setHl(k) }
-  const preset = CURATED.find((c) => sameComposition(p.compose, c.compose))
+  const mode = useStore((s) => s.q.mode)
+  const preset = CURATED.find((c) => sameComposition(p.compose, presetCompose(c, mode)))
   const on = countOn(p.compose, CATEGORIES.flatMap((c) => c.fams)) + p.texts.length
   return (
     <div className={'pd pd--props' + (p.composing ? ' pd--composing' : '')} onPointerLeave={() => { p.setHl(null); p.setPreview(null) }}>
