@@ -26,6 +26,7 @@ interface S {
   view: View
   camera: Camera
   slice: { axis: Axis; index: number }
+  showSlice: boolean
   busy: Busy
   error: string | null
   log: LogLine[]
@@ -72,7 +73,7 @@ interface S {
   voxelize: () => Promise<void>
 
   setQ: (p: Partial<S['q']>) => void
-  process: (opts?: { submit?: boolean }) => Promise<void>
+  process: (opts?: { submit?: boolean; cachedOnly?: boolean }) => Promise<void>
   cancelWatch: () => void
   refreshAtlasJobs: () => Promise<void>
 
@@ -96,6 +97,7 @@ const ticket = (k: string) => (seq[k] = (seq[k] ?? 0) + 1)
 const current = (k: string, t: number) => seq[k] === t
 
 let watching: ReturnType<typeof setTimeout> | null = null
+let initing = false
 
 export const useStore = create<S>()((set, get) => {
   const busy = (k: string, v: boolean) => set((s) => ({ busy: { ...s.busy, [k]: v } }))
@@ -116,12 +118,13 @@ export const useStore = create<S>()((set, get) => {
     }
   }
 
-  async function adoptModel(info: ModelInfo) {
+  async function adoptModel(info: ModelInfo, chain = true) {
     set({ model: info, up: info.up, grid: null, gridData: null, proc: null, procData: null, report: null, resultMesh: null, exported: null })
     const { mesh } = await api.modelMesh()
     set({ modelMesh: mesh })
-    if (get().step < 0) set({ step: 0, view: 'model' })
+    set({ step: 0, view: 'model' })
     get().pushLog(`Model ${info.file} · ${info.faces.toLocaleString()} faces`)
+    if (chain) get().voxelize()
   }
 
   async function adoptProcessed() {
@@ -148,7 +151,7 @@ export const useStore = create<S>()((set, get) => {
             set({ proc: job.meta })
             await adoptProcessed()
             get().pushLog(`Atlas run ${job.run} done · ${job.tiles_total} tiles · ${job.elapsed}s`)
-            if (get().step === 3) get().buildMesh()
+            get().buildMesh()
           }
           if (job.stale) get().pushLog('Grid changed during the run; result cached but not applied', 'warn')
           watching = null
@@ -176,6 +179,7 @@ export const useStore = create<S>()((set, get) => {
     view: 'model',
     camera: HOME_CAM,
     slice: { axis: 'z', index: 16 },
+    showSlice: false,
     busy: {},
     error: null,
     log: [],
@@ -199,7 +203,7 @@ export const useStore = create<S>()((set, get) => {
     atlasJobs: [],
 
     m: {
-      method: 'threshold', level: 0.5, keep: 'largest', smooth: 0, height: 90, refine: 1, amount: 2,
+      method: 'threshold', level: 0.5, keep: 'largest', smooth: 5, height: 90, refine: 1, amount: 2,
       field: 'threshold' as Field, vfilter: 'none' as VFilter, vwidth: 1, grow: 0, close: 0,
     },
     report: null,
@@ -210,25 +214,36 @@ export const useStore = create<S>()((set, get) => {
     pushLog: (text, level = 'info') => set((s) => ({ log: [...s.log.slice(-199), { t: Date.now(), text, level }] })),
 
     init: async () => {
+      if (initing) return
+      initing = true
       await run('init', async () => {
         const st = await api.state()
         set({ key: st.key })
         get().refreshRecent()
         if (st.model) {
-          await adoptModel(st.model)
+          await adoptModel(st.model, false)
           if (st.grid) {
             set({ grid: st.grid, vox: { n: st.grid.n, fill: st.grid.fill, values: st.grid.values, pad: st.grid.pad } })
             const { grid } = await api.grid('input')
             set({ gridData: grid, step: 1, view: 'voxels', slice: { axis: 'z', index: Math.floor(grid.n / 2) } })
           }
           if (st.processed) {
-            set({ proc: st.processed })
+            const pp = st.processed.params as Partial<S['q']> & { axes?: number[] | null }
+            set((s) => ({
+              proc: st.processed,
+              q: { ...s.q, ...pp, axes: pp.axes ?? [0, 1, 2], mode: st.processed!.mode, run: st.processed!.run, tiling: st.processed!.tiles?.mode ?? s.q.tiling },
+            }))
             await adoptProcessed()
             set({ step: 2, view: 'processed' })
           }
+          // run only the steps the service doesn't already have
+          if (!st.grid) get().voxelize()
+          else if (!st.processed) get().process(get().q.mode === 'atlas' ? { cachedOnly: true } : undefined)
+          else get().buildMesh()
         }
         if (st.job) watchJob(st.job.job_id)
       })
+      initing = false
     },
 
     goStep: (s) => {
@@ -261,7 +276,7 @@ export const useStore = create<S>()((set, get) => {
 
     setVox: (p) => {
       set((s) => ({ vox: { ...s.vox, ...p } }))
-      if (get().grid) debounce('vox', 250, () => get().voxelize())
+      if (get().model) debounce('vox', 250, () => get().voxelize())
     },
     voxelize: () => run('vox', async () => {
       const t = ticket('vox')
@@ -273,24 +288,32 @@ export const useStore = create<S>()((set, get) => {
         grid: info, gridData: grid, proc: null, procData: null, report: null, resultMesh: null,
         slice: { axis: st.slice.axis, index: Math.min(st.slice.index, grid.n - 1) || Math.floor(grid.n / 2) },
       })
-      if (st.step < 1) set({ step: 1, view: 'voxels' })
+      if (st.view === 'model' && st.step < 1) set({ view: 'voxels' })
+      set({ step: Math.max(st.step, 1) as Step })
       get().pushLog(`Voxelised ${info.n}³ · ${info.solid.toLocaleString()} solid cells`)
+      // Atlas waits for an explicit submit; it may still find a cached result for these settings
+      get().process(get().q.mode === 'atlas' ? { cachedOnly: true } : undefined)
     }),
 
     setQ: (p) => {
       set((s) => ({ q: { ...s.q, ...p } }))
       const { q, proc } = get()
       // Local modes update live as the dials turn; Atlas waits for an explicit submit
-      if (q.mode !== 'atlas' && (proc || get().step >= 2)) debounce('proc', 120, () => get().process())
+      if (get().grid) debounce('proc', 120, () => get().process(q.mode === 'atlas' ? { cachedOnly: true } : undefined))
+      else if (proc) set({ proc: null })
     },
     process: (opts) => run('proc', async () => {
       const { q, grid } = get()
       if (!grid) return
-      const mode = opts?.submit ? 'atlas' : q.mode
-      if (mode === 'atlas' && !opts?.submit) return
+      const mode = opts?.submit || opts?.cachedOnly ? 'atlas' : q.mode
+      if (mode === 'atlas' && !opts?.submit && !opts?.cachedOnly) return
       const t = ticket('proc')
-      const res = await api.process({ ...q, mode, shots: q.shots || null })
+      const res = await api.process({ ...q, mode, shots: q.shots || null, cached_only: opts?.cachedOnly })
       if (!current('proc', t)) return
+      if (res.status === 'missing') {
+        set({ proc: null, procData: null, resultMesh: null, report: null })
+        return
+      }
       if ('job_id' in res && res.status === 'running') {
         set({ job: res })
         get().pushLog(`Submitted ${res.run} to Atlas · ${res.tiles_total} tiles`)
@@ -301,9 +324,9 @@ export const useStore = create<S>()((set, get) => {
         set({ proc: res.meta })
         await adoptProcessed()
         if (!current('proc', t)) return
-        if (get().step < 2) set({ step: 2, view: 'processed' })
+        if (get().step < 2) set({ step: 2 })
         if (res.meta.cached) get().pushLog(`Atlas result for ${res.meta.run} read from cache`)
-        if (get().resultMesh) debounce('mesh', 150, () => get().buildMesh())
+        debounce('mesh', 150, () => get().buildMesh())
       }
     }),
     cancelWatch: () => {
@@ -326,7 +349,7 @@ export const useStore = create<S>()((set, get) => {
       const t = ticket('mesh')
       const { report, mesh } = await api.mesh(get().m)
       if (!current('mesh', t)) return
-      set({ report, resultMesh: mesh })
+      set({ report, resultMesh: mesh, step: 3 })
     }),
     exportStl: () => run('export', async () => {
       const res = await api.export(get().m)

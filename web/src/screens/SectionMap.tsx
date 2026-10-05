@@ -2,9 +2,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { section, type Axis, type Grid } from '../qs/grid'
 
-const S = 344
-
-export function SectionMap({ grid, input, axis, index, level, onIndex }: {
+export function SectionMap({ grid, input, axis, index, level, onIndex, size: S = 344 }: {
+  size?: number
   grid: Grid | null; input?: Grid | null; axis: Axis; index: number; level: number; onIndex?: (i: number) => void
 }) {
   const ref = useRef<HTMLCanvasElement>(null)
@@ -63,10 +62,9 @@ export function SectionMap({ grid, input, axis, index, level, onIndex }: {
         }
       ctx.stroke()
     }
-    if (inSec) contour((x, v) => inSec[v * n + x] - 0.5, '#8B8D93', [2, 3], 1)
-    contour(f, '#151618', [], 1.25)
+    contour(f, '#151618', [], 1)
     ctx.setLineDash([])
-  }, [sec, inSec, n, level])
+  }, [sec, inSec, n, level, S])
 
   const cell = (e: React.PointerEvent) => {
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect()

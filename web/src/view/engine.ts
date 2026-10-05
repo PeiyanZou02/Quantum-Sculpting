@@ -2,6 +2,7 @@
 // (i,j,k), z up) and the root is scaled to a unit cube, as in Peiyan's original viewer, so the four
 // views line up exactly. The camera is driven from outside by the gimbal's {az, el, dist}.
 import * as THREE from 'three'
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import type { MeshData } from '../api'
 import type { Axis, Grid } from '../qs/grid'
 import type { Camera } from '../qs/QCam'
@@ -41,6 +42,9 @@ export class Engine {
   private planeEdge: THREE.LineSegments
   private ray = new THREE.Raycaster()
   private raf = 0
+  controls: OrbitControls
+  private tween: { from: THREE.Vector3; to: THREE.Vector3; t0: number } | null = null
+  onChange?: () => void
 
   private host: HTMLElement
 
@@ -74,10 +78,30 @@ export class Engine {
     this.plane.visible = false
     this.root.add(this.plane)
 
+    this.controls = new OrbitControls(this.camera, this.renderer.domElement)
+    this.controls.enableDamping = true
+    this.controls.dampingFactor = 0.12
+    this.controls.target.set(0, 0, 0.42)
+    this.controls.addEventListener('change', () => { this.dirty = true; this.onChange?.() })
+
     this.setGrid(32)
     new ResizeObserver(() => this.resize()).observe(host)
     const loop = () => {
       this.raf = requestAnimationFrame(loop)
+      if (this.tween) {
+        const k = Math.min(1, (performance.now() - this.tween.t0) / 480)
+        const e = 1 - (1 - k) ** 3
+        const tgt = this.controls.target
+        const a = this.tween.from, b = this.tween.to
+        // interpolate on the sphere around the target so the camera swings rather than cutting through
+        const r = a.length() + (b.length() - a.length()) * e
+        const dir = a.clone().normalize().lerp(b.clone().normalize(), e).normalize()
+        this.camera.position.copy(tgt).addScaledVector(dir, r)
+        if (k >= 1) this.tween = null
+        this.dirty = true
+        this.onChange?.()
+      }
+      this.controls.update()
       if (this.dirty) {
         this.renderer.render(this.scene, this.camera)
         this.dirty = false
@@ -88,8 +112,28 @@ export class Engine {
 
   dispose() {
     cancelAnimationFrame(this.raf)
+    this.controls.dispose()
     this.renderer.dispose()
     this.renderer.domElement.remove()
+  }
+
+  /** Swing the camera to an azimuth / elevation (degrees). az 0 = front (camera on −y). */
+  orbitTo(azDeg: number, elDeg: number, distScale = 1) {
+    const az = THREE.MathUtils.degToRad(azDeg), el = THREE.MathUtils.degToRad(Math.min(elDeg, 89.5))
+    const v = THREE.MathUtils.degToRad(this.camera.fov) / 2
+    const h = Math.atan(Math.tan(v) * this.camera.aspect)
+    const d = (0.95 / Math.sin(Math.min(v, h))) * distScale
+    const to = new THREE.Vector3(Math.cos(el) * Math.sin(az), -Math.cos(el) * Math.cos(az), Math.sin(el)).multiplyScalar(d)
+    const from = this.camera.position.clone().sub(this.controls.target)
+    this.tween = { from, to, t0: performance.now() }
+  }
+
+  /** Current azimuth / elevation in degrees, for the readout. */
+  angles() {
+    const d = this.camera.position.clone().sub(this.controls.target)
+    const el = Math.asin(d.z / d.length())
+    const az = (Math.atan2(d.x, -d.y) * 180) / Math.PI
+    return { az: (az + 360) % 360, el: (el * 180) / Math.PI }
   }
 
   resize() {
@@ -98,8 +142,15 @@ export class Engine {
     this.renderer.setSize(w, h, false)
     this.camera.aspect = w / h
     this.camera.updateProjectionMatrix()
+    if (!this.framed) {
+      this.framed = true
+      this.orbitTo(35, 22)
+      this.tween!.t0 = -1e9
+    }
     this.dirty = true
   }
+
+  private framed = false
 
   setCamera(c: Camera) {
     const az = THREE.MathUtils.degToRad(c.az), el = THREE.MathUtils.degToRad(c.el)
