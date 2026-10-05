@@ -516,6 +516,36 @@ button, input, select { font: inherit; color: inherit; }
   .progress.indeterminate > span { width: 100%; opacity: 0.4; }
 }
 
+/* ── 「演化」的侧栏：国家之间的关系、每回合的事、大事记 ─────────────────────── */
+
+.saga-graph {
+  display: block; width: 100%; aspect-ratio: 1;
+  border-radius: var(--radius-sm); box-shadow: var(--material-base); background: var(--surface-subtle);
+}
+.saga-graph text { font: 500 11px/1 var(--font-sans); fill: var(--ink); }
+.saga-list { display: flex; flex-direction: column; gap: var(--space-1); margin: 0; padding: 0; list-style: none; font-size: 13px; line-height: 20px; }
+.saga-list li { display: flex; align-items: baseline; gap: var(--space-2); }
+.saga-list li > span { min-width: 0; }
+.saga-log { max-height: 260px; overflow-y: auto; }
+.saga-log li.later { color: var(--ink-disabled); }
+.saga-log li.now { font-weight: 500; }
+.saga-log button {
+  flex: none; min-width: 4ch; height: 20px; padding: 0 var(--space-1);
+  border: 0; border-radius: 4px; background: transparent; color: var(--ink-muted);
+  font: 400 12px/20px var(--font-mono); text-align: right; cursor: pointer;
+}
+.saga-log button:hover { background: var(--surface-hover); color: var(--ink); }
+.nation { display: inline-flex; align-items: center; gap: 4px; font-weight: 500; white-space: nowrap; vertical-align: baseline; }
+.nation i { flex: none; width: 10px; height: 10px; border-radius: 3px; }
+.saga-nations {
+  display: grid; grid-template-columns: auto 36px minmax(0, 1fr); align-items: center; gap: 2px var(--space-2);
+  font-size: 13px; line-height: 20px;
+}
+.saga-nations .bar { height: 4px; border-radius: var(--radius-full); background: var(--gray-400); overflow: hidden; }
+.saga-nations .bar > span { display: block; height: 100%; background: var(--ink-muted); }
+.saga-nations .did { color: var(--ink-muted); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.saga-nations .gone { color: var(--ink-disabled); }
+
 /* ── 浮层 ─────────────────────────────────────────────────────────── */
 
 .modal {

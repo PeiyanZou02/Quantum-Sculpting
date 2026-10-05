@@ -659,6 +659,80 @@ class ServerTest(unittest.TestCase):
         second = self.post("/api/process", {**body, "run": "second"}).get_json()
         self.assertEqual(self.wait_for_job(second["job_id"])["status"], "done")
 
+    # ── 演化 ──
+
+    def test_nations_mode_evolves_the_model_and_keeps_every_turn(self):
+        self.ready(32)
+        body = {"mode": "nations", "k": 5, "turns": 8, "spread": 6, "run": "history"}
+        r = self.post("/api/process", body).get_json()
+        self.assertEqual(r["status"], "done")
+        meta = r["meta"]
+        self.assertEqual((meta["mode"], meta["params"]["k"], meta["params"]["turns"]), ("nations", 5, 8))
+        told = meta["nations"]
+        self.assertEqual((told["k"], told["turns"]), (5, 8))
+        self.assertEqual(told["end"], told["start"] + told["grown"] - told["carved"])
+
+        final = np.frombuffer(self.c.get("/api/grid/processed").data, dtype="<f4").reshape(32, 32, 32)
+        self.assertEqual(set(np.unique(final).tolist()) - {0.0, 1.0}, set(), "结果只有「有」和「没有」")
+        self.assertEqual(int(final.sum()), told["end"])
+
+        # 整段历史：第 0 条是建国，之后每回合一条
+        saga = self.c.get("/api/nations/history").get_json()
+        self.assertEqual((saga["k"], saga["total"], len(saga["turns"])), (5, told["total"], 9))
+        self.assertEqual([t["turn"] for t in saga["turns"]], list(range(9)))
+        founding = saga["turns"][0]
+        self.assertEqual((sum(founding["size"]), founding["events"], founding["attacks"]), (told["start"], [], []))
+        self.assertTrue(all(len(h) == 3 for h in founding["home"]))
+        last = saga["turns"][-1]
+        self.assertEqual(sum(last["size"]), told["end"])
+        self.assertEqual(sum(1 for s in last["size"] if s > 0), told["alive"])
+        for kind in ("annex", "death", "split", "exile", "war"):
+            count = sum(1 for t in saga["turns"] for e in t["events"] if e["type"] == kind)
+            self.assertEqual(count, told[{"annex": "annexed", "death": "died", "exile": "exiled",
+                                           "war": "wars"}.get(kind, kind)], kind)
+
+        # 每一回合的领土图都取得到，最后一张就是结果
+        first = self.c.get("/api/nations/frame/0")
+        info = json.loads(first.headers["X-Meta"])
+        self.assertEqual((info["turn"], info["turns"], info["k"]), (0, 8, 5))
+        shape = tuple(b - a for a, b in info["box"])
+        self.assertEqual(list(shape), saga["shape"])
+        owners = np.frombuffer(first.data, dtype=np.uint8).reshape(shape)
+        self.assertEqual(sorted(set(owners.ravel().tolist()) - {0}), [1, 2, 3, 4, 5])
+        self.assertEqual(int((owners > 0).sum()), told["start"])
+        box = tuple(slice(a, b) for a, b in info["box"])
+        ending = np.frombuffer(self.c.get("/api/nations/frame/8").data, dtype=np.uint8).reshape(shape)
+        np.testing.assert_array_equal(ending > 0, final[box] > 0)
+        self.assertEqual(int(final.sum()), int((final[box] > 0).sum()), "盒子外面没有东西")
+        self.assertEqual(self.c.get("/api/nations/frame/9").status_code, 404)
+
+        # 结果照常能取面、导出；同样的实验名得到同样的历史，换一个名字是另一段
+        report = json.loads(self.post("/api/mesh", {"level": 0.5}).headers["X-Meta"])
+        self.assertGreater(report["faces"], 0)
+        self.assertEqual(self.post("/api/export", {"level": 0.5}).get_json()["file"], "history_nations_n32_L050.stl")
+        again = self.post("/api/process", body).get_json()["meta"]["nations"]
+        self.assertEqual(again, told)
+        other = self.post("/api/process", {**body, "run": "another"}).get_json()["meta"]["nations"]
+        self.assertNotEqual(other, told)
+
+        # 换成别的处理方式，这段历史就不在了
+        self.post("/api/process", {"mode": "gaussian"})
+        self.assertEqual(self.c.get("/api/nations/frame/0").status_code, 404)
+        self.assertEqual(self.c.get("/api/nations/history").status_code, 404)
+
+    def test_nations_mode_grooves_and_limits(self):
+        self.ready(32)
+        body = {"mode": "nations", "k": 4, "turns": 3, "spread": 0, "run": "g"}
+        plain = self.post("/api/process", body).get_json()
+        cut = self.post("/api/process", {**body, "grooves": True}).get_json()
+        self.assertLess(cut["meta"]["nations"]["end"], plain["meta"]["nations"]["end"], "刻了沟，体素应该更少")
+        self.assertEqual(self.post("/api/process", {**body, "turns": 9999}).get_json()["meta"]["params"]["turns"], 300)
+        self.assertEqual(self.post("/api/process", {**body, "k": 99}).get_json()["meta"]["params"]["k"], 16)
+        with server.S.lock:
+            server.S.grid = np.zeros((256, 256, 256), dtype=np.float32)
+            server.S.grid_id += 1
+        self.assertIn("128", self.post("/api/process", {"mode": "nations"}, expect=400).get_json()["error"])
+
     # ── 算得久的时候 ──
 
     def test_a_long_computation_does_not_freeze_the_page_and_stops_when_superseded(self):

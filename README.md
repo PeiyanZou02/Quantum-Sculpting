@@ -44,11 +44,70 @@ service serves it at <http://127.0.0.1:8765/> and the original interface at `/cl
      drag the parameters.
    - *Atlas*: click the key button (top right), paste your key, then submit. Results are cached
      in `grids/` and never submitted twice.
+   - *Evolve*: split the model into "nations" and let them evolve turn by turn (see "Evolve"
+     below). Runs locally.
 4. **Back to a mesh** — choose how the surface is made (see "Level sets" below), drag the
    threshold or the push amount to see the shape change, then export the STL. The file is
    written to `output/` together with a `.json` that records every parameter used.
 
 The interface is in Chinese.
+
+## Evolve: voxel regions as nations
+
+A different way to use a quantum model, after Moth's Motte model (James Wootton, "A quantum
+procedure for map generation"): instead of filtering the whole shape, the model is split into
+3–16 regions, each region is a nation and one qubit, and the voxels are its territory.
+
+Before it is measured, every nation is in a superposition of doing and not doing: only the
+odds are known. Each turn:
+
+1. A quantum state is prepared. Every qubit is turned to the direction its nation wants — the
+   three axes are attack, defend and explore, and since the direction lies on a sphere the
+   three cannot all be at their maximum. Neighbouring nations are entangled in proportion to
+   how close their relationship is.
+2. Every nation is asked one question (attack, defend or explore — only one can be asked per
+   turn) and all the answers are measured together. Close allies agree on the question.
+3. What was asked and whether the answer was yes or no decides what the nation does, and every
+   action leaves its own mark on the shape:
+
+   | Asked | Yes | No |
+   | --- | --- | --- |
+   | attack | **attack**: take the layer of the least friendly neighbour that touches you. A defending neighbour holds against one attacker and breaks against two in the same turn; two nations attacking each other destroy both front lines, opening a crack; a neighbour with too little left is annexed whole | **flee**: break contact with the least friendly neighbour and move one voxel outward. A nation that has fled out of contact has left the continent |
+   | defend | **fortify**: build a layer on the outer surface near the borders | **split**: the far half becomes a new, independent nation (only a nation that has outgrown its starting size can split) |
+   | explore | **grow**: heal gaps inside its own body and grow outward in a cone, away from the centre | **wither**: the outermost surface voxels fall off; a nation that withers to nothing has died by itself |
+
+   The less certain a nation is — the more it is entangled with others, the shorter its own
+   Bloch vector — the closer its chance of answering no comes to a half. Relationships buy
+   acting in step and cost a nation its own mind.
+4. Wants and relationships are updated: losing territory makes a nation want to attack, a
+   fight weakens a tie, and each nation cultivates only one tie at a time.
+
+So nations ally, fall out, are annexed, declare independence, flee and die, and none of it is
+decided before the measurement. Up to 16 nations are alive at once and 24 can appear over a
+history of up to 300 turns; once all 24 have appeared the world can only consolidate.
+
+In the app: the *processed* view colours the voxels by nation, with a bar to play or scrub the
+turns. A panel on the right shows, for the turn on screen, a graph of the nations (size,
+relationships, alliances, this turn's attacks, exiles), what happened, and for every nation
+the question it was asked, its odds before the measurement and the answer; below that, a
+chronicle of the whole history whose entries jump to their turn. The final shape goes on to
+step 4 like any other result. The run name is the seed: the same name gives the same history,
+and a shorter run is exactly the beginning of a longer one.
+
+Things measured on the statue, worth knowing:
+
+- Left alone it never settles: after 400 turns under the first, simpler rules about a hundred
+  voxels were still changing hands every turn.
+- If every pair of neighbours grows close, the entanglement changes nothing: histories are
+  statistically the same as when each nation flips its own coin with the same odds. Ties with
+  everyone wash each other out.
+- With one close tie per nation, allies act in step 60% of the time against 54% for
+  independent coins (5.7 standard errors apart). The effect on the final shape is small: the
+  form comes mostly from the rules.
+
+The quantum part is a real circuit simulation (state vector, one qubit per living nation)
+that could be sent to hardware as it is; in the simulation a seeded generator stands in for
+measurement randomness. Grids up to 128³: about 25 ms a turn at 64³ and 170 ms at 128³.
 
 ## Scan view
 
@@ -182,6 +241,7 @@ app/pipeline.py     mesh <-> voxel grid, fill modes, marching cubes, print check
 app/levelset.py     signed distance fields: from a mesh, smooth, offset, advect, to a mesh
 app/tiling.py       cutting a grid into Atlas-sized tiles and stitching results
 app/emulator.py     Gaussian stand-in + local approximation of Quantum Blur Core
+app/nations.py      voxel regions as nations: one qubit each, evolving turn by turn
 app/atlas.py        Atlas API client (blur-core-v1)
 app/server.py       local service (Flask, listens on 127.0.0.1 only)
 app/static/         the interface
