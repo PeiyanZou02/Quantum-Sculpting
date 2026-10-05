@@ -17,3 +17,5 @@
 .hpar__st--ok::before { background: #23934F; }
 .hpar__st--bad::before { background: #D23F35; }
 .hpar__when { color: var(--qs-ink3); }
+.hpar__fill { transition: width .3s ease-out; }
+.hpar__mark { transition: left .3s ease-out; }

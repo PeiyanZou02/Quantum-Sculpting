@@ -28,8 +28,10 @@ export type PanelTab = 'view' | 'layers' | 'library' | 'notes' | 'motion' | 'out
 export interface Track { id: string; param: string; keys: number[]; sec: number; mode: 'loop' | 'bounce' | 'once' }
 /** The look cycling on its own: shading modes, lights, backdrops, `sec` seconds each. */
 export interface Cycles { shading: boolean; light: boolean; backdrop: boolean; sec: number }
-/** The stage reel: model, voxels, quantum (or Evolve, playing its turns), mesh, `sec` seconds each. */
-export interface Reel { on: boolean; sec: number }
+/** The story: the run told from the original geometry to the mesh, one segment per step (each can be
+ *  left out): model, voxels and mesh hold `sec` seconds; Evolve plays its turns at `tps` a second (the
+ *  quantum step holds `sec`). */
+export interface Reel { on: boolean; sec: number; tps: number; segs: { model: boolean; voxels: boolean; quantum: boolean; mesh: boolean } }
 export interface Saved { id: string; name: string; compose: Record<string, string>; pos: Record<string, Pos>; looks: Record<string, Look>; texts: TextNote[]; guides?: Guides }
 
 interface P {
@@ -133,6 +135,9 @@ interface P {
   setText: (id: string, text: string | null) => void
   guides: Guides
   setGuides: (g: Partial<Guides>) => void
+  /** Explanations inside the pieces (captions, notes, empty-state sentences); off, the pieces show data only. */
+  notes: boolean
+  setNotes: (v: boolean) => void
   /** Ink of exported PNGs (see savePng). */
   pngInk: 'auto' | 'dark' | 'light'
   setPngInk: (i: 'auto' | 'dark' | 'light') => void
@@ -145,10 +150,19 @@ interface P {
   setCycles: (c: Partial<Cycles>) => void
   stageReel: Reel
   setStageReel: (r: Partial<Reel>) => void
-  /** Playing everything above from its start (`playFrom` is when, ms). */
+  /** The one clock all of it reads: `t0` seconds into the pass when play began (or where it is paused),
+   *  `playFrom` the wall time it began (ms), at `speed`; `loop` goes round at the end. `seekKey` bumps on
+   *  every seek so a paused view shows that moment. */
   playing: boolean
   playFrom: number
+  t0: number
+  speed: number
+  loop: boolean
+  seekKey: number
   setPlaying: (v: boolean) => void
+  seek: (t: number) => void
+  setSpeed: (v: number) => void
+  setLoop: (v: boolean) => void
   /** Saved compositions, and the one on screen (null: not saved yet). */
   saved: Saved[]
   current: string | null
@@ -176,7 +190,7 @@ const keep = (s: P) => {
   try {
     localStorage.setItem(KEY, JSON.stringify({
       v: VERSION, compose: s.compose, pos: s.pos, shots: s.shots, spin: s.spin, reelSec: s.reelSec, spinSpeed: s.spinSpeed,
-      cycleSec: s.cycleSec, drawer: s.drawer, looks: s.looks, tracks: s.tracks, cycles: s.cycles, stageReel: s.stageReel, frame: s.frame, outSize: s.outSize, spinDir: s.spinDir, texts: s.texts, pngInk: s.pngInk, saved: s.saved, current: s.current, guides: s.guides, sweepCfg: s.sweepCfg, tab: s.tab, libCat: s.libCat, opened: s.opened,
+      cycleSec: s.cycleSec, drawer: s.drawer, looks: s.looks, tracks: s.tracks, cycles: s.cycles, stageReel: s.stageReel, speed: s.speed, loop: s.loop, notes: s.notes, frame: s.frame, outSize: s.outSize, spinDir: s.spinDir, texts: s.texts, pngInk: s.pngInk, saved: s.saved, current: s.current, guides: s.guides, sweepCfg: s.sweepCfg, tab: s.tab, libCat: s.libCat, opened: s.opened,
     }))
   } catch { /* per-viewer only */ }
 }
@@ -337,6 +351,8 @@ export const usePresent = create<P>()((set, get) => {
     },
     guides: { box: true, floor: true, div: 4, ...(fresh ? DEFAULT_COMPOSITION.guides : null), ...saved.guides },
     setGuides: (g) => up({ guides: { ...get().guides, ...g } }),
+    notes: saved.notes ?? false,
+    setNotes: (v) => up({ notes: v }),
     pngInk: saved.pngInk ?? 'auto',
     setPngInk: (i) => up({ pngInk: i }),
     tracks: saved.tracks ?? [],
@@ -345,11 +361,22 @@ export const usePresent = create<P>()((set, get) => {
     removeTrack: (id) => up({ tracks: get().tracks.filter((t) => t.id !== id) }),
     cycles: { shading: false, light: false, backdrop: false, sec: 3, ...saved.cycles },
     setCycles: (c) => up({ cycles: { ...get().cycles, ...c } }),
-    stageReel: { on: false, sec: 3, ...saved.stageReel },
+    stageReel: { on: false, sec: 3, tps: 6, ...saved.stageReel, segs: { model: true, voxels: true, quantum: true, mesh: true, ...saved.stageReel?.segs } },
     setStageReel: (r) => up({ stageReel: { ...get().stageReel, ...r } }),
     playing: false,
     playFrom: 0,
-    setPlaying: (v) => set({ playing: v, playFrom: Date.now() }),
+    t0: 0,
+    speed: saved.speed ?? 1,
+    loop: saved.loop ?? true,
+    seekKey: 0,
+    setPlaying: (v) => {
+      const s = get()
+      if (v === s.playing) return
+      set(v ? { playing: true, playFrom: Date.now() } : { playing: false, t0: clockOf(s, Date.now()) })
+    },
+    seek: (t) => set({ t0: Math.max(0, t), playFrom: Date.now(), seekKey: get().seekKey + 1 }),
+    setSpeed: (v) => { const s = get(); up({ speed: v, t0: clockOf(s, Date.now()) }); set({ playFrom: Date.now() }) },
+    setLoop: (v) => up({ loop: v }),
     saved: saved.saved ?? (fresh ? [DEFAULT_COMPOSITION] : []),
     current: saved.current ?? (fresh ? DEFAULT_ID : null),
     save: (name) => {
@@ -382,3 +409,7 @@ export function isDirty(s: Pick<P, 'saved' | 'current' | 'compose' | 'pos' | 'lo
   const norm = (o: object) => JSON.stringify(o, (_, v) => (v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).filter(([, x]) => x !== 'off').sort()) : v))
   return norm({ compose: s.compose, pos: strip(s.pos), looks: s.looks, texts: s.texts, guides: s.guides }) !== norm({ compose: cur.compose, pos: cur.pos, looks: cur.looks, texts: cur.texts, guides: cur.guides ?? s.guides })
 }
+
+/** Seconds into the pass on the composition's clock (not wrapped: the animator loops or stops it). */
+export const clockOf = (p: Pick<P, 'playing' | 'playFrom' | 't0' | 'speed'>, now: number) =>
+  p.playing ? p.t0 + ((now - p.playFrom) / 1000) * p.speed : p.t0

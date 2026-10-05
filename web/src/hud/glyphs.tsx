@@ -7,6 +7,7 @@ import { Fragment, useEffect, useMemo, useState } from 'react'
 import type { CSSProperties, PointerEvent as RPointerEvent, ReactNode } from 'react'
 import type { GridInfo } from '../api'
 import type { HudCtx, Vec3 } from './types'
+import { Count } from './Num'
 import './glyphs.css'
 
 // ── maths and small helpers ─────────────────────────────────────────────────────────────────────
@@ -120,7 +121,7 @@ function useNow(every: number) {
 function Head({ t, v, note }: { t: string; v?: ReactNode; note?: ReactNode }) {
   return (
     <div className="qg-head">
-      <span><span className="qg-t">{t}</span>{v}</span>
+      <span><span className="qg-t">{t}</span><Count>{v}</Count></span>
       {note != null && <span className="qg-note">{note}</span>}
     </div>
   )

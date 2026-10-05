@@ -138,8 +138,8 @@ Shading:
 The view carries a composition: pieces from the Quicksilver library laid out around the object, which
 always stays in the centre. **Properties · Compose** holds it:
 
-1. **Presets** — one per category of the library, each with one piece from every family in it on
-   top of the scene's guides: **Marks**, **Navigation**, **Evolve**, **Glyphs**, **Data**, and
+1. **Presets** — **Default** (Lab's own layout), then one per category of the library, each with one
+   piece from every family in it on top of the scene's guides: **Marks**, **Navigation**, **Evolve**, **Glyphs**, **Data**, and
    **Composite**, the most telling piece of each together (it follows the engine in use). A preset lays
    its pieces out around the object, which stays in the centre; in a small view the whole plate scales
    down rather than lose pieces. *Lay out again* re-runs the layout for the frame (all pieces, without
@@ -147,16 +147,25 @@ always stays in the centre. **Properties · Compose** holds it:
    remove pieces on the view; *Clear* takes them all off.
 2. **On the view** — the view's own controls (tool shelf, navigation, axis gizmo, camera, info, value
    scale, corners) and the scene guides (grid box, print grid with its cell size, cutting plane).
+   Pieces show figures, bars and charts only; *Explanations in pieces* brings back their captions and
+   notes.
 3. **Library** — the full Quicksilver library, by category, family and variant. Hover a row to
    preview it on the view; click to turn it on or off; drag it onto the view to place it there.
    Besides marks, glyphs and data, the library holds **Parameters** (any setting as a readout: grid,
    strength, reach, sigma, turn, nations, turns, growth, level, smoothing, thicken, cutting plane,
    film, colour) and live feeds: the runtime log, the Atlas jobs, the Evolve log and one nation.
-4. **Animate** — *Values*: pick a setting, give it keyframes (two to six, spread evenly), the seconds
-   and bounce, loop or once. *Stages*: step through model, voxels, quantum or Evolve (its turns play)
-   and mesh. *Look*: cycle the shading, the light, the backdrop. Then shots and their reel, the
-   turntable, the slice sweep and cycling saved compositions. **Play** (P) runs it all from the start;
-   **Record one pass** records exactly one pass to WebM.
+4. **Animate** — everything plays on one clock. The **timeline** shows the pass to scale, with the
+   playhead; drag on it to scrub to any moment. **Play** (P), **Start**, **Record** (one pass from the
+   start, to WebM), speed 0.25× to 4×, and loop. *Story* tells the run from the original geometry to
+   the mesh: model, voxels, quantum (or Evolve, every turn at the turns per second you set) and mesh,
+   each one optional, so a story can be the Evolve turns alone. *Values*: pick a setting, give it
+   keyframes (two to six, spread evenly), the seconds and bounce, loop or once. *Look*: cycle the
+   shading, the light, the backdrop. Then shots and their reel, the turntable, the slice sweep and
+   cycling saved compositions.
+   Every piece reads the same state, so all of them move with the clock: figures count to their new
+   value, bars and rules ease, the chronicle and the logs add their lines, the territory chart's
+   playhead glides, and Relations (each nation in its own place, sized by its territory) draws
+   alliances in, sends attacks along their arrows and fades the nations that fall.
 5. **Annotate** — notes and measurements pinned to the geometry.
 6. **Saved compositions** — saved by name and cycled with `[` `]` or 1–9.
 

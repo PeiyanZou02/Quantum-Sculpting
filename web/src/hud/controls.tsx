@@ -5,6 +5,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { HudCtx } from './types'
+import { Count } from './Num'
 import './controls.css'
 
 const RAD = Math.PI / 180
@@ -87,7 +88,7 @@ function Line({ k, v, w, note, mt }: { k: string; v?: string; w?: string; note?:
   return (
     <div className="qc-line" style={mt ? { marginTop: mt } : undefined}>
       <span className="qc-k">{k}</span>
-      {v != null && <span className="qc-v">{v}</span>}
+      {v != null && <span className="qc-v"><Count>{v}</Count></span>}
       {w != null && <span className="qc-w">{w}</span>}
       {note && <span className="qc-n">{note}</span>}
     </div>

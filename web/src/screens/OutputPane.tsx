@@ -18,6 +18,7 @@ import { Panel, Row } from '../ui/Panel'
 import { PresentStyle } from './presentStyle'
 import { ComposeSections, OutputSections } from './PresentPanel'
 import { RunBar } from './RunBar'
+import { Count } from '../hud/Num'
 
 
 /** A block: a folding panel in Lab; plain (title and content) when drawn as a HUD card. */
@@ -43,7 +44,7 @@ function Hero({ k, v, unit, note, wide }: { k: string; v: ReactNode; unit?: stri
   return (
     <div className={'hero' + (wide ? ' hero--wide' : '')}>
       <span className="hero__k">{k}</span>
-      <span className="hero__v">{v}{unit && <small>{unit}</small>}</span>
+      <span className="hero__v"><Count>{v}</Count>{unit && <small>{unit}</small>}</span>
       {note != null && <span className="hero__n">{note}</span>}
     </div>
   )

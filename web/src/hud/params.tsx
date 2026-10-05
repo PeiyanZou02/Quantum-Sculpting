@@ -2,6 +2,7 @@
 // it sits in its range), and the Atlas jobs of the account.
 import { useStore } from '../store'
 import { paramOf } from './paramDefs'
+import { useTween } from './tween'
 import type { HudCtx } from './types'
 import './params.css'
 
@@ -9,10 +10,13 @@ import './params.css'
 export function Param({ id }: { id: string }) {
   const s = useStore()
   const p = paramOf(id)
+  const raw = p?.get(s) ?? null
+  // the value counts to where it is going (its bar eases by CSS)
+  const eased = useTween(raw ?? 0, 300)
   if (!p) return null
-  const v = p.get(s)
+  const v = raw == null ? null : Math.abs(eased - raw) < p.step / 2 ? raw : eased
   const lo = p.min(s), hi = p.max(s)
-  const f = v == null ? 0 : Math.min(1, Math.max(0, (v - lo) / (hi - lo || 1)))
+  const f = raw == null ? 0 : Math.min(1, Math.max(0, (raw - lo) / (hi - lo || 1)))
   return (
     <div className={'hpar' + (v == null ? ' hpar--off' : '')}>
       <div className="hpar__head"><span className="hpar__t">{p.t}</span><span className="hpar__v">{v == null ? '—' : p.fmt(v, s)}</span></div>

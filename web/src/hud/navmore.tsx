@@ -8,6 +8,7 @@ import { useMemo, useState } from 'react'
 import type { CSSProperties, PointerEvent as RPointerEvent } from 'react'
 import type { HudCtx } from './types'
 import { useNow } from '../useNow'
+import { Count } from './Num'
 import './navmore.css'
 
 // ---------------------------------------------------------------- shared
@@ -96,7 +97,7 @@ function Rows({ params, style }: { params: Param[]; style?: CSSProperties }) {
         <div key={k} className="qn-row">
           <span className="qn-row__k">{k}</span>
           <span className="qn-row__dots" />
-          <span className={'qn-row__v' + (v === '—' ? ' qn-row__v--dim' : '')}>{v}</span>
+          <span className={'qn-row__v' + (v === '—' ? ' qn-row__v--dim' : '')}><Count>{v}</Count></span>
         </div>
       ))}
     </div>

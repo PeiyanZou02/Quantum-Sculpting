@@ -528,6 +528,7 @@ export function Stage() {
             looks={pr.looks} hl={pr.hl} ghost={pr.preview}
             texts={pr.texts} onText={pr.setText}
             fit={Math.max(0.4, Math.min(1, vsize.w / 2400, vsize.h / 1650))}
+            terse={!pr.notes}
             autoArrange onCrowded={pr.setCrowded} onLeftOut={pr.setLeftOut} tidyKey={pr.tidyKey} onHero={onHero}
             inset={{ l: side, r: side, t: 0, b: 0 }}
             positions={Object.fromEntries(Object.entries(pr.pos).filter(([k]) => k.startsWith('present|')).map(([k, v]) => [k.slice(8), v]))}
