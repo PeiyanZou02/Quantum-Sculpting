@@ -1,0 +1,101 @@
+/* TYPE — the one place the interface's typography is decided. Loaded last.
+   One family (TWK Everett Mono), upright only, two weights (400 text, 500 emphasis), and six roles
+   from tokens.css: display 22, title 13, body 12, prose 12/18, label 11 caps, meta 11. Nothing is
+   smaller than 11px, nothing is italic, and text never uses ink4 (that grey is for lines).
+   Hierarchy comes from role, weight and ink — ink (primary), ink2 (secondary), ink3 (quiet) — not
+   from size jumps or slanting. Labels name things in upper case; values and sentences are set as written. */
+
+em, i, cite, dfn, var, address, svg text { font-style: normal; }
+button, input, select, textarea, svg text { letter-spacing: var(--qs-track); }
+::placeholder { font-style: normal; }
+
+/* ── roles ───────────────────────────────────────────────────────────── */
+/* LABEL: names a field, a column, a group. Upper case, tracked, ink2. */
+.qs-field-label, .qs-field-head span, .qs-field__label, .sub, .qs-label, .hero__k, .figs__k,
+.qs-readout__title, .qs-pop__label, .qd-menu__label, .rt-row--head, .aj-row--head, .ev-nrow--head,
+.qdm-panel__t, .qs-lab-label, .ly-group__t, .mk-group__t, .top__fact dt, .landing__k {
+  font: var(--qs-t-label) !important; text-transform: uppercase; letter-spacing: var(--qs-track-label); color: var(--qs-ink2);
+}
+.sub { color: var(--qs-ink); padding-top: 8px; }
+
+/* TITLE: a section or panel says what it is. */
+.sec__title, .blk__title, .qs-pop__title, .landing__ct, .cmp-fam__t, .cmp-preset__t, .hud-card__t, .qdm-t, .qg-t {
+  font: var(--qs-t-title) !important; letter-spacing: var(--qs-track); color: var(--qs-ink);
+}
+
+/* DISPLAY: the one big figure of a block. */
+.hero__v, .ev-heroes--small .hero__v, .qdm-counter__v { font: var(--qs-t-display) !important; letter-spacing: var(--qs-track); color: var(--qs-ink); }
+.hero__v small, .figs__v small { font: var(--qs-t-meta) !important; color: var(--qs-ink2); margin-left: 6px; letter-spacing: var(--qs-track); }
+.landing__title { font: 500 24px/30px var(--qs-mono) !important; letter-spacing: var(--qs-track); }
+
+/* BODY: values, controls, rows. */
+.qs-field-head output, .qs-input input, .qs-select select, .qs-dd__v, .qs-dd__opt, .qs-seg__item, .modes__b,
+.qd-tab, .qd-drop, .qd-ghost, .qd-menu__title, .qd-menu__item, .figs__v, .ev-q, .ev-did, .rt-msg, .rt-chip__label,
+.focus-strip__s, .focus-strip__why, .top__state, .toast, .qs-check__t, .vis-row__t, .ol-row__t, .ent-row__t, .mk-row__t,
+.qs-readout__v, .qs-readout__val, .evlog__msg {
+  font-family: var(--qs-mono) !important; font-size: 12px !important; letter-spacing: var(--qs-track);
+}
+.qs-seg__item, .modes__b, .qd-tab { line-height: 1 !important; }
+
+/* PROSE: help and descriptions. Readable ink, looser leading, never slanted or faded. */
+.qs-help, .qs-tip__desc, .qg-cap, .qp-note, .ev-rules, .ev-said, .pd-hint, .pd-empty, .pd-warn, .landing__cd,
+.hudmenu__d, .ol-row__d, .qs-check__n, .cmp-fam__d, .cmp-preset__d, .evlog__empty, .qg-how__sum, .qs-field__msg {
+  font: var(--qs-t-prose) !important; color: var(--qs-ink2) !important; max-width: 46ch; text-wrap: pretty;
+}
+.qs-tip__desc, .ol-row__d, .qs-check__n, .hudmenu__d { max-width: none; }
+
+/* META: secondary facts beside a value; the smallest size. */
+.sec__summary, .hero__n, .figs__n, .sec__state, .pane-head__note, .ev-head__note, .stage__busy, .statusbar,
+.rt-t, .aj-t, .rt-dur__n, .evlog__state, .evlog__tally, .hud__caption, .qs-input__suffix, .rt-chip__n, .top__event {
+  font: var(--qs-t-meta) !important; color: var(--qs-ink2);
+}
+.sec__summary { padding-left: 0; }
+
+/* ── places ──────────────────────────────────────────────────────────── */
+/* Top bar: brand, then the loaded model as label/value pairs on one baseline, then the latest event. */
+.top { align-items: center; }
+.top__brand { align-items: center; }
+.top__now { align-items: center; gap: 20px; }
+.top__facts { display: flex; align-items: baseline; gap: 18px; margin: 0; min-width: 0; overflow: hidden; }
+.top__fact { display: flex; align-items: baseline; gap: 7px; white-space: nowrap; }
+.top__fact dt { color: var(--qs-ink3); }
+.top__fact dd { margin: 0; font: var(--qs-t-body); color: var(--qs-ink); }
+.top__fact:first-child dd { font-weight: 500; }
+.top__event { padding-left: 16px; border-left: 1px solid var(--qs-line); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.top__event--warn { color: var(--qs-ink); font-weight: 500; }
+.top__state { display: inline-flex; align-items: center; gap: 6px; color: var(--qs-ink); }
+
+/* Section heads: title left, state right, both centred on one line. */
+.sec__head { align-items: center !important; }
+.sec__summary { color: var(--qs-ink2); }
+
+/* Info over the view: what is shown (ink, 500) over how (ink2). */
+.hud__info { gap: 4px; }
+.hud__info span { font: var(--qs-t-meta) !important; }
+.hud__info span:first-child { font-weight: 500 !important; color: var(--qs-ink); text-transform: uppercase; letter-spacing: var(--qs-track-label); }
+.hud__info span:nth-child(2) { color: var(--qs-ink2) !important; }
+
+/* Focus strip */
+.focus-strip__why em { color: var(--qs-ink2); }
+
+/* Hero blocks: label above, figure, note below, on a 4px rhythm. */
+.hero { gap: 4px; }
+
+/* Tooltips */
+.qs-tip__name { font: var(--qs-t-title) !important; }
+
+/* Section and block titles anchor each column: upper case title, one step above the labels. */
+.sec__title, .blk__title { text-transform: uppercase; letter-spacing: var(--qs-track-label); }
+
+/* No highlight on the section being worked on, and no tile behind a hovered one: the columns stay quiet. */
+.sec:hover, .blk:hover, .sec:focus-within, .blk:focus-within { background: none !important; }
+
+/* Less at once: in the parameter column, help is shown only for the step being worked on.
+   Warnings always show, in ink. */
+.sec:not(.sec--focus) .qs-help:not(.qs-help--warn) { display: none; }
+.qs-help--warn { color: var(--qs-ink) !important; font-weight: 500 !important; }
+
+/* Present drawer: same roles. Group titles are titles; the name over a row of choices is a label. */
+.pd-sec__t { font: var(--qs-t-title) !important; text-transform: uppercase; letter-spacing: var(--qs-track-label); }
+.pd-k { font: var(--qs-t-label) !important; text-transform: uppercase; letter-spacing: var(--qs-track-label); color: var(--qs-ink2); }
+.pd-note__info, .pd-save__n { font: var(--qs-t-meta) !important; color: var(--qs-ink2); }

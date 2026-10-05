@@ -1,0 +1,37 @@
+{
+  "stage": "quartic",
+  "n": 4,
+  "engine": "entanglement-shader-v1",
+  "params": {
+    "style": "3-body",
+    "layers": 3,
+    "reflectance": 0.5,
+    "absorption": 0.6,
+    "incoming_rays": 6,
+    "interaction": -1,
+    "resolution": 48
+  },
+  "job_id": "edc48d12-ae86-4148-a697-51b6b6228983",
+  "output_asset_id": "6e270987-98bc-4d23-a7f4-b66798c67ec6",
+  "size_bytes": 34099,
+  "timeline": [
+    {
+      "status": "queued",
+      "at": "2026-10-04T02:36:27.754Z"
+    },
+    {
+      "status": "processing",
+      "at": "2026-10-04T02:36:33.888Z"
+    },
+    {
+      "status": "completed",
+      "at": "2026-10-04T02:44:49.332Z"
+    }
+  ],
+  "seconds": 502.371,
+  "files": [
+    "R_lut.hdr",
+    "T_lut.hdr",
+    "entanglement_texture.glsl"
+  ]
+}

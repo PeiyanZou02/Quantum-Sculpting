@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<div style="display:flex;flex-direction:column;gap:48px;color:var(--qs-ink)"><div style="display:flex;flex-direction:column;gap:48px">
+  <div style="display:grid;grid-template-columns:72px 340px minmax(0,1fr);align-items:baseline;padding-top:14px;border-top:1px solid var(--qs-ink)"><span style="font:400 11px/1 'Geist Mono',monospace;color:var(--qs-ink3)">08</span><span style="font:400 28px/1.15 'TWK Everett',sans-serif">Data and runtime</span><span style="max-width:760px;font:400 14px/1.35 'TWK Everett',sans-serif;color:var(--qs-ink2);text-wrap:pretty">Numbers are mono. Hover the density to read a bin, drag on it to set the level. The runtime block updates live: elapsed time, iterations, polls and the log.</span></div>
+
+  <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));column-gap:48px;align-items:start">
+    <div style="display:flex;flex-direction:column;gap:12px"><span style="font:400 11px/1 'Geist Mono',monospace;color:var(--qs-ink3)">L1 · Readout + ruler</span><span style="font:400 72px/1 'Geist Mono',monospace;font-variant-numeric:tabular-nums;letter-spacing:-.03em">{{ lv }}</span><div style="position:relative;height:22px"><sc-for list="{{ ruler }}" as="t" hint-placeholder-count="19"><span style="position:absolute;left:{{ t.x }}%;bottom:0;width:1px;height:{{ t.h }}px;background:{{ t.c }}"></span></sc-for><span style="position:absolute;left:{{ lp }}%;bottom:0;width:2px;height:22px;margin-left:-1px;background:#151618;transition:left .2s"></span></div><div style="display:flex;justify-content:space-between;font:400 11px/1 'Geist Mono',monospace;color:var(--qs-ink3)"><span>0.05 swell</span><span>erode 0.95</span></div></div>
+    <div style="display:flex;flex-direction:column;gap:12px"><span style="font:400 11px/1 'Geist Mono',monospace;color:var(--qs-ink3)">L2 · Kept volume</span><div style="display:flex;align-items:baseline;gap:10px"><span style="font:400 40px/1 'Geist Mono',monospace;font-variant-numeric:tabular-nums">{{ keptPct }}%</span><span style="font:400 12px/1.3 'TWK Everett',sans-serif;color:var(--qs-ink3)">of the input solid</span></div><div style="display:flex;height:10px;gap:2px"><div style="width:{{ keptW }}%;background:#151618;transition:width .2s"></div><div style="flex:1;background:rgba(21,22,24,.1)"></div></div><span style="font:400 11px/1 'Geist Mono',monospace;color:var(--qs-ink2)">{{ keptTxt }}</span></div>
+    <div style="display:flex;flex-direction:column;gap:12px"><span style="font:400 11px/1 'Geist Mono',monospace;color:var(--qs-ink3)">L3 · Chip</span><span style="align-self:flex-start;display:inline-flex;align-items:center;gap:10px;height:30px;padding:0 14px;border-radius:999px;border:1px solid #151618;font:400 11px/1 'Geist Mono',monospace;font-variant-numeric:tabular-nums">Level {{ lv }} <span style="color:var(--qs-ink3)">· keeps {{ keptPct }}%</span></span><span style="font:400 12px/1.3 'TWK Everett',sans-serif;color:var(--qs-ink3)">For the run header and toasts.</span></div>
+    <div style="display:flex;flex-direction:column;gap:12px"><span style="font:400 11px/1 'Geist Mono',monospace;color:var(--qs-ink3)">L4 · Level vs kept</span><svg width="260" height="110" viewBox="0 0 260 110"><line x1="0" y1="100" x2="260" y2="100" stroke="#B3B5BB" stroke-width="1"></line><line x1="0" y1="{{ k1 }}" x2="260" y2="{{ k1 }}" stroke="#8B8D93" stroke-width="1" stroke-dasharray="2 3"></line><text x="228" y="{{ k1t }}" font-family="Geist Mono" font-size="9" fill="#8B8D93">input</text><polyline points="{{ kcurve }}" fill="none" stroke="#151618" stroke-width="1.25"></polyline><circle cx="{{ kx }}" cy="{{ ky }}" r="3.5" fill="#151618"></circle><line x1="{{ kx }}" y1="{{ ky }}" x2="{{ kx }}" y2="100" stroke="#151618" stroke-width="1" stroke-dasharray="1 3"></line></svg><span style="font:400 12px/1.3 'TWK Everett',sans-serif;color:var(--qs-ink3)">Dashed line is the input solid.</span></div>
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:12px;padding-top:28px;border-top:1px solid var(--qs-line)">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;width:760px"><span style="font:500 11px/1 'Geist Mono',monospace">Density · interactive</span><span style="font:400 11px/1 'Geist Mono',monospace;color:var(--qs-ink3)">Hover to read a bin · drag to set the level</span></div>
+    <dc-import name="QDensity" w="760" h="150" hint-size="760px,180px"></dc-import>
+    <span style="max-width:760px;font:400 12px/1.35 'TWK Everett',sans-serif;color:var(--qs-ink3);text-wrap:pretty">The same component sits on the floor of screens 03 and 04a. Bars at or above the level are ink; the flag inverts while it is held.</span>
+  </div>
+
+  <div style="display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);column-gap:64px;align-items:start;padding-top:28px;border-top:1px solid var(--qs-line)">
+    <div style="display:flex;flex-direction:column;gap:14px"><div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font:500 11px/1 'Geist Mono',monospace">Runtime · run2 · atlas</span><span style="display:flex;align-items:center;gap:8px;font:400 11px/1 'Geist Mono',monospace"><span style="width:7px;height:7px;border-radius:50%;background:#151618;animation:qs-blink 1.2s ease-in-out infinite"></span>live</span></div>
+      <div style="display:grid;grid-template-columns:repeat(6,minmax(0,1fr));column-gap:20px"><sc-for list="{{ counters }}" as="c" hint-placeholder-count="6"><div style="display:flex;flex-direction:column;gap:8px;padding-top:10px;border-top:1px solid var(--qs-ink)"><span style="font:400 22px/1 'Geist Mono',monospace;font-variant-numeric:tabular-nums">{{ c.v }}</span><span style="font:400 11px/1.3 'Geist Mono',monospace;color:var(--qs-ink3)">{{ c.k }}</span></div></sc-for></div>
+      <div style="position:relative;display:flex;flex-direction:column;gap:7px;margin-top:10px"><sc-for list="{{ gantt }}" as="g" hint-placeholder-count="9"><div style="display:grid;grid-template-columns:170px minmax(0,1fr) 64px;align-items:center;column-gap:12px;font:400 11px/1 'Geist Mono',monospace"><span style="color:var(--qs-ink2)">{{ g.t }}</span><div style="position:relative;height:8px"><div style="position:absolute;left:{{ g.l }}%;width:{{ g.w }}%;min-width:2px;height:8px;background:{{ g.bg }}"></div></div><span style="text-align:right;font-variant-numeric:tabular-nums">{{ g.d }}</span></div></sc-for><div style="position:absolute;left:182px;right:76px;top:-4px;bottom:-4px;pointer-events:none"><div style="position:absolute;top:0;bottom:0;width:1px;background:#151618;opacity:.5;animation:qs-play 9s linear infinite"></div></div></div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:14px"><span style="font:500 11px/1 'Geist Mono',monospace">Log</span><div style="display:flex;flex-direction:column;gap:8px;font:400 11px/1.3 'Geist Mono',monospace;font-variant-numeric:tabular-nums"><sc-for list="{{ log }}" as="l" hint-placeholder-count="7"><div style="display:grid;grid-template-columns:62px 40px minmax(0,1fr);column-gap:10px;color:{{ l.c }}"><span>{{ l.t }}</span><span style="color:{{ l.tc }}">{{ l.lv }}</span><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ l.m }}</span></div></sc-for></div>
+      <div style="display:flex;flex-direction:column;gap:6px;margin-top:12px"><div style="display:grid;grid-template-columns:52px 82px 40px 50px 64px minmax(0,1fr);padding-bottom:8px;border-bottom:1px solid var(--qs-ink);font:400 10px/1 'Geist Mono',monospace;color:var(--qs-ink3)"><span>Run</span><span>Mode</span><span>Grid</span><span>Level</span><span>Time</span><span>Cache</span></div><sc-for list="{{ runs }}" as="r" hint-placeholder-count="3"><div style="display:grid;grid-template-columns:52px 82px 40px 50px 64px minmax(0,1fr);padding:6px 0;border-bottom:1px solid var(--qs-line);font:400 11px/1 'Geist Mono',monospace;font-variant-numeric:tabular-nums"><span>{{ r.n }}</span><span>{{ r.m }}</span><span>{{ r.g }}</span><span>{{ r.l }}</span><span>{{ r.t }}</span><span style="color:var(--qs-ink3)">{{ r.c }}</span></div></sc-for></div>
+    </div>
+  </div>
+</div>
+<div style="display:flex;flex-direction:column;gap:40px;padding-top:28px;border-top:1px solid var(--qs-line)">
+  <div style="display:grid;grid-template-columns:190px minmax(0,1fr);column-gap:28px;align-items:baseline"><span style="font:400 16px/1.2 'TWK Everett',sans-serif">More views of the data</span><span style="max-width:760px;font:400 12px/1.35 'TWK Everett',sans-serif;color:var(--qs-ink3);text-wrap:pretty">From the current repo: tiled Atlas runs, signed distance fields for the level-set mesh, coverage values and the threshold. Hover the tiles and the distance slice to read them.</span></div>
+  <div style="display:grid;grid-template-columns:600px 300px minmax(0,1fr);column-gap:52px;align-items:start">
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <div style="display:flex;justify-content:space-between;align-items:center"><span style="font:500 11px/1 'Geist Mono',monospace">Tiles · 128³ · live</span><div style="display:inline-flex;padding:2px;border-radius:999px;border:1px solid rgba(21,22,24,.26)"><sc-for list="{{ tModes }}" as="it" hint-placeholder-count="2"><span onClick="{{ it.on }}" style="display:inline-flex;align-items:center;height:22px;padding:0 11px;border-radius:999px;border:1px solid {{ it.bd }};background:{{ it.bg }};color:{{ it.fg }};font:400 11px/1 'Geist Mono',monospace;cursor:pointer;box-sizing:border-box">{{ it.t }}</span></sc-for></div></div>
+      <div style="display:flex;gap:40px;align-items:flex-start;min-height:270px">
+        <sc-if value="{{ isCubes }}" hint-placeholder-val="{{ true }}"><div style="display:flex;gap:28px"><sc-for list="{{ layersC }}" as="L" hint-placeholder-count="2"><div style="display:flex;flex-direction:column;gap:8px"><span style="font:400 10px/1 'Geist Mono',monospace;color:#8B8D93">{{ L.t }}</span><div style="display:grid;grid-template-columns:repeat(4,30px);gap:5px"><sc-for list="{{ L.tiles }}" as="c" hint-placeholder-count="16"><span onMouseEnter="{{ c.on }}" onMouseLeave="{{ tOff }}" style="position:relative;width:30px;height:30px;box-sizing:border-box;border:{{ c.bd }};background:{{ c.bg }};cursor:crosshair"><sc-if value="{{ c.run }}"><span style="position:absolute;left:-4px;top:-4px;right:-4px;bottom:-4px;border:1px solid #151618;animation:qs-blink 1.2s ease-in-out infinite"></span></sc-if></span></sc-for></div></div></sc-for></div></sc-if>
+        <sc-if value="{{ isLayers }}"><div style="display:flex;flex-direction:column-reverse;gap:2px;width:280px"><sc-for list="{{ slabs }}" as="c" hint-placeholder-count="32"><span onMouseEnter="{{ c.on }}" onMouseLeave="{{ tOff }}" style="height:6px;box-sizing:border-box;border:{{ c.bd }};background:{{ c.bg }};cursor:crosshair"></span></sc-for></div></sc-if>
+        <div style="display:flex;flex-direction:column;gap:10px;font:400 11px/1 'Geist Mono',monospace"><sc-for list="{{ legend }}" as="l" hint-placeholder-count="6"><span style="display:flex;align-items:center;gap:10px"><span style="width:12px;height:12px;box-sizing:border-box;border:{{ l.bd }};background:{{ l.bg }}"></span>{{ l.t }}</span></sc-for><span style="display:flex;align-items:center;gap:10px"><span style="display:flex;gap:2px"><span style="width:5px;height:12px;border:1px solid #151618;box-sizing:border-box"></span><span style="width:5px;height:12px;border:1px solid #151618;box-sizing:border-box"></span></span>halved after a size error</span></div>
+      </div>
+      <span style="font:400 11px/1 'Geist Mono',monospace;font-variant-numeric:tabular-nums;color:#55575D">{{ tileRead }}</span>
+      <span style="font:400 12px/1.35 'TWK Everett',sans-serif;color:var(--qs-ink3);text-wrap:pretty">Cubes are 32 × 32 × 64; layers are 128 × 128 × 4, sent bottom to top. Three jobs run at once, cached tiles are not sent again, and empty tiles are skipped.</span>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <span style="font:500 11px/1 'Geist Mono',monospace">Signed distance · slice</span>
+      <canvas ref="{{ sdfRef }}" width="240" height="240" onMouseMove="{{ sdfMove }}" style="width:240px;height:240px;cursor:crosshair"></canvas>
+      <div style="display:inline-flex;align-self:flex-start;padding:2px;border-radius:999px;border:1px solid rgba(21,22,24,.26)"><sc-for list="{{ ops }}" as="it" hint-placeholder-count="3"><span onClick="{{ it.on }}" style="display:inline-flex;align-items:center;height:22px;padding:0 11px;border-radius:999px;border:1px solid {{ it.bd }};background:{{ it.bg }};color:{{ it.fg }};font:400 11px/1 'Geist Mono',monospace;cursor:pointer;box-sizing:border-box">{{ it.t }}</span></sc-for></div>
+      <span style="font:400 11px/1.3 'Geist Mono',monospace;font-variant-numeric:tabular-nums;color:#55575D">{{ sdfRead }}</span>
+      <span style="font:400 12px/1.35 'TWK Everett',sans-serif;color:var(--qs-ink3);text-wrap:pretty">Wall and handle of the cup. Negative inside, positive outside. Ink is the surface; grey lines are 1-voxel steps in the 3-voxel band where distances are exact. Thicken and shrink move the zero line.</span>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <span style="font:500 11px/1 'Geist Mono',monospace">Voxel values</span>
+      <div style="display:flex;gap:24px"><div style="display:flex;flex-direction:column;gap:8px"><svg width="144" height="108" viewBox="0 0 144 108"><sc-for list="{{ covs }}" as="c" hint-placeholder-count="0"><rect x="{{ c.x }}" y="{{ c.y }}" width="18" height="18" fill="#151618" fill-opacity="{{ c.o }}" stroke="#B3B5BB" stroke-width=".5"></rect></sc-for><line x1="0" y1="25.2" x2="144" y2="90" stroke="#151618" stroke-width="1.5"></line></svg><span style="font:400 11px/1 'Geist Mono',monospace">Coverage</span><span style="font:400 12px/1.3 'TWK Everett',sans-serif;color:var(--qs-ink3)">0.5 level is the true surface</span></div><div style="display:flex;flex-direction:column;gap:8px"><svg width="144" height="108" viewBox="0 0 144 108"><sc-for list="{{ bins }}" as="c" hint-placeholder-count="0"><rect x="{{ c.x }}" y="{{ c.y }}" width="18" height="18" fill="#151618" fill-opacity="{{ c.o }}" stroke="#B3B5BB" stroke-width=".5"></rect></sc-for><line x1="0" y1="25.2" x2="144" y2="90" stroke="#E3E4E7" stroke-width="1.5"></line><line x1="0" y1="16.2" x2="144" y2="81" stroke="#151618" stroke-width="1" stroke-dasharray="3 3"></line></svg><span style="font:400 11px/1 'Geist Mono',monospace">0 or 1</span><span style="font:400 12px/1.3 'TWK Everett',sans-serif;color:var(--qs-ink3)">About half a voxel fat</span></div></div>
+    </div>
+  </div>
+  <div style="display:flex;flex-direction:column;gap:12px;padding-top:28px;border-top:1px solid var(--qs-line)">
+    <div style="display:flex;justify-content:space-between"><span style="font:500 11px/1 'Geist Mono',monospace">Level sweep · one field, five thresholds</span><span style="font:400 11px/1 'Geist Mono',monospace;color:#8B8D93">sample counts</span></div>
+    <div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));column-gap:24px"><sc-for list="{{ sweep }}" as="w" hint-placeholder-count="5"><div style="display:flex;flex-direction:column;gap:10px"><div style="position:relative;height:180px;background:{{ w.cb }}"><div data-vox="iso" data-theme="light" data-mode="qpu" data-level="{{ w.l }}" data-smooth="5" data-fit="1.3" data-elev="22" style="position:absolute;inset:0"></div></div><div style="display:flex;justify-content:space-between;font:400 11px/1 'Geist Mono',monospace;font-variant-numeric:tabular-nums"><span style="color:{{ w.fg }}">Level {{ w.l }}</span><span style="color:#8B8D93">keeps {{ w.k }} · {{ w.p }}</span></div></div></sc-for></div>
+    <span style="font:400 12px/1.35 'TWK Everett',sans-serif;color:var(--qs-ink3);text-wrap:pretty">Low levels swell the cup and fuse its parts; high levels erode it into fragments. With keep largest, only the biggest part is exported.</span>
+  </div>
+</div>
+</div></x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1472,&quot;height&quot;:1000}}">
+class Component extends DCLogic {
+  state = { level: .5, hover: -1, drag: false, t: 0 };
+  componentDidMount() { this.iv = setInterval(() => this.setState(s => ({ t: s.t + 1 })), 500); }
+  componentWillUnmount() { clearInterval(this.iv); }
+  extra() {
+    const s = this.state, e2 = (s.t || 0) * .5, mode = s.tm ?? 'cubes', hv = s.th2;
+    const look = (k, p) => k === 'done' ? ['1px solid #151618', '#151618'] : k === 'running' ? ['1px solid #151618', `linear-gradient(0deg,#151618 ${p}%,transparent ${p}%)`] : k === 'cached' ? ['1px solid #151618', 'repeating-linear-gradient(45deg,#151618 0 1.5px,transparent 1.5px 4px)'] : k === 'empty' ? ['1px dotted #8B8D93', 'transparent'] : ['1px solid #B3B5BB', 'transparent'];
+    const label = i => i.k === 'running' ? 'running ' + i.p + '%' : i.k === 'empty' ? 'empty, skipped' : i.k;
+    const tiles = [], info = {}; let m = 0;
+    for (let n = 0; n < 32; n++) { const L = n >> 4, ix = n & 3, iy = (n >> 2) & 3, empty = (ix === 0 || ix === 3) && (iy === 0 || iy === 3); tiles.push({ n, L, ix, iy, empty }); }
+    const ec = e2 % 64;
+    tiles.forEach(t => { if (t.empty) { info[t.n] = { k: 'empty' }; return; } if (m < 3) { info[t.n] = { k: 'cached' }; m++; return; } const q = m - 3, a = Math.floor(q / 3) * 8 + (q % 3) * .4, b = a + 7.5; info[t.n] = ec >= b ? { k: 'done' } : ec >= a ? { k: 'running', p: Math.round((ec - a) / (b - a) * 100) } : { k: 'queued' }; m++; });
+    const layersC = [0, 1].map(L => ({ t: 'z ' + L * 64 + '–' + (L * 64 + 63), tiles: tiles.filter(t => t.L === L).map(t => { const i = info[t.n], [bd, bg] = look(i.k, i.p); return { bd, bg, run: i.k === 'running', on: () => this.setState({ th2: t.n }) }; }) }));
+    const el2 = e2 % 48, slabs = []; let m2 = 0;
+    for (let z = 0; z < 32; z++) { let i; if (z === 0 || z >= 29) i = { k: 'empty' }; else { const a = Math.floor(m2 / 3) * 4 + (m2 % 3) * .3, b = a + 3.6; i = el2 >= b ? { k: 'done' } : el2 >= a ? { k: 'running', p: Math.round((el2 - a) / (b - a) * 100) } : { k: 'queued' }; m2++; } const [bd, bg0] = look(i.k, i.p); slabs.push({ i, bd, bg: i.k === 'running' ? `linear-gradient(90deg,#151618 ${i.p}%,transparent ${i.p}%)` : bg0, on: () => this.setState({ th2: 100 + z }) }); }
+    let tileRead;
+    if (mode === 'cubes' && hv != null && hv < 100) { const t = tiles[hv]; tileRead = 'Tile ' + hv + ' · x ' + t.ix * 32 + '–' + (t.ix * 32 + 31) + ' · y ' + t.iy * 32 + '–' + (t.iy * 32 + 31) + ' · z ' + t.L * 64 + '–' + (t.L * 64 + 63) + ' · ' + label(info[hv]); }
+    else if (mode === 'layers' && hv != null && hv >= 100) { const z = hv - 100; tileRead = 'Slab ' + z + ' · z ' + z * 4 + '–' + (z * 4 + 3) + ' · ' + label(slabs[z].i); }
+    else { const arr = mode === 'cubes' ? tiles.map(t => info[t.n].k) : slabs.map(x => x.i.k), c = k => arr.filter(x => x === k).length; tileRead = c('done') + ' done · ' + c('running') + ' running · ' + c('queued') + ' queued' + (mode === 'cubes' ? ' · ' + c('cached') + ' cached' : '') + ' · ' + c('empty') + ' empty'; }
+    const seg = (t, on, a) => ({ t, on, bg: a ? '#CBCCD0' : 'transparent', bd: a ? '#151618' : 'transparent', fg: a ? '#151618' : '#55575D' });
+    this.sdfD = this.sdfD || ((u, v) => { const r = Math.hypot(u - 22, v - 24), dr = Math.max(r - 17, 13 - r), c1 = Math.hypot(u - 42, v - 18) - 2.5, c2 = Math.hypot(u - 42, v - 30) - 2.5; return Math.min(dr, c1, c2); });
+    this.drawSDF = this.drawSDF || (() => { const el = this.sdfEl; if (!el) return; const ctx = el.getContext('2d'), W = 240, img = ctx.createImageData(W, W), off = this.state.op ?? 0; for (let py = 0; py < W; py++) for (let px = 0; px < W; px++) { const d = this.sdfD((px + .5) / 5, (py + .5) / 5) - off, ad = Math.abs(d), o = (py * W + px) * 4; let c = d < 0 ? [196, 197, 201] : ad <= 3 ? [216, 217, 220] : [227, 228, 231]; if (ad <= 3 && Math.abs(d - Math.round(d)) < .07) c = [139, 141, 147]; if (ad < .12) c = [21, 22, 24]; img.data[o] = c[0]; img.data[o + 1] = c[1]; img.data[o + 2] = c[2]; img.data[o + 3] = 255; } ctx.putImageData(img, 0, 0); });
+    this.sdfRef = this.sdfRef || (el => { this.sdfEl = el; if (el) this.drawSDF(); });
+    const op = s.op ?? 0;
+    const sdfMove = ev => { const r = ev.currentTarget.getBoundingClientRect(), u = (ev.clientX - r.left) / r.width * 48, v = (ev.clientY - r.top) / r.height * 48, d = this.sdfD(u, v) - (this.state.op ?? 0); this.setState({ sdfR: 'x ' + u.toFixed(1) + ' · y ' + v.toFixed(1) + ' · d ' + (d >= 0 ? '+' : '−') + Math.abs(d).toFixed(2) + ' vox · ' + (d < 0 ? 'inside' : 'outside') + (Math.abs(d) <= 3 ? ' · in band' : '') }); };
+    const covs = [], bins = [];
+    for (let r = 0; r < 6; r++) for (let c = 0; c < 8; c++) { let k = 0; for (let a = 0; a < 4; a++) for (let b = 0; b < 4; b++) { const x = c + (b + .5) / 4, y = r + (a + .5) / 4; if (y > .45 * x + 1.4) k++; } covs.push({ x: c * 18, y: r * 18, o: (k / 16).toFixed(2) }); bins.push({ x: c * 18, y: r * 18, o: k > 0 ? 1 : 0 }); }
+    const cbs = ['left top', 'right top', 'left bottom', 'right bottom'].map(p => `linear-gradient(#151618,#151618) ${p}/14px 1.5px no-repeat,linear-gradient(#151618,#151618) ${p}/1.5px 14px no-repeat`).join(',');
+    return {
+      tModes: [seg('Cubes', () => this.setState({ tm: 'cubes', th2: null }), mode === 'cubes'), seg('Layers', () => this.setState({ tm: 'layers', th2: null }), mode === 'layers')],
+      isCubes: mode === 'cubes', isLayers: mode === 'layers', layersC, slabs, tOff: () => this.setState({ th2: null }), tileRead,
+      legend: [['done', 'done'], ['running', 'running', 55], ['queued', 'queued'], ['cached', 'cached, not sent'], ['empty', 'empty, skipped']].map(([k, t, p]) => { const [bd, bg] = look(k, p); return { t, bd, bg }; }),
+      sdfRef: this.sdfRef, sdfMove, sdfRead: s.sdfR || 'Hover the slice to read a distance',
+      ops: [['Shrink 1', -1], ['None', 0], ['Thicken 1', 1]].map(([t, v]) => seg(t, () => this.setState({ op: v }, () => this.drawSDF()), op === v)),
+      covs, bins,
+      sweep: [['0.20', '130%', '1 part'], ['0.35', '95%', '1 part'], ['0.50', '72%', '1 part'], ['0.65', '50%', '2 parts'], ['0.80', '34%', '6 parts']].map(([l, k, p]) => ({ l, k, p, fg: l === '0.50' ? '#151618' : '#55575D', cb: l === '0.50' ? cbs : 'transparent' }))
+    };
+  }
+  renderVals() {
+    const s = this.state, W = 720, n = 40, bw = W / n, L = s.level;
+    const raw = Array.from({ length: n }, (_, i) => { const v = (i + .5) / n; return 900 * Math.exp(-(((v - .06) / .06) ** 2)) + 210 * Math.exp(-(((v - .5) / .2) ** 2)) + 380 * Math.exp(-(((v - .97) / .035) ** 2)) + 30; });
+    const SOLID = 2914, K50 = 2102, above = (arr, l) => arr.reduce((a, c, i) => a + ((i + .5) / n >= l ? c : 0), 0);
+    const sc = K50 / above(raw, .5), cnt = raw.map(c => Math.round(c * sc));
+    { const d = K50 - above(cnt, .5); let bi = n - 1; for (let i = 0; i < n; i++) if ((i + .5) / n >= .5 && cnt[i] > cnt[bi]) bi = i; cnt[bi] += d; }
+    const mx = Math.sqrt(Math.max(...cnt)), solid = SOLID;
+    const kept = above(cnt, L), keptPct = Math.round(kept / solid * 100);
+    const bars = cnt.map((c, i) => ({ h: Math.max(3, Math.round(146 * Math.sqrt(c) / mx)), bg: (i + .5) / n >= L ? '#151618' : i === s.hover ? '#8B8D93' : '#B3B5BB' }));
+    const pos = e => { const r = e.currentTarget.getBoundingClientRect(); return Math.max(0, Math.min(W, (e.clientX - r.left) * (W / r.width))); };
+    const setL = x => Math.max(.05, Math.min(.95, x / W));
+    const move = e => { const x = pos(e), b = Math.min(n - 1, Math.floor(x / bw)); this.setState(st => st.drag ? { level: setL(x), hover: b } : { hover: b }); };
+    const down = e => { this.setState({ drag: true, level: setL(pos(e)) }); };
+    const up = () => this.setState({ drag: false });
+    const leave = () => this.setState({ drag: false, hover: -1 });
+    const hb = s.hover, hx = (hb + .5) * bw;
+    const ruler = Array.from({ length: 19 }, (_, i) => ({ x: (i / 18 * 100).toFixed(2), h: i % 3 === 0 ? 12 : 6, c: (.05 + i * .05) <= L + 1e-6 ? '#151618' : '#B3B5BB' }));
+    const kmax = above(cnt, .05) / solid, kyOf = k => (100 - k / kmax * 90).toFixed(1);
+    const kc = []; for (let i = 0; i <= 52; i++) { const lvl = .05 + i * (.9 / 52); kc.push((i * 5) + ',' + kyOf(above(cnt, lvl) / solid)); }
+    const kx = ((L - .05) / .9 * 260).toFixed(1), ky = kyOf(kept / solid), k1 = kyOf(1);
+    const t = s.t, el = t * .5, fmt = x => { const m = Math.floor(x / 60), sec = (x % 60).toFixed(1); return String(m).padStart(2, '0') + ':' + sec.padStart(4, '0'); };
+    const polls = Math.floor(el / 2) % 9, iter = 2 + Math.floor(t / 6) % 4;
+    const counters = [[fmt(el % 120), 'elapsed'], [String(iter), 'iterations'], [String(polls), 'status polls'], ['1', 'cache hits'], ['512 KB', 'sent'], [(1.0 * Math.min(1, (t % 40) / 30)).toFixed(2) + ' MB', 'received of 2 MB']].map(([v, k]) => ({ v, k }));
+    const G = [['Load model', 0, .4], ['Voxelize 32³', .4, 1.2], ['Emulate preview', 1.6, 3.8], ['Atlas · queue', 5.4, 3], ['Atlas · run', 8.4, 6.4], ['Fetch result', 14.8, .8], ['Level set · push 0.6', 15.6, 1.9], ['Smooth · gaussian', 17.5, .3], ['Export STL + json', 17.8, .2]];
+    const gantt = G.map(([tt, l, d], i) => ({ t: tt, l: (l / 18 * 100).toFixed(2), w: (d / 18 * 100).toFixed(2), d: d.toFixed(1) + ' s', bg: i === 4 ? '#151618' : i < 4 ? '#55575D' : '#B3B5BB' }));
+    const LG = [['14:06:11', 'info', 'post /engines/blur-core-v1/process · 202 · job 7f3a'], ['14:06:12', 'info', 'status queued · position 3'], ['14:06:24', 'info', 'status running'], ['14:06:29', 'info', 'poll 4 · running · 5 s'], ['14:06:34', 'warn', 'poll 5 · slow response 2.1 s'], ['14:06:50', 'info', 'status completed · 9.4 s'], ['14:06:54', 'info', 'result 32,768 values · 1.0 MB'], ['14:06:54', 'info', 'normalize · total 2,914.0 kept'], ['14:06:55', 'info', 'cache write grids/run2_atlas_n32.npy'], ['14:06:55', 'info', 'marching cubes · level 0.50 · 48,212 faces'], ['14:06:56', 'info', 'export run2_L050.stl + .json']];
+    const off = Math.floor(t / 3) % (LG.length - 6);
+    const log = LG.slice(off, off + 7).map(([tt, lv, m], i) => ({ t: tt, lv, m, c: i === 6 ? '#151618' : '#55575D', tc: lv === 'warn' ? '#151618' : '#8B8D93' }));
+    return {
+      ...this.extra(), lv: L.toFixed(2), lp: ((L - .05) / .9 * 100).toFixed(2), ruler, keptPct, keptW: Math.min(100, keptPct), keptTxt: kept.toLocaleString() + ' cells kept · input ' + solid.toLocaleString(), kcurve: kc.join(' '), kx, ky, k1, k1t: (k1 - 4).toFixed(1),
+      bars, lx: (L * W).toFixed(1), hov: hb >= 0, hx: hx.toFixed(1), tx: Math.min(W - 190, Math.max(0, hx + 8)).toFixed(1), tip: (hb / n).toFixed(3) + '–' + ((hb + 1) / n).toFixed(3) + ' · ' + (cnt[hb] || 0) + ' cells',
+      move, down, up, leave, cur: s.drag ? 'grabbing' : 'crosshair', counters, gantt, log,
+      runs: [['run1', 'emulation', '32³', '0.50', '5.4 s', '—'], ['run2', 'atlas', '32³', '0.50', '18.0 s', 'miss · written'], ['run3', 'atlas', '32³', '0.35', '0.9 s', 'hit · no job']].map(([nn, m, g, l, tt, c]) => ({ n: nn, m, g, l, t: tt, c }))
+    };
+  }
+}
+</script>
+</body>
+</html>

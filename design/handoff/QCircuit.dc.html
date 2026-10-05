@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<div style="position:relative;width:{{ W }}px;height:{{ H }}px;color:var(--qs-ink)">
+  <div style="position:absolute;left:0;right:0;top:0;display:flex;justify-content:space-between;gap:16px;font:400 10px/1 'Geist Mono',monospace;"><span style="font-weight:500">{{ title }}</span><span style="color:var(--qs-ink3)">{{ sub }}</span></div>
+  <sc-for list="{{ groups }}" as="g" hint-placeholder-count="0"><div style="position:absolute;left:0;top:{{ g.y }}px;width:5px;height:{{ g.h }}px;border:1px solid var(--qs-ink3);border-right:none"></div><span style="position:absolute;left:10px;top:{{ g.ly }}px;font:500 10px/1 'Geist Mono',monospace">{{ g.t }}</span></sc-for>
+  <sc-for list="{{ rows }}" as="r" hint-placeholder-count="0"><span style="position:absolute;left:28px;top:{{ r.ty }}px;font:400 9px/1 'Geist Mono',monospace;color:var(--qs-ink3)">{{ r.q }}</span><div style="position:absolute;left:58px;right:0;top:{{ r.y }}px;height:1px;background:var(--qs-ink4)"></div></sc-for>
+  <div style="position:absolute;left:70px;top:{{ ey }}px;width:30px;height:{{ eh }}px;border:1px solid var(--qs-ink);border-radius:999px;background:var(--qs-bg);box-sizing:border-box;display:flex;align-items:center;justify-content:center"><span style="writing-mode:vertical-rl;transform:rotate(180deg);font:400 9px/1 'Geist Mono',monospace;letter-spacing:.06em">ENCODE |ψ⟩</span></div>
+  <sc-for list="{{ gates }}" as="g" hint-placeholder-count="0"><div style="position:absolute;left:{{ g.x }}px;top:{{ g.y }}px;width:{{ g.w }}px;height:14px;border:1px solid var(--qs-ink);border-radius:999px;background:var(--qs-bg);box-sizing:border-box;display:flex;align-items:center;justify-content:center;font:400 9px/1 'Geist Mono',monospace">{{ g.t }}</div></sc-for>
+  <sc-for list="{{ links }}" as="l" hint-placeholder-count="0"><div style="position:absolute;left:{{ l.x }}px;top:{{ l.y1 }}px;width:1px;height:{{ l.h }}px;background:var(--qs-ink)"></div><div style="position:absolute;left:{{ l.x }}px;top:{{ l.y1 }}px;width:7px;height:7px;margin:-3px 0 0 -3px;border-radius:50%;background:var(--qs-ink)"></div><div style="position:absolute;left:{{ l.x }}px;top:{{ l.ty }}px;width:13px;height:13px;margin-left:-6px;border-radius:50%;border:1px solid var(--qs-ink);box-sizing:border-box;background:linear-gradient(var(--qs-ink),var(--qs-ink)) center/1px 100% no-repeat,linear-gradient(var(--qs-ink),var(--qs-ink)) center/100% 1px no-repeat,var(--qs-bg)"></div></sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:560,&quot;height&quot;:300},&quot;per&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:5,&quot;tsType&quot;:&quot;number&quot;},&quot;axes&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;xyz&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;gate&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;x&quot;,&quot;y&quot;,&quot;xy&quot;,&quot;yx&quot;],&quot;default&quot;:&quot;xy&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;reach&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;default&quot;:0.25,&quot;tsType&quot;:&quot;number&quot;,&quot;min&quot;:0,&quot;max&quot;:1,&quot;step&quot;:0.05},&quot;theta&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;0.30π&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;w&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:540,&quot;tsType&quot;:&quot;number&quot;},&quot;title&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;Circuit&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;sub&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    const p = this.props, per = +(p.per ?? 5), axes = String(p.axes ?? 'xyz').split(''), style = p.gate ?? 'xy', reach = +(p.reach ?? .25), st = +(p.strength ?? .3), W = +(p.w ?? 540), rh = +(p.rowH ?? 16), top = 34;
+    const gl = style === 'x' ? ['Rx'] : style === 'y' ? ['Ry'] : style === 'xy' ? ['Rx', 'Ry'] : ['Ry', 'Rx'];
+    const rows = [], gates = [], links = [], groups = [];
+    let q = 0;
+    axes.forEach((ax, ai) => {
+      const y0 = top + q * rh;
+      for (let k = 0; k < per; k++) { const y = top + q * rh; rows.push({ y, ty: y - 4, q: 'q' + q }); { const th = (st * ((1 - reach) * Math.pow(2, -k) + reach)).toFixed(2); gl.forEach((g, gi) => gates.push({ x: 120 + gi * 92, y: y - 7, w: 84, t: g + ' ' + th + 'π' })); } gates.push({ x: W - 30, y: y - 7, w: 28, t: 'M' }); q++; }
+      groups.push({ y: y0 - 6, h: (per - 1) * rh + 12, ly: y0 + ((per - 1) * rh) / 2 - 5, t: ax.toUpperCase() });
+      const nl = 0;
+      for (let l = 0; l < nl; l++) { const a = top + (ai * per + l) * rh; links.push({ x: 120 + gl.length * 48 + 18 + l * 24, y1: a, h: rh, ty: a + rh - 6 }); }
+    });
+    return { W, H: top + (q - 1) * rh + 14, rows, gates, links, groups, ey: top - 8, eh: (q - 1) * rh + 16, title: p.title ?? 'Circuit', sub: p.sub || (q + ' qubits · style ' + style + ' · strength ' + st.toFixed(2) + ' · reach ' + reach.toFixed(2)) };
+  }
+}
+</script>
+</body>
+</html>

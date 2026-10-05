@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<div style="display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start;max-width:{{ maxW }}px;color:#151618;font-variant-numeric:tabular-nums">
+  <sc-if value="{{ showHead }}"><div style="order:0;width:100%;display:flex;justify-content:space-between;align-items:baseline"><span style="font:600 10px/1 'Geist Mono',monospace;letter-spacing:.04em">SLICE</span><span style="font:400 11px/1 'Geist Mono',monospace;color:#8B8D93">{{ headR }}</span></div></sc-if>
+  <sc-if value="{{ showMap }}"><div style="order:{{ mo }};display:flex;flex-direction:column;gap:10px;width:{{ M }}px">
+    <div onMouseMove="{{ mMove }}" onMouseLeave="{{ mLeave }}" style="position:relative;width:{{ M }}px;height:{{ M }}px;cursor:crosshair">
+      <svg width="{{ M }}" height="{{ M }}" viewBox="{{ mvb }}" style="position:absolute;left:0;top:0">
+        <path d="{{ mGrid }}" fill="none" stroke="rgba(21,22,24,.1)" stroke-width="1"></path>
+        <path d="{{ mCells }}" fill="{{ mFill }}"></path>
+        <path d="{{ mCorners }}" fill="none" stroke="#151618" stroke-width="1"></path>
+        <sc-if value="{{ mHov }}"><path d="{{ mCross }}" fill="none" stroke="#8B8D93" stroke-width="1" stroke-dasharray="2 3"></path><rect x="{{ mRx }}" y="{{ mRy }}" width="{{ mS }}" height="{{ mS }}" fill="none" stroke="#151618" stroke-width="1.5"></rect></sc-if>
+      </svg>
+      <span style="position:absolute;left:10px;top:10px;font:400 10px/1 'Geist Mono',monospace;color:{{ mTagC }};white-space:nowrap">{{ mTag }}</span>
+      <span style="position:absolute;right:10px;bottom:10px;font:400 10px/1 'Geist Mono',monospace;color:#8B8D93;white-space:nowrap">{{ mAxH }} →</span>
+      <span style="position:absolute;left:10px;bottom:10px;font:400 10px/1 'Geist Mono',monospace;color:#8B8D93;white-space:nowrap">↑ {{ mAxV }}</span>
+    </div>
+    <span style="height:11px;font:400 11px/1 'Geist Mono',monospace;color:#55575D;white-space:nowrap">{{ mRead }}</span>
+  </div></sc-if>
+  <div onMouseMove="{{ dMove }}" onMouseDown="{{ dDown }}" onMouseUp="{{ dUp }}" onMouseLeave="{{ dLeave }}" style="order:{{ dor }};position:relative;flex:none;width:{{ W }}px;height:{{ H }}px;cursor:{{ dCur }};user-select:none">
+    <svg width="{{ W }}" height="{{ H }}" viewBox="{{ vb }}" style="position:absolute;left:0;top:0;overflow:visible">
+      <path d="{{ hid }}" fill="none" stroke="#B3B5BB" stroke-width="1" stroke-dasharray="2 3"></path>
+      <sc-if value="{{ gOn }}"><path d="{{ gPlane }}" fill="none" stroke="#55575D" stroke-width="1" stroke-dasharray="3 3"></path></sc-if>
+      <path d="{{ plane }}" fill="{{ pf }}" stroke="#151618" stroke-width="1"></path>
+      <path d="{{ cells }}" fill="#151618" fill-opacity=".82"></path>
+      <path d="{{ vis }}" fill="none" stroke="#8B8D93" stroke-width="1"></path>
+      <path d="{{ lead }}" fill="none" stroke="#151618" stroke-width="1"></path>
+      <path d="{{ rail }}" fill="none" stroke="#8B8D93" stroke-width="1"></path>
+      <sc-for list="{{ rt }}" as="t" hint-placeholder-count="0"><line x1="{{ t.x1 }}" y1="{{ t.y1 }}" x2="{{ t.x2 }}" y2="{{ t.y2 }}" stroke="{{ t.c }}" stroke-width="1"></line></sc-for>
+    </svg>
+    <sc-for list="{{ rl }}" as="l" hint-placeholder-count="0"><span style="position:absolute;left:{{ l.x }}px;top:{{ l.y }}px;transform:{{ l.tr }};font:400 9px/1 'Geist Mono',monospace;color:#8B8D93;white-space:nowrap;pointer-events:none">{{ l.t }}</span></sc-for>
+    <sc-if value="{{ gOn }}"><span style="position:absolute;left:{{ gtx }}px;top:{{ gty }}px;transform:{{ ttr }};display:inline-flex;align-items:center;height:18px;padding:0 7px;border-radius:999px;border:1px dashed #55575D;color:#55575D;font:400 10px/1 'Geist Mono',monospace;white-space:nowrap;box-sizing:border-box;pointer-events:none">{{ gT }}</span></sc-if>
+    <span style="position:absolute;left:{{ ttx }}px;top:{{ tty }}px;transform:{{ ttr }};display:inline-flex;align-items:center;height:18px;padding:0 7px;border-radius:999px;border:1px solid #151618;background:{{ tb }};color:{{ tc }};font:400 10px/1 'Geist Mono',monospace;white-space:nowrap;box-sizing:border-box;pointer-events:none">{{ tT }}</span>
+  </div>
+  <sc-if value="{{ showSide }}"><div style="order:3;display:flex;flex-direction:column;gap:18px;width:{{ SW }}px">
+    <div style="display:flex;align-items:center;justify-content:space-between"><span style="font:400 11px/1 'Geist Mono',monospace;color:#8B8D93">Axis</span><div style="display:inline-flex;padding:2px;border-radius:999px;border:1px solid rgba(21,22,24,.26)"><sc-for list="{{ axes }}" as="a" hint-placeholder-count="3"><span onClick="{{ a.on }}" style="display:inline-flex;align-items:center;height:22px;padding:0 10px;border-radius:999px;border:1px solid {{ a.bd }};background:{{ a.bg }};color:{{ a.fg }};font:400 11px/1 'Geist Mono',monospace;cursor:pointer;box-sizing:border-box">{{ a.t }}</span></sc-for></div></div>
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <div style="display:flex;justify-content:space-between;font:400 10px/1 'Geist Mono',monospace;color:#8B8D93;white-space:nowrap"><span>Solid cells per layer</span><span>max {{ spMax }}</span></div>
+      <div onMouseLeave="{{ dLeave }}" style="display:flex;align-items:flex-end;gap:2px;height:44px;border-bottom:1px solid #B3B5BB"><sc-for list="{{ bars }}" as="b" hint-placeholder-count="32"><span onMouseEnter="{{ b.en }}" onClick="{{ b.ck }}" style="flex:1;height:{{ b.h }}px;background:{{ b.bg }};cursor:pointer"></span></sc-for></div>
+      <div style="display:flex;justify-content:space-between;font:400 10px/1 'Geist Mono',monospace;color:#8B8D93;white-space:nowrap"><span>{{ ax0 }} 0</span><span>31</span></div>
+    </div>
+    <dc-import name="QReadout" title="Layer" kw="80" w="{{ SW }}" rows="{{ rows }}" hint-size="300px,110px"></dc-import>
+  </div></sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1100,&quot;height&quot;:400},&quot;layout&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;compact&quot;,&quot;inspector&quot;,&quot;wide&quot;],&quot;default&quot;:&quot;wide&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;axis&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;z&quot;,&quot;x&quot;,&quot;y&quot;],&quot;default&quot;:&quot;z&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;index&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:16,&quot;tsType&quot;:&quot;number&quot;,&quot;min&quot;:0,&quot;max&quot;:31},&quot;state&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;live&quot;,&quot;hover&quot;,&quot;drag&quot;],&quot;default&quot;:&quot;live&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  state = {};
+  componentWillUnmount() { clearTimeout(this.ft); }
+  vol() {
+    if (this._v) return this._v;
+    const N = 32, v = new Uint8Array(N * N * N); let tot = 0;
+    for (let k = 0; k < N; k++) for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+      const x = i + .5, y = j + .5, z = k + .5, r = Math.hypot(x - 16, y - 16);
+      let s = z >= 2 && z <= 30 && r <= 12.5 && (r >= 11.2 || z <= 3.6);
+      if (!s && Math.abs(y - 16) <= 1.3 && x >= 28 && x <= 31.4 && z >= 9 && z <= 23 && !(x > 28.4 && x < 30.4 && z > 11 && z < 21)) s = true;
+      if (s) { v[i + N * (j + N * k)] = 1; tot++; }
+    }
+    return (this._v = { v, N, tot });
+  }
+  renderVals() {
+    const p = this.props, s = this.state, f = p.state || 'live', lay = p.layout || 'compact', { v, N, tot } = this.vol();
+    const ax = s.ax || p.axis || 'z', k = s.k ?? Math.max(0, Math.min(31, Math.round(+(p.index ?? 16)))), drag = !!s.drag || f === 'drag';
+    const hk = s.hk ?? (f === 'hover' ? Math.min(31, k + 6) : null), gOn = hk != null && hk !== k;
+    const [W, H, u, ox, oy] = ({ compact: [260, 156, 2.9, 34, 132], inspector: [344, 220, 4.4, 30, 200], wide: [440, 320, 6, 40, 292] })[lay] || [260, 156, 2.9, 34, 132];
+    const n1 = x => x.toFixed(1), kx = .433, ky = .25;
+    const P = (i, j, kk) => [ox + u * (i + j * kx), oy - u * (kk + j * ky)];
+    const at = (c, a, b) => ax === 'z' ? v[a + N * (b + N * c)] : ax === 'x' ? v[c + N * (a + N * b)] : v[a + N * (c + N * b)];
+    const p3 = (a, b, L) => ax === 'z' ? P(a, b, L) : ax === 'x' ? P(L, a, b) : P(a, L, b);
+    const poly = q => 'M' + q.map(t => n1(t[0]) + ' ' + n1(t[1])).join('L') + 'Z';
+    const quad = L => poly([[0, 0], [32, 0], [32, 32], [0, 32]].map(([a, b]) => p3(a, b, L)));
+    let cells = '';
+    for (let b = 0; b < N; b++) for (let a = 0; a < N; a++) if (at(k, a, b)) cells += poly([p3(a, b, k + .5), p3(a + 1, b, k + .5), p3(a + 1, b + 1, k + .5), p3(a, b + 1, k + .5)]);
+    let hid = '', vis = ''; const C8 = [];
+    for (const z of [0, 32]) for (const j of [0, 32]) for (const i of [0, 32]) C8.push([i, j, z]);
+    for (let a = 0; a < 8; a++) for (let b = a + 1; b < 8; b++) {
+      const A = C8[a], B = C8[b]; if (A.filter((x, t) => x !== B[t]).length !== 1) continue;
+      const pa = P(...A), pb = P(...B), sg = `M${n1(pa[0])} ${n1(pa[1])}L${n1(pb[0])} ${n1(pb[1])}`;
+      if ([A, B].some(q => q[0] === 0 && q[1] === 32 && q[2] === 0)) hid += sg; else vis += sg;
+    }
+    const RB = { z: t => [32, 32, t], x: t => [t, 0, 0], y: t => [32, t, 0] }[ax], OF = { z: [14, 0], x: [0, 14], y: [12, 7] }[ax], TD = { z: [1, 0], x: [0, 1], y: [.5, .87] }[ax];
+    const R = t => { const q = P(...RB(t)); return [q[0] + OF[0], q[1] + OF[1]]; };
+    const r0 = R(0), r1 = R(32), rt = [];
+    for (let t = 0; t <= 32; t += 2) { const q = R(t), L = t % 8 ? 3 : 6; rt.push({ x1: n1(q[0]), y1: n1(q[1]), x2: n1(q[0] + TD[0] * L), y2: n1(q[1] + TD[1] * L), c: t % 8 ? '#B3B5BB' : '#8B8D93' }); }
+    const rl = (lay === 'compact' ? [0, 31] : [0, 8, 16, 24, 31]).filter(t => Math.abs(t - k) > 2 && !(gOn && Math.abs(t - hk) <= 2)).map(t => { const q = R(t + .5); return ax === 'x' ? { x: n1(q[0]), y: n1(q[1] + 9), t: String(t), tr: 'translate(-50%,0)' } : { x: n1(q[0] + TD[0] * 10), y: n1(q[1] + TD[1] * 10), t: String(t), tr: 'translate(0,-50%)' }; });
+    const A0 = P(...RB(k + .5)), T0 = R(k + .5);
+    const tab = c => { const q = R(c + .5); return [n1(q[0] + TD[0] * 9), n1(q[1] + TD[1] * 9)]; };
+    const TT = tab(k), GT = gOn ? tab(hk) : ['0', '0'];
+    const toIdx = e => { const rc = e.currentTarget.getBoundingClientRect(), sc = W / (rc.width || W), mx = (e.clientX - rc.left) * sc, my = (e.clientY - rc.top) * sc, dx = r1[0] - r0[0], dy = r1[1] - r0[1]; return Math.max(0, Math.min(31, Math.round(((mx - r0[0]) * dx + (my - r0[1]) * dy) / (dx * dx + dy * dy) * 32 - .5))); };
+    const M = 300, sc = M / N, mk = gOn ? hk : k;
+    let mCells = '', mGrid = '';
+    for (let b = 0; b < N; b++) for (let a = 0; a < N; a++) if (at(mk, a, b)) mCells += `M${n1(a * sc)} ${n1((N - 1 - b) * sc)}h${n1(sc)}v${n1(sc)}h-${n1(sc)}Z`;
+    for (let t = 8; t < N; t += 8) mGrid += `M${n1(t * sc)} 0V${M}M0 ${n1(t * sc)}H${M}`;
+    const mc = s.mc, coord = (c, a, b) => ax === 'z' ? `x ${a} · y ${b} · z ${c}` : ax === 'x' ? `x ${c} · y ${a} · z ${b}` : `x ${a} · y ${c} · z ${b}`;
+    this._cnt = this._cnt || {};
+    const cn = this._cnt[ax] || (this._cnt[ax] = Array.from({ length: N }, (_, c) => { let n = 0; for (let b = 0; b < N; b++) for (let a = 0; a < N; a++) n += at(c, a, b); return n; }));
+    const mx = Math.max(...cn), AX = ax.toUpperCase(), fmt = n => n.toLocaleString('en-US');
+    return {
+      maxW: lay === 'wide' ? 1100 : W, showHead: lay === 'inspector', showMap: lay !== 'compact', showSide: lay !== 'compact', mo: lay === 'wide' ? 2 : 1, dor: lay === 'wide' ? 1 : 2, SW: lay === 'wide' ? 300 : 344,
+      headR: `input · ${ax} ${k} of 31`, W, H, vb: `0 0 ${W} ${H}`, hid, vis, plane: quad(k + .5), gPlane: gOn ? quad(hk + .5) : '', gOn, cells, pf: s.flash ? 'rgba(21,22,24,.14)' : 'rgba(21,22,24,.05)',
+      lead: `M${n1(A0[0])} ${n1(A0[1])}L${n1(T0[0])} ${n1(T0[1])}`, rail: `M${n1(r0[0])} ${n1(r0[1])}L${n1(r1[0])} ${n1(r1[1])}`, rt, rl,
+      ttx: TT[0], tty: TT[1], gtx: GT[0], gty: GT[1], ttr: { z: 'translate(0,-50%)', x: 'translate(-50%,0)', y: 'translate(0,-20%)' }[ax],
+      tT: `${ax} ${k}`, gT: gOn ? `${ax} ${hk} · ${fmt(cn[hk])}` : '', tb: drag ? '#151618' : '#E3E4E7', tc: drag ? '#E3E4E7' : '#151618', dCur: drag ? 'grabbing' : 'ns-resize',
+      M, mvb: `0 0 ${M} ${M}`, mGrid, mCells, mFill: gOn ? '#8B8D93' : '#55575D', mCorners: `M0 14V0H14M${M - 14} 0H${M}V14M${M} ${M - 14}V${M}H${M - 14}M14 ${M}H0V${M - 14}`,
+      mHov: !!mc, mRx: mc ? n1(mc.a * sc) : 0, mRy: mc ? n1((N - 1 - mc.b) * sc) : 0, mS: n1(sc), mCross: mc ? `M0 ${n1((N - .5 - mc.b) * sc)}H${M}M${n1((mc.a + .5) * sc)} 0V${M}` : '',
+      mTag: gOn ? `${ax} ${hk} · preview` : `${ax} ${k}`, mTagC: gOn ? '#8B8D93' : '#151618', mAxH: ax === 'x' ? 'y' : 'x', mAxV: ax === 'z' ? 'y' : 'z',
+      mRead: mc ? `${coord(mk, mc.a, mc.b)} · ${at(mk, mc.a, mc.b) ? 'solid' : 'empty'}` : 'Hover the section to read a cell',
+      axes: ['X', 'Y', 'Z'].map(t => { const on = t.toLowerCase() === ax; return { t, on: () => this.setState({ ax: t.toLowerCase(), hk: null, mc: null }), bd: on ? '#151618' : 'transparent', bg: on ? '#CBCCD0' : 'transparent', fg: on ? '#151618' : '#55575D' }; }),
+      bars: cn.map((n, c) => ({ h: Math.max(1, Math.round(n / mx * 42)), bg: c === k ? '#151618' : gOn && c === hk ? '#8B8D93' : '#C4C6CB', en: () => this.setState({ hk: c }), ck: () => this.setState({ k: c }) })),
+      spMax: fmt(mx), ax0: AX,
+      rows: `Axis|${AX};Index|${k} / 31;Position|${(k * 3.2).toFixed(1)} mm;Solid|${fmt(cn[k])} cells;Area|${(cn[k] * 10.24 / 100).toFixed(1)} cm²;Share|${(cn[k] / tot * 100).toFixed(1)}% of solid`,
+      dMove: e => { const i = toIdx(e); if (s.drag) this.setState({ k: i, hk: i }); else if (i !== s.hk) this.setState({ hk: i }); },
+      dDown: e => { const i = toIdx(e); this.setState({ drag: true, k: i, hk: i }); },
+      dUp: () => { this.setState({ drag: false, flash: true }); clearTimeout(this.ft); this.ft = setTimeout(() => this.setState({ flash: false }), 240); },
+      dLeave: () => this.setState({ hk: null, drag: false }),
+      mMove: e => { const rc = e.currentTarget.getBoundingClientRect(), q = M / (rc.width || M), a = Math.max(0, Math.min(N - 1, Math.floor((e.clientX - rc.left) * q / sc))), b = Math.max(0, Math.min(N - 1, N - 1 - Math.floor((e.clientY - rc.top) * q / sc))); if (!mc || mc.a !== a || mc.b !== b) this.setState({ mc: { a, b } }); },
+      mLeave: () => this.setState({ mc: null })
+    };
+  }
+}
+</script>
+</body>
+</html>

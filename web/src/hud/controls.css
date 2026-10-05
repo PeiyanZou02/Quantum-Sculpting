@@ -1,0 +1,245 @@
+/* Controls as readouts (QLControls4 · "05 Physical controls"). The satin bodies are mixed from the ink
+   tokens only, so both themes work: lit faces are lighter than the shade in light and in dark. Marks stay
+   ink and grey on a transparent ground. Readouts: nothing here takes the pointer. */
+
+.qc {
+  /* satin ramp, lit → shade */
+  --qc-hi: var(--qs-bg);
+  --qc-m1: color-mix(in srgb, var(--qs-ink) 6%, var(--qs-bg));
+  --qc-m2: color-mix(in srgb, var(--qs-ink) 13%, var(--qs-bg));
+  --qc-m3: color-mix(in srgb, var(--qs-ink) 21%, var(--qs-bg));
+  --qc-m4: color-mix(in srgb, var(--qs-ink) 31%, var(--qs-bg));
+  --qc-recess: color-mix(in srgb, var(--qs-ink) 15%, var(--qs-bg));
+  /* brushed lines, glints and shading */
+  --qc-brush: color-mix(in srgb, var(--qs-ink) 7%, transparent);
+  --qc-glint: color-mix(in srgb, var(--qs-bg) 72%, transparent);
+  --qc-glint2: color-mix(in srgb, var(--qs-bg) 22%, transparent);
+  --qc-shade: color-mix(in srgb, var(--qs-ink) 24%, transparent);
+  --qc-shade2: color-mix(in srgb, var(--qs-ink) 11%, transparent);
+  --qc-dim: color-mix(in srgb, var(--qs-ink) 34%, transparent);
+  --qc-veil: color-mix(in srgb, var(--qs-ink) 5%, transparent);
+  --qc-lens: var(--qs-ink);
+
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  gap: 8px;
+  color: var(--qs-ink);
+  pointer-events: none;
+  user-select: none;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .qc {
+    --qc-hi: color-mix(in srgb, var(--qs-ink) 40%, var(--qs-bg));
+    --qc-m1: color-mix(in srgb, var(--qs-ink) 32%, var(--qs-bg));
+    --qc-m2: color-mix(in srgb, var(--qs-ink) 25%, var(--qs-bg));
+    --qc-m3: color-mix(in srgb, var(--qs-ink) 18%, var(--qs-bg));
+    --qc-m4: color-mix(in srgb, var(--qs-ink) 11%, var(--qs-bg));
+    --qc-recess: color-mix(in srgb, var(--qs-ink) 7%, var(--qs-bg));
+    --qc-glint: color-mix(in srgb, var(--qs-ink) 30%, transparent);
+    --qc-glint2: color-mix(in srgb, var(--qs-ink) 8%, transparent);
+    --qc-shade: color-mix(in srgb, var(--qs-bg) 85%, transparent);
+    --qc-shade2: color-mix(in srgb, var(--qs-bg) 50%, transparent);
+    --qc-dim: color-mix(in srgb, var(--qs-bg) 60%, transparent);
+    --qc-lens: var(--qs-bg);
+  }
+}
+:root[data-theme="dark"] .qc {
+  --qc-hi: color-mix(in srgb, var(--qs-ink) 40%, var(--qs-bg));
+  --qc-m1: color-mix(in srgb, var(--qs-ink) 32%, var(--qs-bg));
+  --qc-m2: color-mix(in srgb, var(--qs-ink) 25%, var(--qs-bg));
+  --qc-m3: color-mix(in srgb, var(--qs-ink) 18%, var(--qs-bg));
+  --qc-m4: color-mix(in srgb, var(--qs-ink) 11%, var(--qs-bg));
+  --qc-recess: color-mix(in srgb, var(--qs-ink) 7%, var(--qs-bg));
+  --qc-glint: color-mix(in srgb, var(--qs-ink) 30%, transparent);
+  --qc-glint2: color-mix(in srgb, var(--qs-ink) 8%, transparent);
+  --qc-shade: color-mix(in srgb, var(--qs-bg) 85%, transparent);
+  --qc-shade2: color-mix(in srgb, var(--qs-bg) 50%, transparent);
+  --qc-dim: color-mix(in srgb, var(--qs-bg) 60%, transparent);
+  --qc-lens: var(--qs-bg);
+}
+
+.qc--c { align-items: center; }
+.qc--idle .qc-art { opacity: .5; }
+.qc-art { position: relative; flex: none; }
+.qc-abs { position: absolute; }
+.qc-svg { position: absolute; left: 0; top: 0; overflow: visible; }
+
+/* the value line under (or over) a piece: sans name, mono value, light italic note */
+.qc-line { display: flex; align-items: baseline; gap: 6px; white-space: nowrap; }
+.qc-k { font: 500 12px/1 var(--qs-sans); color: var(--qs-ink); }
+.qc-v { font: 400 11px/1 var(--qs-mono); font-variant-numeric: tabular-nums; color: var(--qs-ink2); }
+.qc-w { font: 400 12px/1 var(--qs-sans); color: var(--qs-ink2); }
+.qc-n { font: 400 11px/1 var(--qs-sans); color: var(--qs-ink3); }
+
+/* small marks on the drawings */
+.qc-s { font: 400 11px/1 var(--qs-sans); color: var(--qs-ink3); white-space: nowrap; }
+.qc-m { font: 400 11px/1 var(--qs-mono); font-variant-numeric: tabular-nums; color: var(--qs-ink3); white-space: nowrap; }
+.qc-on { color: var(--qs-ink); }
+.qc-engr { text-shadow: 0 1px 0 var(--qc-glint); }
+
+/* svg strokes and text */
+.qc-k1, .qc-k3, .qc-k4 { fill: none; stroke-width: 1px; }
+.qc-k1 { stroke: var(--qs-ink); }
+.qc-k3 { stroke: var(--qs-ink3); }
+.qc-k4 { stroke: var(--qs-ink4); }
+.qc-f1 { fill: var(--qs-ink); stroke: none; }
+.qc-f3 { fill: var(--qs-ink3); }
+.qc-fv { fill: var(--qc-veil); }
+.qc-dash { stroke-dasharray: 2 3; }
+.qc-dot { stroke-dasharray: 1 2; }
+.qc-tm, .qc-ts { stroke: none; fill: var(--qs-ink3); }
+.qc-tm { font: 400 11px/1 var(--qs-mono); font-variant-numeric: tabular-nums; }
+.qc-tm9 { font-size: 11px; }
+.qc-ts { font: 400 11px/1 var(--qs-sans); }
+.qc-t1 { fill: var(--qs-ink); }
+
+/* satin bodies */
+.qc-knob {
+  border-radius: 50%;
+  background:
+    repeating-conic-gradient(from 0deg, var(--qc-glint2) 0deg 1.2deg, var(--qc-brush) 1.2deg 3.6deg),
+    conic-gradient(from 210deg, var(--qc-hi), var(--qc-m3), var(--qc-m1), var(--qc-m4), var(--qc-hi));
+  box-shadow: 0 1px 1.5px var(--qc-shade), 0 8px 18px var(--qc-shade2);
+}
+.qc-cap {
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 50% 26%, var(--qc-glint) 0%, transparent 60%),
+    conic-gradient(from 15deg, var(--qc-m1), var(--qc-m3), var(--qc-hi), var(--qc-m3), var(--qc-m1), var(--qc-m3), var(--qc-hi), var(--qc-m4), var(--qc-m1));
+  box-shadow: 0 0 0 1px var(--qc-glint2), 0 1px 2.5px var(--qc-shade);
+}
+.qc-face {
+  border-radius: 50%;
+  background:
+    repeating-radial-gradient(circle at 50% 50%, var(--qc-glint2) 0 1px, transparent 1px 2.5px),
+    radial-gradient(circle at 50% 26%, var(--qc-glint) 0%, transparent 60%),
+    conic-gradient(from 15deg, var(--qc-m1), var(--qc-m3), var(--qc-hi), var(--qc-m3), var(--qc-m1), var(--qc-m3), var(--qc-hi), var(--qc-m4), var(--qc-m1));
+  box-shadow: 0 0 0 1px var(--qc-glint2), 0 1px 2px var(--qc-shade);
+}
+.qc-bead {
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 32%, var(--qc-hi) 0%, var(--qc-m1) 38%, var(--qc-m3) 78%, var(--qc-m4) 100%);
+  box-shadow: 0 1px 1.5px var(--qc-shade), 0 5px 10px var(--qc-shade2);
+}
+.qc-recess {
+  background: var(--qc-recess);
+  box-shadow: inset 0 1px 3px var(--qc-shade), 0 1px 0 var(--qc-glint);
+}
+.qc-ink { background: var(--qs-ink); }
+.qc-lift { box-shadow: 0 1px 1.5px var(--qc-shade), 0 8px 18px var(--qc-shade2); }
+
+/* D2: the ring with a hole */
+.qc-ring {
+  -webkit-mask: radial-gradient(circle, transparent 50px, var(--qs-ink) 51px);
+  mask: radial-gradient(circle, transparent 50px, var(--qs-ink) 51px);
+}
+.qc-ringwrap { filter: drop-shadow(0 4px 7px var(--qc-shade2)); }
+
+/* D3: the coarse ring clicks between 0.05 detents */
+.qc-click { transition: transform 220ms var(--qs-ease); }
+
+/* D4: the knob turns to the active detent */
+.qc-turn { transition: transform 480ms var(--qs-ease); }
+
+/* D5: edge wheel */
+.qc-knurl { background: repeating-linear-gradient(90deg, var(--qc-hi) 0 2px, var(--qc-m3) 2px 3.5px); }
+.qc-wheelshade { background: linear-gradient(90deg, var(--qc-dim), transparent 30%, var(--qc-glint2) 50%, transparent 70%, var(--qc-dim)); }
+
+/* D6: dial states */
+.qc-ringmark { border-radius: 50%; border: 1px solid var(--qs-ink); box-sizing: border-box; }
+.qc-breathe { animation: qc-breathe 1.8s ease-in-out infinite; }
+@keyframes qc-breathe { 0%, 100% { opacity: 1 } 50% { opacity: .35 } }
+.qc-flag {
+  position: absolute; left: 50%; top: -10px; transform: translateX(-50%);
+  padding: 4px 8px; border-radius: 0; border: 1px solid var(--qs-ink); background: var(--qs-bg);
+  font: 400 11px/1 var(--qs-mono); font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--qs-ink);
+}
+.qc-press { transition: transform 120ms var(--qs-ease); }
+.qc-pressed { transform: scale(.97); }
+.qc-pressed-in { border-radius: 50%; box-shadow: inset 0 2px 6px var(--qc-shade); }
+.qc-states { display: flex; flex-direction: column; gap: 6px; }
+.qc-state { display: flex; align-items: center; gap: 7px; font: 400 11px/1 var(--qs-sans); color: var(--qs-ink3); white-space: nowrap; transition: color 200ms; }
+.qc-state i { width: 5px; height: 5px; border-radius: 50%; box-sizing: border-box; border: 1px solid var(--qs-ink4); }
+.qc-state--on { color: var(--qs-ink); font-weight: 500; }
+.qc-state--on i { background: var(--qs-ink); border-color: var(--qs-ink); }
+.qc-state .qc-v { color: inherit; font-size: 11px; }
+
+/* N1: drum */
+.qc-drum {
+  border-radius: 0;
+  background: linear-gradient(90deg, var(--qc-m4) 0%, var(--qc-m2) 16%, var(--qc-hi) 42%, var(--qc-m1) 58%, var(--qc-m3) 84%, var(--qc-m4) 100%);
+  box-shadow: 0 1px 1.5px var(--qc-shade), 0 8px 16px var(--qc-shade2);
+  overflow: hidden;
+}
+.qc-drumnum { position: absolute; top: 50%; font-family: var(--qs-mono); font-variant-numeric: tabular-nums; line-height: 1; white-space: nowrap; color: var(--qs-ink2); }
+
+/* N2: odometer */
+.qc-odo { display: flex; gap: 3px; padding: 6px; border-radius: 0; }
+.qc-digit {
+  position: relative; width: 24px; height: 36px; overflow: hidden; border-radius: 0;
+  background: linear-gradient(180deg, var(--qc-m4) 0%, var(--qc-m1) 30%, var(--qc-hi) 50%, var(--qc-m1) 70%, var(--qc-m4) 100%);
+}
+.qc-digits {
+  position: absolute; left: 0; right: 0; top: 0; display: flex; flex-direction: column; align-items: center;
+  font: 400 15px/19px var(--qs-mono); font-variant-numeric: tabular-nums; color: var(--qs-ink);
+  transition: transform 520ms var(--qs-ease);
+}
+.qc-digitwin {
+  position: absolute; inset: 0;
+  -webkit-mask: linear-gradient(180deg, color-mix(in srgb, var(--qs-ink) 30%, transparent) 0 28%, var(--qs-ink) 36% 64%, color-mix(in srgb, var(--qs-ink) 30%, transparent) 72% 100%);
+  mask: linear-gradient(180deg, color-mix(in srgb, var(--qs-ink) 30%, transparent) 0 28%, var(--qs-ink) 36% 64%, color-mix(in srgb, var(--qs-ink) 30%, transparent) 72% 100%);
+}
+.qc-odo--exact .qc-digitwin { opacity: .35; }
+
+/* N3: pull rod */
+.qc-rod {
+  border-radius: 0;
+  background: linear-gradient(180deg, var(--qc-m3) 0%, var(--qc-hi) 40%, var(--qc-m2) 60%, var(--qc-m4) 100%);
+  box-shadow: 0 2px 4px var(--qc-shade2);
+}
+.qc-grad { background: repeating-linear-gradient(270deg, var(--qc-dim) 0 1px, transparent 1px 22.5px); }
+
+/* N4: centre-detent slide */
+.qc-thumb {
+  border-radius: 0;
+  background: linear-gradient(90deg, var(--qc-hi) 0%, var(--qc-m1) 38%, var(--qc-m3) 52%, var(--qc-m2) 70%, var(--qc-hi) 100%);
+  box-shadow: 0 1px 1.5px var(--qc-shade), 0 6px 12px var(--qc-shade2);
+}
+.qc-ticks30 { background: repeating-linear-gradient(90deg, var(--qs-ink3) 0 1px, transparent 1px 30px); }
+
+/* N5: shift gate */
+.qc-gate-shadow { stroke: var(--qc-shade); }
+.qc-gate { stroke: var(--qc-recess); }
+
+/* N6: runner */
+.qc-runbar { border-radius: 0; background: linear-gradient(180deg, var(--qc-hi), var(--qc-m2) 55%, var(--qc-m1)); box-shadow: 0 1px 1.5px var(--qc-shade); }
+.qc-runrail { background: var(--qc-m3); }
+
+/* viewcam: trackball and the camera object */
+.qc-bezel {
+  border-radius: 50%;
+  background: repeating-conic-gradient(from 0deg, var(--qs-ink3) 0deg .8deg, transparent .8deg 15deg);
+  -webkit-mask: radial-gradient(closest-side, transparent calc(100% - 7px), var(--qs-ink) calc(100% - 6px));
+  mask: radial-gradient(closest-side, transparent calc(100% - 7px), var(--qs-ink) calc(100% - 6px));
+}
+.qc-ball {
+  border-radius: 50%;
+  background: radial-gradient(circle at 38% 30%, var(--qc-hi) 0%, var(--qc-m1) 28%, var(--qc-m3) 62%, var(--qc-m4) 100%);
+  box-shadow: 0 2px 3px var(--qc-shade), 0 12px 22px var(--qc-shade2);
+}
+.qc-cam {
+  position: absolute; width: 32px; height: 20px; margin: -10px 0 0 -16px; border-radius: 0;
+  background: linear-gradient(180deg, var(--qc-hi) 0%, var(--qc-m1) 48%, var(--qc-m3) 60%, var(--qc-m1) 100%);
+  box-shadow: 0 1px 1.5px var(--qc-shade), 0 5px 10px var(--qc-shade2);
+}
+.qc-cam__hood { position: absolute; right: -7px; top: 3px; width: 9px; height: 14px; border-radius: 0; background: linear-gradient(180deg, var(--qc-m1), var(--qc-m4)); }
+.qc-cam__lens {
+  position: absolute; right: -9px; top: 5px; width: 10px; height: 10px; border-radius: 50%;
+  background: radial-gradient(circle at 45% 40%, var(--qs-ink3) 0%, var(--qc-lens) 60%, var(--qc-lens) 100%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .qc-breathe { animation: none; }
+  .qc-click, .qc-turn, .qc-digits, .qc-press, .qc-state { transition: none; }
+}

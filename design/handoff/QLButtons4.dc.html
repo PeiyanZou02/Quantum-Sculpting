@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<div style="display:flex;flex-direction:column;gap:36px;color:var(--qs-ink)">
+  <div style="display:grid;grid-template-columns:72px 340px minmax(0,1fr);align-items:baseline;padding-top:14px;border-top:1px solid var(--qs-ink)"><span style="font:400 11px/1 'Geist Mono',monospace;color:var(--qs-ink3)">04</span><span style="font:400 28px/1.15 'TWK Everett',sans-serif">Buttons and inputs</span><span style="max-width:760px;font:400 14px/1.35 'TWK Everett',sans-serif;color:var(--qs-ink2);text-wrap:pretty">Pills in sentence case. A state changes the fill, the line or the motion, never the colour. The live row responds to hover and click.</span></div>
+  <div style="display:grid;grid-template-columns:110px repeat(7,minmax(0,1fr));row-gap:20px;align-items:center">
+    <span></span><sc-for list="{{ S }}" as="s" hint-placeholder-count="7"><span style="font:400 11px/1 'Geist Mono',monospace;color:var(--qs-ink3)">{{ s }}</span></sc-for>
+    <sc-for list="{{ matrix }}" as="row" hint-placeholder-count="4"><span style="font:400 11px/1 'Geist Mono',monospace">{{ row.k }}</span><sc-for list="{{ row.cells }}" as="c" hint-placeholder-count="7"><span style="justify-self:start;display:inline-flex;align-items:center;gap:7px;height:30px;padding:0 14px;border-radius:999px;border:{{ c.bd }};background:{{ c.bg }};color:{{ c.fg }};box-shadow:{{ c.sh }};transform:{{ c.tf }};font:400 11px/1 'Geist Mono',monospace;white-space:nowrap;box-sizing:border-box"><sc-if value="{{ c.spin }}"><span style="width:9px;height:9px;border-radius:50%;border:1px solid currentColor;border-right-color:transparent;box-sizing:border-box;animation:qs-spin .9s linear infinite"></span></sc-if>{{ c.t }}</span></sc-for></sc-for>
+  </div>
+  <div style="display:flex;align-items:center;flex-wrap:wrap;gap:16px;padding-top:24px;border-top:1px solid var(--qs-line)">
+    <span style="width:110px;font:400 11px/1 'Geist Mono',monospace;color:var(--qs-ink3)">Live</span>
+    <span onClick="{{ submit }}" style="display:inline-flex;align-items:center;gap:7px;height:30px;padding:0 14px;border-radius:999px;border:1px solid var(--qs-ink);font:400 11px/1 'Geist Mono',monospace;cursor:pointer;user-select:none;transition:background .15s,transform .1s" style-hover="background:rgba(21,22,24,.06)" style-active="background:#CBCCD0;transform:translateY(1px)"><sc-if value="{{ busy }}"><span style="width:9px;height:9px;border-radius:50%;border:1px solid currentColor;border-right-color:transparent;box-sizing:border-box;animation:qs-spin .9s linear infinite"></span></sc-if>{{ subLabel }}</span>
+    <span style="display:inline-flex;align-items:center;height:30px;padding:0 14px;border-radius:999px;border:1px solid var(--qs-ink);font:400 11px/1 'Geist Mono',monospace;cursor:pointer;user-select:none;transition:background .15s,transform .1s" style-hover="background:rgba(21,22,24,.06)" style-active="background:#CBCCD0;transform:translateY(1px)">Export STL</span>
+    <span style="display:inline-flex;align-items:center;height:30px;padding:0 14px;border-radius:999px;border:1px solid rgba(21,22,24,.26);color:var(--qs-ink2);font:400 11px/1 'Geist Mono',monospace;cursor:pointer;user-select:none;transition:background .15s,color .15s" style-hover="background:rgba(21,22,24,.06);color:#151618" style-active="background:#CBCCD0;transform:translateY(1px)">Use test cup</span>
+    <span style="display:inline-flex;align-items:center;gap:7px;height:30px;padding:0 14px;border-radius:999px;border:1px solid transparent;color:var(--qs-ink2);font:400 11px/1 'Geist Mono',monospace;cursor:pointer;user-select:none;transition:border-color .15s" style-hover="border-color:rgba(21,22,24,.26)" style-active="background:#CBCCD0">Reset view ↻</span>
+    <div style="display:inline-flex;padding:2px;border-radius:999px;border:1px solid rgba(21,22,24,.26)"><sc-for list="{{ segs }}" as="it" hint-placeholder-count="3"><span onClick="{{ it.on }}" style="display:inline-flex;align-items:center;height:24px;padding:0 12px;border-radius:999px;border:1px solid {{ it.bd }};background:{{ it.bg }};color:{{ it.fg }};font:400 11px/1 'Geist Mono',monospace;cursor:pointer;box-sizing:border-box;transition:background .2s,color .2s">{{ it.t }}</span></sc-for></div>
+    <sc-if value="{{ warn }}"><span style="display:flex;align-items:center;gap:8px;font:400 12px/1.3 'TWK Everett',sans-serif;color:var(--qs-ink2)"><span style="width:15px;height:15px;border-radius:50%;border:1px solid var(--qs-ink);box-sizing:border-box;display:flex;align-items:center;justify-content:center;font:500 9px/1 'Geist Mono',monospace">!</span>{{ tileMsg }}</span></sc-if>
+  </div>
+  <div style="display:grid;grid-template-columns:110px repeat(5,minmax(0,1fr));column-gap:24px;align-items:start;padding-top:24px;border-top:1px solid var(--qs-line)">
+    <span style="font:400 11px/1 'Geist Mono',monospace;color:var(--qs-ink3)">Text field</span>
+    <div style="display:flex;flex-direction:column;gap:8px"><span style="font:400 10px/1 'Geist Mono',monospace;color:var(--qs-ink3)">Default</span><span style="padding-bottom:7px;border-bottom:1px solid var(--qs-ink4);font:400 13px/1 'Geist Mono',monospace;color:var(--qs-ink3)">run name</span></div>
+    <div style="display:flex;flex-direction:column;gap:8px"><span style="font:400 10px/1 'Geist Mono',monospace;color:var(--qs-ink3)">Focus</span><span style="display:flex;align-items:center;gap:3px;padding-bottom:6px;border-bottom:2px solid var(--qs-ink);font:400 13px/1 'Geist Mono',monospace">run<span style="width:1px;height:14px;background:var(--qs-ink);animation:qs-blink 1s steps(1) infinite"></span></span></div>
+    <div style="display:flex;flex-direction:column;gap:8px"><span style="font:400 10px/1 'Geist Mono',monospace;color:var(--qs-ink3)">Filled</span><span style="padding-bottom:7px;border-bottom:1px solid var(--qs-ink);font:400 13px/1 'Geist Mono',monospace">run1</span></div>
+    <div style="display:flex;flex-direction:column;gap:8px"><span style="font:400 10px/1 'Geist Mono',monospace;color:var(--qs-ink3)">Error</span><span style="padding-bottom:7px;border-bottom:1px dashed var(--qs-ink);font:400 13px/1 'Geist Mono',monospace">run 1</span><span style="font:400 12px/1.3 'TWK Everett',sans-serif;color:var(--qs-ink2)">! No spaces in run names</span></div>
+    <div style="display:flex;flex-direction:column;gap:8px"><span style="font:400 10px/1 'Geist Mono',monospace;color:var(--qs-ink3)">Disabled</span><span style="padding-bottom:7px;border-bottom:1px dashed var(--qs-ink4);font:400 13px/1 'Geist Mono',monospace;color:var(--qs-ink4)">run1</span></div>
+  </div>
+  <div style="display:grid;grid-template-columns:110px repeat(5,minmax(0,1fr));column-gap:24px;align-items:center">
+    <span style="font:400 11px/1 'Geist Mono',monospace;color:var(--qs-ink3)">Switch</span>
+    <div style="display:flex;align-items:center;gap:10px"><span style="position:relative;width:34px;height:18px;border-radius:999px;border:1px solid var(--qs-ink4);box-sizing:border-box"><span style="position:absolute;left:3px;top:3px;width:10px;height:10px;border-radius:50%;box-shadow:inset 0 0 0 1px var(--qs-ink3)"></span></span><span style="font:400 11px/1 'Geist Mono',monospace;color:var(--qs-ink3)">Off</span></div>
+    <div style="display:flex;align-items:center;gap:10px"><span style="position:relative;width:34px;height:18px;border-radius:999px;border:1px solid var(--qs-ink);background:rgba(21,22,24,.06);box-sizing:border-box"><span style="position:absolute;left:3px;top:3px;width:10px;height:10px;border-radius:50%;box-shadow:inset 0 0 0 1px var(--qs-ink)"></span></span><span style="font:400 11px/1 'Geist Mono',monospace">Hover</span></div>
+    <div style="display:flex;align-items:center;gap:10px"><span style="position:relative;width:34px;height:18px;border-radius:999px;border:1px solid var(--qs-ink);box-sizing:border-box"><span style="position:absolute;left:3px;top:3px;width:16px;height:10px;border-radius:999px;background:var(--qs-ink)"></span></span><span style="font:400 11px/1 'Geist Mono',monospace">Pressed</span></div>
+    <div style="display:flex;align-items:center;gap:10px"><span style="position:relative;width:34px;height:18px;border-radius:999px;border:1px solid var(--qs-ink);box-sizing:border-box"><span style="position:absolute;right:3px;top:3px;width:10px;height:10px;border-radius:50%;background:var(--qs-ink)"></span></span><span style="font:400 11px/1 'Geist Mono',monospace">On · fill interior</span></div>
+    <div style="display:flex;align-items:center;gap:10px"><span style="position:relative;width:34px;height:18px;border-radius:999px;border:1px dashed var(--qs-ink4);box-sizing:border-box"><span style="position:absolute;right:3px;top:3px;width:10px;height:10px;border-radius:50%;background:var(--qs-ink4)"></span></span><span style="font:400 11px/1 'Geist Mono',monospace;color:var(--qs-ink4)">Disabled</span></div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1472,&quot;height&quot;:620}}">
+class Component extends DCLogic {
+  state = { sub: 0, seg: 1 };
+  componentWillUnmount() { clearTimeout(this.t1); clearTimeout(this.t2); }
+  renderVals() {
+    const S = ['Default', 'Hover', 'Pressed', 'Focus', 'Selected', 'Loading', 'Disabled'];
+    const K = [['Commit', 'Submit to Atlas →', '1px solid var(--qs-ink)', 'var(--qs-ink)', 'Submitting'], ['Line', 'Export STL', '1px solid var(--qs-ink)', 'var(--qs-ink)', 'Exporting'], ['Hairline', 'Use test cup', '1px solid rgba(21,22,24,.26)', 'var(--qs-ink2)', 'Loading'], ['Ghost', 'Reset view ↻', '1px solid transparent', 'var(--qs-ink2)', 'Resetting']];
+    const matrix = K.map(([k, t, bd, fg, busy]) => ({ k, cells: S.map(s => {
+      const c = { t, bd, fg, bg: 'transparent', sh: 'none', tf: 'none', spin: false };
+      if (s === 'Hover') { c.bg = 'rgba(21,22,24,.06)'; c.fg = 'var(--qs-ink)'; if (k === 'Ghost') c.bd = '1px solid rgba(21,22,24,.26)'; }
+      if (s === 'Pressed') { c.bg = '#CBCCD0'; c.tf = 'translateY(1px)'; c.fg = 'var(--qs-ink)'; }
+      if (s === 'Focus') c.sh = '0 0 0 3px rgba(21,22,24,.14)';
+      if (s === 'Selected') { c.bg = '#CBCCD0'; c.bd = '1px solid var(--qs-ink)'; c.fg = 'var(--qs-ink)'; }
+      if (s === 'Loading') { c.spin = true; c.fg = 'var(--qs-ink2)'; c.t = busy; }
+      if (s === 'Disabled') { c.bd = '1px dashed var(--qs-ink4)'; c.fg = 'var(--qs-ink4)'; }
+      return c; }) }));
+    const st = this.state.sub;
+    const submit = () => { if (st) return; this.setState({ sub: 1 }); this.t1 = setTimeout(() => this.setState({ sub: 2 }), 2400); this.t2 = setTimeout(() => this.setState({ sub: 0 }), 4600); };
+    const segs = ['16³', '32³', '64³', '128³', '256³'].map((t, i) => { const a = i === this.state.seg; return { t, on: () => this.setState({ seg: i }), bg: a ? '#CBCCD0' : 'transparent', bd: a ? 'var(--qs-ink)' : 'transparent', fg: a ? 'var(--qs-ink)' : 'var(--qs-ink2)' }; });
+    return { S, matrix, submit, busy: st === 1, subLabel: st === 1 ? 'Submitting' : st === 2 ? 'Submitted · job 7f3a ✓' : 'Submit to Atlas →', segs, warn: this.state.seg >= 2, tileMsg: ['', '', '64³ is split into 4 tiles of 32×32×64.', '128³ is split into 32 tiles, 3 run at a time.', '256³ is split into 256 tiles, 3 run at a time.'][this.state.seg] };
+  }
+}
+</script>
+</body>
+</html>

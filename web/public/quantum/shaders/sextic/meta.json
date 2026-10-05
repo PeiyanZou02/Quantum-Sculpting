@@ -1,0 +1,37 @@
+{
+  "stage": "sextic",
+  "n": 6,
+  "engine": "entanglement-shader-v1",
+  "params": {
+    "style": "peaked",
+    "layers": 5,
+    "reflectance": 0.6,
+    "absorption": 0.5,
+    "incoming_rays": 7,
+    "interaction": -0.5,
+    "resolution": 48
+  },
+  "job_id": "1cb73649-fcb0-4ae9-b683-e54b90ac98f0",
+  "output_asset_id": "e06f9e87-7ca1-4b44-841a-bc5f80d038b8",
+  "size_bytes": 34407,
+  "timeline": [
+    {
+      "status": "queued",
+      "at": "2026-10-04T02:46:21.887Z"
+    },
+    {
+      "status": "processing",
+      "at": "2026-10-04T02:46:27.115Z"
+    },
+    {
+      "status": "completed",
+      "at": "2026-10-04T02:49:29.946Z"
+    }
+  ],
+  "seconds": 188.742,
+  "files": [
+    "R_lut.hdr",
+    "T_lut.hdr",
+    "entanglement_texture.glsl"
+  ]
+}

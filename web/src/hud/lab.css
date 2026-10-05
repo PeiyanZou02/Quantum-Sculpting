@@ -1,0 +1,78 @@
+/* HUD lab marks: frame, meta, scan, steps, captures. Colours are tokens only (light and dark). */
+
+/* full-viewport layers: drawn over the view, never catch the pointer except their own controls */
+.qs-lab-layer { position: absolute; left: 0; top: 0; pointer-events: none; overflow: visible; }
+.qs-lab-hit { pointer-events: auto; }
+
+/* reset for clickable marks (steps, layer strokes, capture dots) */
+.qs-lab-btn {
+  appearance: none; border: 0; margin: 0; padding: 0; background: none; color: inherit; font: inherit;
+  cursor: pointer; pointer-events: auto; text-align: inherit;
+}
+.qs-lab-btn:focus-visible { outline: 1px solid var(--qs-ink); outline-offset: 3px; border-radius: 0; }
+
+/* metadata blocks */
+.qs-lab-meta { display: flex; flex-direction: column; gap: 7px; min-width: 176px; color: var(--qs-ink); font-variant-numeric: tabular-nums; }
+.qs-lab-meta__title {
+  display: flex; align-items: baseline; gap: 8px; padding-bottom: 7px; border-bottom: 1px solid var(--qs-line);
+  font: 500 12px/1 var(--qs-sans); letter-spacing: var(--qs-track);
+}
+.qs-lab-meta__title i { font-style: normal; color: var(--qs-ink3); letter-spacing: var(--qs-track); }
+.qs-lab-meta__row { display: grid; grid-template-columns: 64px minmax(0, 1fr); column-gap: 12px; align-items: baseline; }
+.qs-lab-meta__k { font: 400 12px/1.2 var(--qs-sans); letter-spacing: var(--qs-track); color: var(--qs-ink3); }
+.qs-lab-meta__v { font: 400 11px/1.2 var(--qs-mono); color: var(--qs-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px; }
+.qs-lab-meta__v--dim { color: var(--qs-ink3); }
+.qs-lab-meta-pair { display: flex; gap: 40px; align-items: flex-start; }
+
+/* the plate's title: kicker, display line, a sentence, provenance */
+.qs-lab-title { display: flex; flex-direction: column; width: 272px; color: var(--qs-ink); }
+.qs-lab-title__k { font: var(--qs-t-label); text-transform: uppercase; letter-spacing: var(--qs-track-label); color: var(--qs-ink2); padding-bottom: 8px; border-bottom: 1px solid var(--qs-ink); }
+.qs-lab-title__t { font: var(--qs-t-display); letter-spacing: -.01em; margin-top: 12px; text-wrap: balance; }
+.qs-lab-title__p { font: var(--qs-t-prose); color: var(--qs-ink2); margin: 8px 0 0; text-wrap: pretty; }
+.qs-lab-title__m { font: var(--qs-t-meta); color: var(--qs-ink); margin-top: 10px; font-variant-numeric: tabular-nums; }
+
+/* small label used across families */
+.qs-lab-label { font: 500 12px/1 var(--qs-sans); letter-spacing: var(--qs-track); color: var(--qs-ink); }
+.qs-lab-small { font: 400 11px/1 var(--qs-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* pills (index tabs, active items) */
+.qs-lab-pill {
+  display: inline-flex; align-items: center; height: 18px; padding: 0 7px; border-radius: 0; box-sizing: border-box;
+  border: 1px solid var(--qs-ink); background: var(--qs-bg); color: var(--qs-ink);
+  font: 400 11px/1 var(--qs-mono); font-variant-numeric: tabular-nums; white-space: nowrap;
+  transition: background .15s, color .15s, border-color .15s;
+}
+.qs-lab-pill--held { background: var(--qs-ink); color: var(--qs-bg); }
+.qs-lab-pill--ghost { border-style: dashed; border-color: var(--qs-ink2); color: var(--qs-ink2); }
+
+/* scan v1: sweep */
+.qs-lab-sweep { position: absolute; left: 0; right: 0; top: 0; height: 1.6px; background: var(--qs-ink); animation: qs-lab-sweep 3.2s ease-in-out both; }
+@keyframes qs-lab-sweep { from { top: 0% } to { top: 100% } }
+/* scan v4: marching ants */
+.qs-lab-march { animation: qs-lab-dash 1.2s linear infinite; }
+@keyframes qs-lab-dash { to { stroke-dashoffset: -8 } }
+
+/* steps */
+.qs-lab-ping { position: absolute; inset: -1px; border-radius: 50%; border: 1px solid var(--qs-ink); box-sizing: border-box; animation: qs-lab-ping 1.8s ease-out infinite; pointer-events: none; }
+@keyframes qs-lab-ping { 0% { transform: scale(1); opacity: .9 } 100% { transform: scale(2.6); opacity: 0 } }
+.qs-lab-blink { animation: qs-blink 1.2s ease-in-out infinite; }
+
+/* steps A: sliding pill */
+.qs-lab-slide { transition: left .35s cubic-bezier(.2, .8, .2, 1), width .35s cubic-bezier(.2, .8, .2, 1); }
+/* steps B: progress line */
+.qs-lab-grow { transition: width .5s cubic-bezier(.2, .8, .2, 1); }
+/* steps C: position bar */
+.qs-lab-move { transition: top .3s cubic-bezier(.2, .8, .2, 1); }
+/* steps D: needle */
+.qs-lab-turn { transition: transform .45s cubic-bezier(.2, .8, .2, 1); }
+.qs-lab-fade { transition: color .2s, background .3s, border-color .3s; }
+
+/* layer stack strokes */
+.qs-lab-stroke { transition: width .3s cubic-bezier(.2, .8, .2, 1), background .15s; }
+.qs-lab-stack:hover .qs-lab-row:hover .qs-lab-stroke:not(.is-cur) { background: var(--qs-ink3) !important; }
+
+@media (prefers-reduced-motion: reduce) {
+  .qs-lab-sweep { animation: none; top: 50%; }
+  .qs-lab-march, .qs-lab-ping, .qs-lab-blink { animation: none; }
+  .qs-lab-slide, .qs-lab-grow, .qs-lab-move, .qs-lab-turn, .qs-lab-fade, .qs-lab-stroke, .qs-lab-pill { transition: none; }
+}

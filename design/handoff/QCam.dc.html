@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<div style="display:flex;align-items:flex-end;gap:20px;color:#151618">
+  <div onMouseDown="{{ down }}" onMouseMove="{{ move }}" onMouseUp="{{ up }}" onMouseEnter="{{ enter }}" onMouseLeave="{{ leave }}" onDoubleClick="{{ dbl }}" style="position:relative;flex:none;width:188px;height:150px;cursor:{{ cur }};user-select:none">
+    <svg width="188" height="150" viewBox="0 0 188 150" style="position:absolute;left:0;top:0;overflow:visible">
+      <defs>
+        <linearGradient id="qc-m" gradientUnits="userSpaceOnUse" x1="20" y1="10" x2="170" y2="140"><stop offset="0" stop-color="#A9ABB0"></stop><stop offset=".28" stop-color="#F1F2F3"></stop><stop offset=".5" stop-color="#C6C8CC"></stop><stop offset=".72" stop-color="#F5F6F7"></stop><stop offset="1" stop-color="#A2A4A9"></stop></linearGradient>
+        <radialGradient id="qc-b" cx=".4" cy=".32" r=".75"><stop offset="0" stop-color="#FFFFFF"></stop><stop offset=".38" stop-color="#E4E5E8"></stop><stop offset=".78" stop-color="#C3C5CA"></stop><stop offset="1" stop-color="#AEB0B5"></stop></radialGradient>
+        <radialGradient id="qc-sh"><stop offset="0" stop-color="#14161C" stop-opacity=".1"></stop><stop offset="1" stop-color="#14161C" stop-opacity="0"></stop></radialGradient>
+      </defs>
+      <ellipse cx="94" cy="100" rx="80" ry="27" fill="url(#qc-sh)"></ellipse>
+      <path d="{{ ringB }}" fill="none" stroke="rgba(20,22,28,.3)" stroke-width="7.2"></path>
+      <path d="{{ ringB }}" fill="none" stroke="url(#qc-m)" stroke-width="6"></path>
+      <sc-for list="{{ ticks }}" as="t" hint-placeholder-count="0"><line x1="{{ t.x1 }}" y1="{{ t.y1 }}" x2="{{ t.x2 }}" y2="{{ t.y2 }}" stroke="{{ t.c }}" stroke-width="1"></line></sc-for>
+      <path d="M84 94H104" fill="none" stroke="#B3B5BB" stroke-width="1"></path>
+      <path d="{{ cube }}" fill="none" stroke="#8B8D93" stroke-width="1"></path>
+      <path d="{{ azArc }}" fill="none" stroke="#151618" stroke-width="{{ azW }}"></path>
+      <sc-if value="{{ ghost }}"><path d="{{ trail }}" fill="none" stroke="#151618" stroke-width="1" stroke-dasharray="2 3"></path><circle cx="{{ gx }}" cy="{{ gy }}" r="6.5" fill="none" stroke="#151618" stroke-width="1" stroke-dasharray="2 2"></circle></sc-if>
+      <path d="{{ yoke }}" fill="none" stroke="rgba(20,22,28,.3)" stroke-width="5.4"></path>
+      <path d="{{ yoke }}" fill="none" stroke="url(#qc-m)" stroke-width="4.2"></path>
+      <path d="{{ elArc }}" fill="none" stroke="#151618" stroke-width="1"></path>
+      <sc-for list="{{ et }}" as="t" hint-placeholder-count="0"><line x1="{{ t.x1 }}" y1="{{ t.y1 }}" x2="{{ t.x2 }}" y2="{{ t.y2 }}" stroke="#8B8D93" stroke-width="1"></line></sc-for>
+      <line x1="{{ bx }}" y1="{{ by }}" x2="{{ fx }}" y2="{{ fy }}" stroke="#8B8D93" stroke-width="1" stroke-dasharray="1 2.5"></line>
+      <circle cx="{{ fx }}" cy="{{ fy }}" r="1.6" fill="#8B8D93"></circle>
+      <line x1="{{ bx }}" y1="{{ by }}" x2="{{ ccx }}" y2="{{ ccy }}" stroke="#151618" stroke-width="1"></line>
+      <path d="{{ frus }}" fill="none" stroke="#151618" stroke-width="1"></path>
+      <path d="{{ ringF }}" fill="none" stroke="rgba(20,22,28,.3)" stroke-width="7.2"></path>
+      <path d="{{ ringF }}" fill="none" stroke="url(#qc-m)" stroke-width="6"></path>
+      <circle cx="{{ bx }}" cy="{{ by }}" r="{{ rr }}" fill="none" stroke="{{ rc }}" stroke-width="1" stroke-dasharray="{{ rd }}" opacity="{{ ro }}"></circle>
+      <circle cx="{{ bx }}" cy="{{ by }}" r="{{ br }}" fill="url(#qc-b)" stroke="rgba(20,22,28,.4)" stroke-width=".75"></circle>
+    </svg>
+    <sc-for list="{{ tl }}" as="l" hint-placeholder-count="0"><span style="position:absolute;left:{{ l.x }}px;top:{{ l.y }}px;transform:translate(-50%,-50%);font:400 9px/1 'Geist Mono',monospace;color:#55575D;white-space:nowrap;pointer-events:none">{{ l.t }}</span></sc-for>
+    <sc-if value="{{ hov }}"><span style="position:absolute;left:{{ azLx }}px;top:{{ azLy }}px;transform:translate(-50%,-50%);font:400 9px/1 'Geist Mono',monospace;white-space:nowrap;pointer-events:none">{{ azT }}</span><span style="position:absolute;left:{{ elLx }}px;top:{{ elLy }}px;transform:translate(0,-50%);font:400 9px/1 'Geist Mono',monospace;white-space:nowrap;pointer-events:none">{{ elT }}</span></sc-if>
+  </div>
+  <sc-if value="{{ full }}"><div style="display:flex;flex-direction:column;gap:12px;padding-bottom:22px">
+    <dc-import name="QReadout" title="Camera" kw="44" w="150" rows="{{ rows }}" hint-size="150px,70px"></dc-import>
+    <div style="display:flex;gap:4px"><sc-for list="{{ st }}" as="s" hint-placeholder-count="4"><span onClick="{{ s.on }}" style="display:inline-flex;align-items:center;height:20px;padding:0 8px;border-radius:999px;border:1px solid {{ s.bd }};background:{{ s.bg }};color:{{ s.fg }};font:400 10px/1 'Geist Mono',monospace;cursor:pointer;box-sizing:border-box" style-hover="border-color:#151618;color:#151618">{{ s.t }}</span></sc-for></div>
+  </div></sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:400,&quot;height&quot;:170},&quot;az&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;035&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;el&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;22&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;dist&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;2.40&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;state&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;live&quot;,&quot;hover&quot;,&quot;drag&quot;,&quot;snap&quot;],&quot;default&quot;:&quot;live&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;bare&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;}}">
+class Component extends DCLogic {
+  state = {};
+  componentWillUnmount() { cancelAnimationFrame(this.raf); }
+  base() { const p = this.props; return { az: parseFloat(p.az ?? 35) || 0, el: parseFloat(p.el ?? 22) || 0, dist: parseFloat(p.dist ?? 2.4) || 2.4 }; }
+  cur() { const b = this.base(), s = this.state; return { az: s.az ?? b.az, el: s.el ?? b.el, dist: s.dist ?? b.dist }; }
+  snap(a, e) {
+    cancelAnimationFrame(this.raf);
+    const c = this.cur(), da = ((a - c.az) % 360 + 540) % 360 - 180, t0 = performance.now();
+    this.setState({ snapTo: { az: a, el: e }, from: c.az, drag: false });
+    const step = t => {
+      const k = Math.min(1, (t - t0) / 480), q = 1 - Math.pow(1 - k, 3);
+      this.setState({ az: ((c.az + da * q) % 360 + 360) % 360, el: c.el + (e - c.el) * q });
+      if (k < 1) this.raf = requestAnimationFrame(step); else this.setState({ snapTo: null });
+    };
+    this.raf = requestAnimationFrame(step);
+  }
+  renderVals() {
+    const p = this.props, s = this.state, f = p.state || 'live', { az, el, dist } = this.cur();
+    const drag = !!s.drag || f === 'drag', hov = drag || !!s.hov || f === 'hover' || f === 'snap';
+    const cx = 94, cy = 94, R = 62, sT = .34, cT = .9404, r = Math.PI / 180, n1 = v => v.toFixed(1);
+    const P = v => [cx + R * v[0], cy - R * (v[2] * cT + v[1] * sT)];
+    const G = (t, k = 1) => [k * Math.sin(t * r), -k * Math.cos(t * r), 0];
+    const Qa = (a, e, k = 1) => [k * Math.cos(e * r) * Math.sin(a * r), -k * Math.cos(e * r) * Math.cos(a * r), k * Math.sin(e * r)];
+    const pt = v => { const q = P(v); return n1(q[0]) + ' ' + n1(q[1]); };
+    const poly = (fn, a, b, n) => { let d = ''; for (let i = 0; i <= n; i++) d += (i ? 'L' : 'M') + pt(fn(a + (b - a) * i / n)); return d; };
+    const half = front => { const a = R, b = R * sT; return front ? `M${cx + a} ${cy}A${a} ${n1(b)} 0 0 1 ${cx - a} ${cy}` : `M${cx - a} ${cy}A${a} ${n1(b)} 0 0 1 ${cx + a} ${cy}`; };
+    const aS = az > 180 ? az - 360 : az;
+    const ticks = Array.from({ length: 24 }, (_, i) => { const t = i * 15, mj = t % 90 === 0, a = P(G(t, 1.08)), b = P(G(t, mj ? 1.22 : 1.14)); return { x1: n1(a[0]), y1: n1(a[1]), x2: n1(b[0]), y2: n1(b[1]), c: mj ? '#151618' : Math.cos(t * r) < -.01 ? '#B3B5BB' : '#8B8D93' }; });
+    const tl = hov ? [0, 90, 180, 270].map(t => { const a = P(G(t, 1.4)); return { x: n1(a[0]), y: n1(a[1]), t: String(t).padStart(3, '0') }; }) : [];
+    const et = hov ? [15, 30, 45, 60, 75, 90].map(e => { const a = P(Qa(az, e, 1.08)), b = P(Qa(az, e, e % 45 ? 1.14 : 1.22)); return { x1: n1(a[0]), y1: n1(a[1]), x2: n1(b[0]), y2: n1(b[1]) }; }) : [];
+    const h = .15, z = .32, V = [[-h, -h, 0], [h, -h, 0], [h, h, 0], [-h, h, 0], [-h, -h, z], [h, -h, z], [h, h, z], [-h, h, z]].map(P);
+    const cube = [[0, 1], [1, 2], [2, 3], [3, 0], [4, 5], [5, 6], [6, 7], [7, 4], [0, 4], [1, 5], [2, 6], [3, 7]].map(([a, b]) => `M${n1(V[a][0])} ${n1(V[a][1])}L${n1(V[b][0])} ${n1(V[b][1])}`).join('');
+    const B = P(Qa(az, el)), F = P(G(az, Math.cos(el * r))), C = P([0, 0, .16]);
+    const dx = C[0] - B[0], dy = C[1] - B[1], L = Math.hypot(dx, dy) || 1, ux = dx / L, uy = dy / L;
+    const fr = a => { const c = Math.cos(a), si = Math.sin(a); return `M${n1(B[0])} ${n1(B[1])}l${n1((ux * c - uy * si) * 18)} ${n1((ux * si + uy * c) * 18)}`; };
+    const tgt = s.snapTo || (f === 'snap' ? { az: 45, el: 35 } : null);
+    let ghost = false, trail = '', gx = 0, gy = 0;
+    if (tgt) { ghost = true; const g = P(Qa(tgt.az, tgt.el)); gx = n1(g[0]); gy = n1(g[1]); const fa = s.snapTo ? s.from : az, d = ((tgt.az - fa) % 360 + 540) % 360 - 180; trail = Math.abs(d) > .5 ? poly(t => G(t), fa, fa + d, 18) : ''; }
+    const azL = P(G(aS / 2, .74)), elL = P(Qa(az, el / 2, .66));
+    const fA = v => String(Math.round(((v % 360) + 360) % 360) % 360).padStart(3, '0') + '°', sg = v => (v >= 0 ? '+' : '−') + Math.abs(Math.round(v)) + '°';
+    let rows = `Az|${fA(az)};El|${Math.round(el)}°;Dist|${dist.toFixed(2)}`;
+    if (drag) { const dA = s.drag ? ((az - s.a0) % 360 + 540) % 360 - 180 : 12, dE = s.drag ? el - s.e0 : -4; rows = `Az|${fA(az)}|${sg(dA)};El|${Math.round(el)}°|${sg(dE)};Dist|${dist.toFixed(2)}|`; }
+    const st = [['Front', 0, 0], ['Side', 90, 0], ['Top', 0, 89], ['Iso', 45, 35]].map(([t, a, e]) => { const on = Math.abs(((az - a) % 360 + 540) % 360 - 180) < 1 && Math.abs(el - e) < 1; return { t, on: () => this.snap(a, e), bd: on ? '#151618' : 'rgba(21,22,24,.26)', bg: on ? '#CBCCD0' : 'transparent', fg: on ? '#151618' : '#55575D' }; });
+    return {
+      ringB: half(false), ringF: half(true), ticks, tl, et, cube,
+      azArc: Math.abs(aS) > .5 ? poly(t => G(t), 0, aS, 24) : '', azW: hov ? 1.6 : 1,
+      yoke: poly(e => Qa(az, e), 0, 180, 36), elArc: el > .5 ? poly(e => Qa(az, e, .88), 0, el, 14) : '',
+      bx: n1(B[0]), by: n1(B[1]), fx: n1(F[0]), fy: n1(F[1]), ccx: n1(C[0]), ccy: n1(C[1]), frus: fr(.3) + fr(-.3),
+      br: drag ? 7.5 : 6.5, rr: 11.5, rc: drag ? '#151618' : '#8B8D93', rd: drag ? 'none' : '2 2', ro: hov ? 1 : 0,
+      ghost, trail, gx, gy, hov, azLx: n1(azL[0]), azLy: n1(azL[1]), elLx: n1(elL[0] + 8), elLy: n1(elL[1]), azT: 'az ' + fA(az), elT: 'el ' + Math.round(el) + '°',
+      rows, st, full: !(p.bare ?? false), cur: drag ? 'grabbing' : 'grab',
+      down: e => { cancelAnimationFrame(this.raf); const c = this.cur(); this.setState({ drag: true, x0: e.clientX, y0: e.clientY, a0: c.az, e0: c.el, d0: c.dist, snapTo: null }); },
+      move: e => { if (!s.drag) return; const rc = e.currentTarget.getBoundingClientRect(), k = 188 / (rc.width || 188), mx = (e.clientX - s.x0) * k, my = (e.clientY - s.y0) * k; if (e.shiftKey) this.setState({ dist: Math.max(.6, Math.min(8, s.d0 + my * .02)) }); else this.setState({ az: ((s.a0 + mx * 1.2) % 360 + 360) % 360, el: Math.max(0, Math.min(89, s.e0 - my * .8)) }); },
+      up: () => this.setState({ drag: false }), enter: () => this.setState({ hov: true }), leave: () => this.setState({ hov: false, drag: false }),
+      dbl: () => { const b = this.base(); this.snap(b.az, b.el); }
+    };
+  }
+}
+</script>
+</body>
+</html>

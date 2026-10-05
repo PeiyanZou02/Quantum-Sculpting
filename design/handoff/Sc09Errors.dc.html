@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet"><style>@font-face{font-family:'TWK Everett';src:url(fonts/TWKEverett-Book.ttf) format('truetype');font-weight:300 500;font-style:normal;font-display:swap}body{margin:0;background:#D6D7DA}a{color:#151618}a:hover{color:#55575D}</style><script src="qvoxel.js"></script></helmet>
+<div data-screen-label="Errors" style="position:relative;width:1920px;height:1080px;overflow:hidden;background:#E3E4E7;color:#151618;--qs-bg:#E3E4E7;--qs-ink:#151618;--qs-ink2:#55575D;--qs-ink3:#8B8D93;--qs-ink4:#B3B5BB;--qs-line:rgba(21,22,24,.16)">
+  <div data-vox="field" data-theme="light" data-mode="qpu" data-fit="1.3" data-elev="24" style="position:absolute;left:432px;top:112px;width:1056px;height:720px;opacity:.55"></div>
+  <dc-import name="SculptorChrome" step="2" run="run2|64³ coverage|atlas|paused|2 of 6 tiles" atlas="bad" view="2" avail="3" style="position:absolute;left:0;top:0" hint-size="1920px,1080px"></dc-import>
+  <div style="position:absolute;left:472px;top:128px;width:620px;display:flex;flex-direction:column;gap:12px">
+    <div style="display:flex;justify-content:space-between;font:400 11px/1 'Geist Mono',monospace"><span>Atlas · paused</span><span style="color:#55575D">tiles halved · 6 jobs</span></div>
+    <div style="display:flex;gap:4px"><sc-for list="{{ jt }}" as="t" hint-placeholder-count="6"><div style="flex:{{ t.f }};display:flex;flex-direction:column;gap:6px"><div style="height:4px;box-sizing:border-box;border:{{ t.bd }};background:{{ t.bg }}"></div><span style="font:400 10px/1 'Geist Mono',monospace;color:{{ t.fg }}">{{ t.t }}</span></div></sc-for></div>
+    <div style="display:flex;gap:10px;align-items:flex-start;margin-top:6px"><span style="flex:none;width:16px;height:16px;border-radius:50%;border:1px solid #151618;box-sizing:border-box;display:flex;align-items:center;justify-content:center;font:500 9px/1 'Geist Mono',monospace">!</span><div style="display:flex;flex-direction:column;gap:6px"><span style="font:400 13px/1.35 'TWK Everett',sans-serif">Tile 3 was over the 2 MB result limit. Tiles were halved to 32 × 32 × 32 and the limit is remembered.</span><span style="font:400 11px/1 'Geist Mono',monospace;color:#8B8D93">TMPRL1103 · payload over the error limit</span></div></div>
+  </div>
+  <svg width="140" height="60" viewBox="0 0 140 60" style="position:absolute;left:1640px;top:56px;overflow:visible"><polyline points="130,2 130,24 10,24 10,46" fill="none" stroke="#151618" stroke-width="1" stroke-dasharray="1 3"></polyline></svg>
+  <div style="position:absolute;left:1528px;top:108px;width:344px;display:flex;gap:10px;align-items:flex-start"><span style="flex:none;width:16px;height:16px;border-radius:50%;border:1px solid #151618;box-sizing:border-box;display:flex;align-items:center;justify-content:center;font:500 9px/1 'Geist Mono',monospace">!</span><div style="display:flex;flex-direction:column;gap:8px"><span style="font:400 13px/1.35 'TWK Everett',sans-serif">Atlas rejected the key. The run is paused; nothing is lost.</span><span style="font:400 11px/1 'Geist Mono',monospace;color:#8B8D93">HTTP 401 · unauthorized</span><div style="display:flex"><dc-import name="QPill" kind="line" size="s" label="Set a new key" hint-size="110px,22px"></dc-import></div></div></div>
+  <div style="position:absolute;left:48px;top:260px;width:344px;display:flex;flex-direction:column;gap:24px">
+    <div style="display:flex;flex-direction:column;gap:10px"><span style="font:400 11px/1 'Geist Mono',monospace;color:#8B8D93">Step 03</span><span style="font:400 28px/1.1 'TWK Everett',sans-serif">Quantum</span><span style="font:400 14px/1.35 'TWK Everett',sans-serif;color:#55575D;text-wrap:pretty">Two tiles are back and cached. Resuming sends only the four that are missing.</span></div>
+    <dc-import name="QReadout" title="Sent" kw="96" w="344" rows="Strength|0.30;Reach|0.00;Style|x;Tiles|6 of 32 × 32 × 32;Run|run2" hint-size="344px,90px"></dc-import>
+  </div>
+  <div style="position:absolute;left:48px;top:1000px;display:flex;align-items:center;gap:8px"><dc-import name="QPill" kind="line" label="Resume · 4 tiles left" arrow="→" hint-size="190px,30px"></dc-import><dc-import name="QPill" kind="ghost" label="Discard run" hint-size="110px,30px"></dc-import></div>
+  <div style="position:absolute;left:1528px;top:240px;width:344px;display:flex;flex-direction:column;gap:26px">
+    <div style="display:flex;flex-direction:column;gap:12px"><span style="font:600 10px/1 'Geist Mono',monospace;letter-spacing:.04em">TILES</span><div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px"><sc-for list="{{ tiles }}" as="t" hint-placeholder-count="4"><div style="display:flex;gap:4px;height:64px"><sc-for list="{{ t.parts }}" as="p" hint-placeholder-count="1"><div style="position:relative;flex:1;box-sizing:border-box;border:{{ p.bd }};background:{{ p.bg }}"><span style="position:absolute;left:5px;top:5px;padding:2px 4px;background:#E3E4E7;font:400 10px/1 'Geist Mono',monospace">{{ p.t }}</span></div></sc-for></div></sc-for></div></div>
+    <div style="display:flex;flex-direction:column;gap:7px;padding-top:18px;border-top:1px solid rgba(21,22,24,.16);font:400 11px/1.3 'Geist Mono',monospace;font-variant-numeric:tabular-nums;color:#55575D"><span style="font:600 10px/1 'Geist Mono',monospace;letter-spacing:.04em;color:#151618;margin-bottom:3px">LOG</span><span>14:06:20  tile 1 completed · cached</span><span>14:06:22  tile 2 completed · cached</span><span style="color:#151618">14:06:23  ! tile 3 · TMPRL1103 · halving</span><span style="color:#151618">14:06:24  ! poll · HTTP 429 · wait 4 s</span><span style="color:#151618">14:06:31  ! submit 3a · HTTP 401 · paused</span></div>
+    <div style="display:flex;gap:10px;align-items:flex-start"><span style="flex:none;width:16px;height:16px;border-radius:50%;border:1px solid #151618;box-sizing:border-box;display:flex;align-items:center;justify-content:center;font:500 9px/1 'Geist Mono',monospace">!</span><div style="display:flex;flex-direction:column;gap:6px"><span style="font:400 13px/1.35 'TWK Everett',sans-serif">Too many requests. Status polls slowed from every 2 s to every 4 s.</span><span style="font:400 11px/1 'Geist Mono',monospace;color:#8B8D93">HTTP 429 · rate limited</span></div></div>
+  </div>
+  <div style="position:absolute;left:432px;top:872px;width:1056px;display:flex;flex-direction:column">
+    <div style="display:grid;grid-template-columns:160px minmax(0,1fr) minmax(0,1fr);column-gap:28px;padding-bottom:10px;border-bottom:1px solid #151618;font:400 10px/1 'Geist Mono',monospace;color:#8B8D93"><span>Code</span><span>What happened</span><span>What the app does</span></div>
+    <sc-for list="{{ errs }}" as="e" hint-placeholder-count="3"><div style="display:grid;grid-template-columns:160px minmax(0,1fr) minmax(0,1fr);column-gap:28px;padding:11px 0;border-bottom:1px solid rgba(21,22,24,.16);align-items:baseline"><span style="font:400 11px/1 'Geist Mono',monospace">{{ e.c }}</span><span style="font:400 13px/1.3 'TWK Everett',sans-serif">{{ e.w }}</span><span style="font:400 13px/1.3 'TWK Everett',sans-serif;color:#55575D">{{ e.a }}</span></div></sc-for>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1920,&quot;height&quot;:1080}}">
+class Component extends DCLogic {
+  renderVals() {
+    const done = ['1px solid #151618', '#151618'], q = ['1px solid #B3B5BB', 'transparent'];
+    const P = (t, s) => ({ t, bd: s[0], bg: s[1] });
+    return {
+      jt: [['Tile 1 · done', 2, done, '#151618'], ['Tile 2 · done', 2, done, '#151618'], ['3a', 1, q, '#8B8D93'], ['3b', 1, q, '#8B8D93'], ['4a', 1, q, '#8B8D93'], ['4b', 1, q, '#8B8D93']].map(([t, f, s, fg]) => ({ t, f, bd: s[0], bg: s[1], fg })),
+      tiles: [[P('1', done)], [P('2', done)], [P('3a', q), P('3b', q)], [P('4a', q), P('4b', q)]].map(parts => ({ parts })),
+      errs: [{ c: 'TMPRL1103', w: 'A tile result was over the 2 MB limit.', a: 'Halves the tiles, remembers the limit and carries on.' }, { c: 'HTTP 429', w: 'Atlas asked for fewer requests.', a: 'Slows status polls and retries.' }, { c: 'HTTP 401', w: 'The saved key was rejected.', a: 'Pauses the run until a new key is saved; cached tiles are kept.' }]
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,44 @@
+/* Shared styles for the object-slot HUD marks: bounds, focus, selection, callout. */
+.qs-hud {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+  pointer-events: none;
+  user-select: none;
+}
+.qs-hud text { font-variant-numeric: tabular-nums; }
+/* Label ground: a 3px bg halo painted under the glyphs, never a box. */
+.qs-hud-halo {
+  paint-order: stroke fill;
+  stroke: var(--qs-bg);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+}
+.qs-hud-anim { transform-box: view-box; }
+
+/* selection v2: corners close in over 240 ms. */
+@keyframes qs-hud-lock {
+  0% { transform: scale(1.6); opacity: 0; }
+  70% { transform: scale(.96); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.qs-hud-lock { animation: qs-hud-lock 240ms cubic-bezier(.2, .8, .2, 1) both; }
+
+/* focus v4: breathes once (480 ms, ease-out). */
+@keyframes qs-hud-breathe {
+  0% { transform: scale(1); }
+  35% { transform: scale(1.07); }
+  100% { transform: scale(1); }
+}
+.qs-hud-breathe { animation: qs-hud-breathe 480ms var(--qs-ease, ease-out) both; }
+
+/* bounds v4: dashed corners close in on the object. --dx/--dy set per corner. */
+@keyframes qs-hud-close {
+  from { transform: translate(var(--dx, 0), var(--dy, 0)); opacity: 0; }
+  to { transform: translate(0, 0); opacity: 1; }
+}
+.qs-hud-close { animation: qs-hud-close 480ms var(--qs-ease, ease-out) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .qs-hud-lock, .qs-hud-breathe, .qs-hud-close { animation: none; }
+}

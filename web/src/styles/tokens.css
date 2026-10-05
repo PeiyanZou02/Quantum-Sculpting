@@ -1,0 +1,101 @@
+/* Quicksilver tokens. One typeface throughout: TWK Everett Mono (licensed; the files live in public/fonts/,
+   git-ignored). Upright only, two weights. Without the files the stack falls back to the system mono. */
+@font-face { font-family: 'TWK Everett Mono'; src: url('/fonts/TWKEverettMono-Regular.woff2') format('woff2'); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: 'TWK Everett Mono'; src: url('/fonts/TWKEverettMono-Medium.woff2') format('woff2'); font-weight: 500; font-style: normal; font-display: swap; }
+@font-face { font-family: 'TWK Everett Mono'; src: url('/fonts/TWKEverettMono-Bold.woff2') format('woff2'); font-weight: 700; font-style: normal; font-display: swap; }
+
+:root {
+  --qs-scheme: light;
+  color-scheme: light;
+  /* neutral greys after IBM Carbon (Gray 10 / Gray 100): no tint, no accent */
+  --qs-bg: #F4F4F4;
+  --qs-canvas: #E0E0E0;
+  --qs-ink: #161616;
+  --qs-ink2: #525252;
+  --qs-ink3: #6F6F6F;
+  --qs-ink4: #A8A8A8;
+  --qs-line: rgba(22, 22, 22, .14);
+  --qs-ctl: rgba(22, 22, 22, .32);
+  --qs-sel: #E0E0E0;
+  --qs-faint: rgba(22, 22, 22, .06);
+  --qs-dot: #C6C6C6;
+  --qs-scrim: rgba(244, 244, 244, .9);
+
+  /* Metal: physical controls only */
+  --qs-metal-band: linear-gradient(90deg, #A9ABB0 0%, #F1F2F3 28%, #C6C8CC 50%, #F5F6F7 72%, #A2A4A9 100%);
+  --qs-metal-bead: radial-gradient(circle at 40% 32%, #FFFFFF 0%, #E4E5E8 38%, #C3C5CA 78%, #AEB0B5 100%);
+  --qs-puck-shadow: 0 1px 1.5px rgba(20, 22, 28, .28), 0 5px 10px rgba(20, 22, 28, .16);
+  --qs-recess: #C4C6CB;
+  --qs-recess-shadow: inset 0 1px 3px rgba(20, 22, 28, .4), 0 1px 0 rgba(255, 255, 255, .75);
+
+  /* one family: --qs-sans is kept as a name so older rules resolve to the same mono */
+  --qs-mono: 'TWK Everett Mono', 'SF Mono', ui-monospace, Menlo, Consolas, 'Liberation Mono', monospace;
+  --qs-sans: var(--qs-mono);
+
+  /* type roles (Swiss: few sizes, set by role, never by place). Size/line-height pairs on a 4px rhythm. */
+  --qs-t-display: 500 20px/24px var(--qs-mono);   /* hero figures */
+  --qs-t-title: 500 12px/16px var(--qs-mono);     /* app name, section and panel titles */
+  --qs-t-body: 400 12px/16px var(--qs-mono);      /* values, controls, list rows, sentences */
+  --qs-t-prose: 400 12px/18px var(--qs-mono);     /* help and descriptions: looser for reading */
+  --qs-t-label: 500 11px/12px var(--qs-mono);     /* field labels, kickers, column heads: upper case, tracked */
+  --qs-t-meta: 400 11px/16px var(--qs-mono);      /* secondary facts; the smallest size anywhere */
+  /* tracking: TWK Everett Mono sets wide, so text is tightened; labels open only a little */
+  --qs-track: -.035em;
+  --qs-track-label: .01em;
+
+  --qs-snap: 480ms;
+  --qs-ease: cubic-bezier(.215, .61, .355, 1);
+}
+
+/* Dark: same structure, ink and ground swapped. Follows the system unless the page sets data-theme. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --qs-scheme: dark; color-scheme: dark;
+    --qs-bg: #1C1C1C; --qs-canvas: #0F0F0F;
+    --qs-ink: #F4F4F4; --qs-ink2: #C6C6C6; --qs-ink3: #A8A8A8; --qs-ink4: #525252;
+    --qs-line: rgba(244, 244, 244, .14); --qs-ctl: rgba(244, 244, 244, .3); --qs-sel: #393939;
+    --qs-faint: rgba(244, 244, 244, .06); --qs-dot: #393939; --qs-scrim: rgba(22, 22, 22, .9);
+  }
+}
+:root[data-theme="dark"] {
+  --qs-scheme: dark; color-scheme: dark;
+  --qs-bg: #1C1C1C; --qs-canvas: #0F0F0F;
+  --qs-ink: #F4F4F4; --qs-ink2: #C6C6C6; --qs-ink3: #A8A8A8; --qs-ink4: #525252;
+  --qs-line: rgba(244, 244, 244, .14); --qs-ctl: rgba(244, 244, 244, .3); --qs-sel: #393939;
+  --qs-faint: rgba(244, 244, 244, .06); --qs-dot: #393939; --qs-scrim: rgba(22, 22, 22, .9);
+}
+
+@keyframes qs-blink { 0%, 100% { opacity: 1 } 50% { opacity: .2 } }
+@keyframes qs-spin { to { transform: rotate(360deg) } }
+@keyframes qs-sweep { from { transform: translateY(0) } to { transform: translateY(100%) } }
+
+html, body, #root { margin: 0; height: 100%; }
+body {
+  background: var(--qs-bg);
+  color: var(--qs-ink);
+  font: var(--qs-t-body);
+  letter-spacing: var(--qs-track);
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+button, input, select { font: inherit; color: inherit; }
+* { box-sizing: border-box; }
+
+/* type scale: one class per role (see the --qs-t-* tokens) */
+.qs-title  { font: var(--qs-t-display); letter-spacing: var(--qs-track); }
+.qs-app    { font: var(--qs-t-title); text-transform: uppercase; letter-spacing: var(--qs-track-label); }
+.qs-sub    { font: var(--qs-t-title); }
+.qs-body   { font: var(--qs-t-body); }
+.qs-prose  { font: var(--qs-t-prose); color: var(--qs-ink2); text-wrap: pretty; }
+.qs-cap    { font: var(--qs-t-body); color: var(--qs-ink2); }
+.qs-mono   { font: var(--qs-t-meta); font-variant-numeric: tabular-nums; }
+.qs-small  { font: var(--qs-t-meta); font-variant-numeric: tabular-nums; }
+.qs-field  { font: var(--qs-t-body); font-variant-numeric: tabular-nums; }
+.qs-hero   { font: var(--qs-t-display); font-variant-numeric: tabular-nums; }
+.qs-label  { font: var(--qs-t-label); text-transform: uppercase; letter-spacing: var(--qs-track-label); }
+.qs-rule   { height: 1px; background: var(--qs-line); border: 0; margin: 0; }
+
+/* forced inks for PNG exports (see savePng) */
+.ink-dark { --qs-bg: #F4F4F4; --qs-ink: #161616; --qs-ink2: #525252; --qs-ink3: #6F6F6F; --qs-ink4: #A8A8A8; --qs-line: rgba(22, 22, 22, .14); --qs-ctl: rgba(22, 22, 22, .32); --qs-sel: #E0E0E0; --qs-faint: rgba(22, 22, 22, .06); --qs-dot: #C6C6C6; }
+.ink-light { --qs-bg: #1C1C1C; --qs-ink: #F4F4F4; --qs-ink2: #C6C6C6; --qs-ink3: #A8A8A8; --qs-ink4: #525252; --qs-line: rgba(244, 244, 244, .14); --qs-ctl: rgba(244, 244, 244, .3); --qs-sel: #393939; --qs-faint: rgba(244, 244, 244, .06); --qs-dot: #393939; }

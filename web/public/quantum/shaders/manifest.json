@@ -1,0 +1,85 @@
+{
+  "engine": "entanglement-shader-v1",
+  "shaders": [
+    {
+      "id": "quadric",
+      "label": "Peaked \u00b7 2 layers",
+      "engine": "entanglement-shader-v1",
+      "job_id": "a0a286ea-db53-4796-b5a1-9a5c092038e3",
+      "seconds": 511.0,
+      "params": {
+        "style": "peaked",
+        "layers": 2,
+        "reflectance": 0.2,
+        "absorption": 0.95,
+        "incoming_rays": 8,
+        "interaction": 1,
+        "resolution": 48
+      }
+    },
+    {
+      "id": "cubic",
+      "label": "Frustrated \u00b7 3 layers",
+      "engine": "entanglement-shader-v1",
+      "job_id": "b6c32766-5096-446d-a847-1fe9ed2fdf90",
+      "seconds": 481.5,
+      "params": {
+        "style": "frustrated",
+        "layers": 3,
+        "reflectance": 0.35,
+        "absorption": 0.8,
+        "incoming_rays": 6,
+        "interaction": 1,
+        "resolution": 48
+      }
+    },
+    {
+      "id": "quartic",
+      "label": "3-body \u00b7 3 layers",
+      "engine": "entanglement-shader-v1",
+      "job_id": "edc48d12-ae86-4148-a697-51b6b6228983",
+      "seconds": 502.4,
+      "params": {
+        "style": "3-body",
+        "layers": 3,
+        "reflectance": 0.5,
+        "absorption": 0.6,
+        "incoming_rays": 6,
+        "interaction": -1,
+        "resolution": 48
+      }
+    },
+    {
+      "id": "quintic",
+      "label": "Constrained \u00b7 4 layers",
+      "engine": "entanglement-shader-v1",
+      "job_id": "7c7620ac-2d8e-46bd-bc98-a2aa72f62be9",
+      "seconds": 504.1,
+      "params": {
+        "style": "constrained",
+        "layers": 4,
+        "reflectance": 0.3,
+        "absorption": 0.9,
+        "incoming_rays": 8,
+        "interaction": 1.5,
+        "resolution": 48
+      }
+    },
+    {
+      "id": "sextic",
+      "label": "Peaked \u00b7 5 layers",
+      "engine": "entanglement-shader-v1",
+      "job_id": "1cb73649-fcb0-4ae9-b683-e54b90ac98f0",
+      "seconds": 188.7,
+      "params": {
+        "style": "peaked",
+        "layers": 5,
+        "reflectance": 0.6,
+        "absorption": 0.5,
+        "incoming_rays": 7,
+        "interaction": -0.5,
+        "resolution": 48
+      }
+    }
+  ]
+}

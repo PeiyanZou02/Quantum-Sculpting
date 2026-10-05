@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<div style="display:flex;flex-direction:column;gap:8px;width:{{ w }}px;color:#151618;font-variant-numeric:tabular-nums">
+  <div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font:600 10px/1 'Geist Mono',monospace;letter-spacing:.04em">DENSITY</span><span style="font:400 11px/1 'Geist Mono',monospace;color:#55575D">{{ read }}</span></div>
+  <div onMouseDown="{{ dn }}" onMouseMove="{{ mv }}" onMouseUp="{{ up }}" onMouseLeave="{{ lv }}" style="position:relative;width:{{ w }}px;height:{{ h }}px;cursor:{{ cur }};user-select:none">
+    <div style="position:absolute;left:0;right:0;bottom:16px;height:{{ bh }}px;display:flex;align-items:flex-end;gap:2px"><sc-for list="{{ bars }}" as="b" hint-placeholder-count="48"><span style="flex:1;height:{{ b.h }}px;background:{{ b.c }}"></span></sc-for></div>
+    <div style="position:absolute;left:0;right:0;bottom:16px;height:1px;background:#B3B5BB"></div>
+    <sc-for list="{{ ax }}" as="a" hint-placeholder-count="5"><span style="position:absolute;left:{{ a.x }}px;bottom:0;transform:{{ a.tr }};font:400 10px/1 'Geist Mono',monospace;color:#8B8D93">{{ a.t }}</span></sc-for>
+    <sc-if value="{{ gOn }}"><div style="position:absolute;left:{{ gx }}px;top:16px;bottom:16px;border-left:1px dashed #8B8D93"></div><span style="position:absolute;left:{{ gtx }}px;top:30px;transform:{{ gtr }};font:400 10px/1 'Geist Mono',monospace;color:#55575D;white-space:nowrap">{{ gT }}</span></sc-if>
+    <div style="position:absolute;left:{{ lx }}px;top:12px;bottom:16px;width:1px;background:#151618"></div>
+    <span style="position:absolute;left:{{ lx }}px;top:-4px;transform:translateX(-50%);display:inline-flex;align-items:center;height:20px;padding:0 9px;border-radius:999px;border:1px solid #151618;background:{{ fb }};color:{{ fc }};font:400 11px/1 'Geist Mono',monospace;box-sizing:border-box;white-space:nowrap">{{ lT }}</span>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1056,&quot;height&quot;:150},&quot;w&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:1056,&quot;tsType&quot;:&quot;number&quot;},&quot;h&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:120,&quot;tsType&quot;:&quot;number&quot;},&quot;level&quot;:{&quot;editor&quot;:&quot;float&quot;,&quot;default&quot;:0.5,&quot;tsType&quot;:&quot;number&quot;,&quot;min&quot;:0.05,&quot;max&quot;:0.95,&quot;step&quot;:0.01}}">
+class Component extends DCLogic {
+  state = {};
+  hist() {
+    if (this._h) return this._h;
+    const NB = 48, bins = new Array(NB).fill(0), vals = [];
+    const sb = (ax, az, hx, hz) => { const qx = Math.abs(ax) - hx, qz = Math.abs(az) - hz; return Math.hypot(Math.max(qx, 0), Math.max(qz, 0)) + Math.min(Math.max(qx, qz), 0); };
+    for (let k = 0; k < 32; k++) for (let j = 0; j < 32; j++) for (let i = 0; i < 32; i++) {
+      const x = i + .5, y = j + .5, z = k + .5, r = Math.hypot(x - 16, y - 16);
+      const qx = Math.abs(x - 29.7) - 1.7, qy = Math.abs(y - 16) - 1.3, qz = Math.abs(z - 16) - 7;
+      const ho = Math.hypot(Math.max(qx, 0), Math.max(qy, 0), Math.max(qz, 0)) + Math.min(Math.max(qx, qy, qz), 0);
+      const d = Math.min(sb(r - 11.85, z - 16, .65, 14), sb(r - 6.25, z - 2.8, 6.25, .8), Math.max(ho, -sb(x - 29.4, z - 16, 1, 5)));
+      const v = .02 + .9 / (1 + Math.exp(d / 1.1));
+      if (v > .03) { vals.push(v); bins[Math.min(NB - 1, Math.floor(v * NB))]++; }
+    }
+    vals.sort((a, b) => a - b);
+    return (this._h = { bins, vals, NB });
+  }
+  above(L) { const v = this.hist().vals; let lo = 0, hi = v.length; while (lo < hi) { const m = (lo + hi) >> 1; if (v[m] < L) lo = m + 1; else hi = m; } return v.length - lo; }
+  renderVals() {
+    const p = this.props, s = this.state, w = +(p.w ?? 1056), h = +(p.h ?? 120), { bins, NB } = this.hist();
+    const L = s.L ?? +(p.level ?? .5), drag = !!s.drag, BH = h - 38, hm = Math.sqrt(Math.max(...bins)) || 1;
+    const kept = n => Math.round(2914 * .7213 * this.above(n) / (this.above(.5) || 1)), fmt = n => n.toLocaleString('en-US');
+    const kv = kept(L), toL = e => { const rc = e.currentTarget.getBoundingClientRect(), x = (e.clientX - rc.left) * w / (rc.width || w); return Math.max(.05, Math.min(.95, Math.round(x / w * 100) / 100)); };
+    const g = s.g, gOn = g != null && !drag && Math.abs(g - L) > .005, gb = gOn ? Math.min(NB - 1, Math.floor(g * NB)) : 0, flip = gOn && g > .8;
+    return {
+      w, h, bh: BH, cur: drag ? 'grabbing' : 'ew-resize',
+      bars: bins.map((n, b) => ({ h: n ? Math.max(1, Math.round(Math.sqrt(n) / hm * BH)) : 0, c: (b + .5) / NB >= L ? '#151618' : '#B3B5BB' })),
+      ax: [0, .25, .5, .75, 1].map(t => ({ x: (t * w).toFixed(1), t: String(t), tr: t === 0 ? 'none' : t === 1 ? 'translateX(-100%)' : 'translateX(-50%)' })),
+      lx: (L * w).toFixed(1), lT: L.toFixed(2), fb: drag ? '#151618' : '#E3E4E7', fc: drag ? '#E3E4E7' : '#151618',
+      gOn, gx: gOn ? (g * w).toFixed(1) : 0, gtx: gOn ? (g * w + (flip ? -6 : 6)).toFixed(1) : 0, gtr: flip ? 'translateX(-100%)' : 'none', gT: gOn ? `${g.toFixed(2)} · ${fmt(bins[gb])} cells · keeps ${fmt(kept(g))}` : '',
+      read: `level ${L.toFixed(2)} · keeps ${fmt(kv)} of 2,914 cells · ${Math.round(kv / 2914 * 100)}%`,
+      dn: e => this.setState({ drag: true, L: toL(e) }),
+      mv: e => { const v = toL(e); if (s.drag) this.setState({ L: v }); else if (v !== s.g) this.setState({ g: v }); },
+      up: () => this.setState({ drag: false }),
+      lv: () => this.setState({ drag: false, g: null })
+    };
+  }
+}
+</script>
+</body>
+</html>

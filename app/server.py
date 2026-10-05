@@ -30,6 +30,7 @@ import levelset
 import nations
 import pipeline
 import qrng
+import shaders
 import tiling
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -215,6 +216,10 @@ def load_key():
         return saved.strip(), "saved"
     env = os.environ.get("MOTH_API_KEY", "").strip()
     return (env, "env") if env else ("", None)
+
+
+shaders.configure(load_key, lambda: ATLAS_BASE, lambda: GRIDS)
+app.register_blueprint(shaders.bp)
 
 
 def key_status():
@@ -1283,7 +1288,25 @@ def state():
 
 @app.get("/")
 def index():
+    # Quantum Sculptor 界面（web/，构建到 static/studio/）；没有构建时用原来的界面
+    if (STATIC / "studio" / "index.html").exists():
+        return send_from_directory(STATIC / "studio", "index.html")
     return send_from_directory(STATIC, "index.html")
+
+
+@app.get("/classic")
+def classic():
+    """原来的界面，方便对照。"""
+    return send_from_directory(STATIC, "index.html")
+
+
+@app.get("/studio/")
+@app.get("/studio/<path:name>")
+def studio(name="index.html"):
+    if not (STATIC / "studio" / "index.html").exists():
+        abort(404, "Build the interface first: cd web && pnpm install && pnpm build")
+    path = STATIC / "studio" / name
+    return send_from_directory(STATIC / "studio", name if path.is_file() else "index.html")
 
 
 def main():

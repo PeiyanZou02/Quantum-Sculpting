@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet"><style>@font-face{font-family:'TWK Everett';src:url(fonts/TWKEverett-Book.ttf) format('truetype');font-weight:300 500;font-style:normal;font-display:swap}body{margin:0;background:#D6D7DA}a{color:#151618}a:hover{color:#55575D}</style><script src="qvoxel.js"></script></helmet>
+<div data-screen-label="04 Mesh · push the surface" style="position:relative;width:1920px;height:1080px;overflow:hidden;background:#E3E4E7;color:#151618;--qs-bg:#E3E4E7;--qs-ink:#151618;--qs-ink2:#55575D;--qs-ink3:#8B8D93;--qs-ink4:#B3B5BB;--qs-line:rgba(21,22,24,.16)">
+  <div data-vox="iso" data-theme="light" data-mode="qpu" data-level=".5" data-smooth="9" data-fit="1.3" data-elev="22" style="position:absolute;left:432px;top:112px;width:1056px;height:720px"></div>
+  <dc-import name="SculptorChrome" step="3" run="run1|32³ → 128³ fine|push 0.60|toward result|gaussian 1.0" atlas="on" view="3" avail="4" style="position:absolute;left:0;top:0" hint-size="1920px,1080px"></dc-import>
+  <div style="position:absolute;left:472px;top:134px;font:400 11px/1 'Geist Mono',monospace;color:#55575D">Surface speed = result − level, along the normal</div>
+  <svg width="1056" height="720" viewBox="0 0 1056 720" style="position:absolute;left:432px;top:112px;overflow:visible"><g fill="none" stroke="#151618" stroke-width="1"><path d="M372 300l-34 -14M344 280l-6 6l8 3"></path><path d="M700 290l36 -12M729 274l7 4l-5 7"></path><path d="M380 470l-30 10M358 486l-8 -6l8 -4"></path><path d="M690 460l28 12M712 466l6 6l-9 2"></path></g><text x="300" y="276" font-family="Geist Mono" font-size="10" fill="#151618">+0.4</text><text x="742" y="272" font-family="Geist Mono" font-size="10" fill="#151618">+0.5</text><text x="306" y="500" font-family="Geist Mono" font-size="10" fill="#151618">+0.2</text><text x="726" y="492" font-family="Geist Mono" font-size="10" fill="#151618">−0.1</text></svg>
+  <div style="position:absolute;left:48px;top:260px;width:344px;display:flex;flex-direction:column;gap:24px">
+    <div style="display:flex;flex-direction:column;gap:10px"><span style="font:400 11px/1 'Geist Mono',monospace;color:#8B8D93">Step 04</span><span style="font:400 28px/1.1 'TWK Everett',sans-serif">Mesh</span><span style="font:400 14px/1.35 'TWK Everett',sans-serif;color:#55575D;text-wrap:pretty">Let the quantum result move the original surface. Detail is kept and displaced; no new detail is added at the fine scale.</span></div>
+    <div style="display:inline-flex;align-self:flex-start;padding:2px;border-radius:999px;border:1px solid rgba(21,22,24,.26);font:400 11px/1 'Geist Mono',monospace"><span style="display:inline-flex;align-items:center;height:24px;padding:0 11px;border-radius:999px;border:1px solid transparent;color:#55575D">Threshold</span><span style="display:inline-flex;align-items:center;height:24px;padding:0 11px;border-radius:999px;border:1px solid #151618;background:#CBCCD0">Push the surface</span></div>
+    <div style="display:flex;flex-direction:column;gap:6px"><span style="font:400 11px/1 'Geist Mono',monospace;color:#8B8D93">Field</span><div style="position:relative;width:260px;height:96px"><svg width="260" height="96" viewBox="0 0 260 96" style="position:absolute;left:0;top:0"><path d="M40 28V78H200V28M120 28V78" fill="none" stroke="rgba(20,22,28,.22)" stroke-width="14" stroke-linecap="round" stroke-linejoin="round" transform="translate(0 1.5)"></path><path d="M40 28V78H200V28M120 28V78" fill="none" stroke="#C4C6CB" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"></path><text x="40" y="12" text-anchor="middle" font-family="Geist Mono" font-size="9" fill="#151618">toward result</text><text x="120" y="12" text-anchor="middle" font-family="Geist Mono" font-size="9" fill="#8B8D93">difference</text><text x="200" y="12" text-anchor="middle" font-family="Geist Mono" font-size="9" fill="#8B8D93">gradient</text></svg><div style="position:absolute;left:29px;top:18px;width:22px;height:22px;border-radius:50%;background:radial-gradient(circle at 40% 32%,#FFFFFF 0%,#E4E5E8 38%,#C3C5CA 78%,#AEB0B5 100%);box-shadow:0 1px 1.5px rgba(20,22,28,.28),0 5px 10px rgba(20,22,28,.16)"></div></div><span style="font:400 11px/1.4 'Geist Mono',monospace;color:#8B8D93">Stable; pulls toward the threshold surface</span></div>
+    <div style="display:flex;flex-direction:column;gap:6px"><span style="font:400 11px/1 'Geist Mono',monospace;color:#8B8D93">Amount</span><div style="position:relative;width:290px;height:84px"><div style="position:absolute;left:0;top:20px;width:70px;height:24px;border-radius:4px;background:#C4C6CB;box-shadow:inset 0 1px 3px rgba(20,22,28,.4),0 1px 0 rgba(255,255,255,.75)"></div><div style="position:absolute;left:30px;top:26px;width:160px;height:12px;border-radius:6px;background:linear-gradient(180deg,#B9BBC0 0%,#F6F7F8 40%,#D3D4D8 60%,#AEB0B5 100%);box-shadow:0 2px 4px rgba(20,22,28,.18)"></div><div style="position:absolute;left:72px;top:26px;width:112px;height:12px;background:repeating-linear-gradient(90deg,rgba(21,22,24,.45) 0 1px,transparent 1px 20px)"></div><div style="position:absolute;left:179px;top:21px;width:22px;height:22px;border-radius:50%;background:radial-gradient(circle at 40% 32%,#FFFFFF 0%,#E4E5E8 38%,#C3C5CA 78%,#AEB0B5 100%);box-shadow:0 1px 1.5px rgba(20,22,28,.28),0 5px 10px rgba(20,22,28,.16)"></div><div style="position:absolute;left:70px;top:58px;width:200px;height:6px;border-left:1px solid #8B8D93;border-right:1px solid #8B8D93;border-bottom:1px solid #B3B5BB;box-sizing:border-box"></div><span style="position:absolute;left:66px;top:70px;font:400 10px/1 'Geist Mono',monospace;color:#8B8D93">0</span><span style="position:absolute;left:180px;top:70px;font:400 10px/1 'Geist Mono',monospace">0.60</span><span style="position:absolute;left:266px;top:70px;font:400 10px/1 'Geist Mono',monospace;color:#8B8D93">1</span></div></div>
+    <div style="display:flex;flex-direction:column;gap:10px"><span style="font:400 11px/1 'Geist Mono',monospace;color:#8B8D93">Refine</span><div style="display:inline-flex;align-self:flex-start;padding:2px;border-radius:999px;border:1px solid rgba(21,22,24,.26);font:400 11px/1 'Geist Mono',monospace"><span style="display:inline-flex;align-items:center;height:22px;padding:0 10px;border-radius:999px;border:1px solid transparent;color:#55575D">1×</span><span style="display:inline-flex;align-items:center;height:22px;padding:0 10px;border-radius:999px;border:1px solid transparent;color:#55575D">2×</span><span style="display:inline-flex;align-items:center;height:22px;padding:0 10px;border-radius:999px;border:1px solid #151618;background:#CBCCD0">4×</span><span style="display:inline-flex;align-items:center;height:22px;padding:0 10px;border-radius:999px;border:1px solid transparent;color:#55575D">8×</span></div><span style="font:400 11px/1.4 'Geist Mono',monospace;color:#8B8D93">Fine grid 128³ from the 32³ result · max 256³</span></div>
+  </div>
+  <div style="position:absolute;left:48px;top:1000px"><dc-import name="QPill" kind="commit" label="Export" hint-size="110px,30px"></dc-import></div>
+  <div style="position:absolute;left:1528px;top:112px;width:344px;display:flex;flex-direction:column;gap:16px">
+    <div style="display:flex;justify-content:space-between"><span style="font:600 10px/1 'Geist Mono',monospace;letter-spacing:.04em">DISTANCE</span><span style="font:400 11px/1 'Geist Mono',monospace;color:#8B8D93">signed · slice z 64 of 127</span></div>
+    <canvas ref="{{ cv }}" width="344" height="344" style="width:344px;height:344px"></canvas>
+    <div style="display:grid;grid-template-columns:22px minmax(0,1fr);row-gap:9px;align-items:center;font:400 11px/1 'Geist Mono',monospace"><span style="width:14px;height:2px;background:#151618"></span><span>Pushed surface</span><span style="width:14px;height:0;border-top:1px dashed #8B8D93"></span><span style="color:#55575D">Original surface</span><span style="width:12px;height:12px;background:#C4C5C9"></span><span style="color:#55575D">Inside · negative distance</span></div>
+    <div style="padding-top:16px;border-top:1px solid rgba(21,22,24,.16)"><dc-import name="QReadout" title="Level set" kw="96" w="344" rows="Fine grid|128³;Exact band|3 voxels;Iterations|12;Largest move|1.8 vox" hint-size="344px,80px"></dc-import></div>
+  </div>
+  <div style="position:absolute;left:432px;top:868px;width:1056px;display:flex;flex-direction:column;gap:10px">
+    <div style="display:flex;justify-content:space-between"><span style="font:600 10px/1 'Geist Mono',monospace;letter-spacing:.04em">DISPLACEMENT</span><span style="font:400 11px/1 'Geist Mono',monospace;color:#55575D">mean +0.21 vox · surface moved out more than in</span></div>
+    <div style="display:flex;align-items:flex-end;gap:6px;height:104px;border-bottom:1px solid #B3B5BB"><sc-for list="{{ disp }}" as="d" hint-placeholder-count="21"><span style="flex:1;height:{{ d.h }}px;border-radius:999px 999px 0 0;background:{{ d.c }}"></span></sc-for></div>
+    <div style="display:flex;justify-content:space-between;font:400 10px/1 'Geist Mono',monospace;color:#8B8D93"><span>−2 vox · moved in</span><span style="color:#151618">0</span><span>moved out · +2 vox</span></div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1920,&quot;height&quot;:1080}}">
+class Component extends DCLogic {
+  cv = el => { if (el && el !== this.el) { this.el = el; this.draw(); } };
+  draw() {
+    const el = this.el, W = 344, S = W / 48, ctx = el.getContext('2d'), img = ctx.createImageData(W, W);
+    const d0 = (u, v) => { const r = Math.hypot(u - 22, v - 24), dr = Math.max(r - 17, 13 - r), c1 = Math.hypot(u - 42, v - 18) - 2.5, c2 = Math.hypot(u - 42, v - 30) - 2.5; return Math.min(dr, c1, c2); };
+    const push = (u, v) => .7 * Math.sin(Math.atan2(v - 24, u - 22) * 3) + .2;
+    for (let py = 0; py < W; py++) for (let px = 0; px < W; px++) {
+      const u = (px + .5) / S, v = (py + .5) / S, a = d0(u, v), d = a - push(u, v), o = (py * W + px) * 4;
+      let c = d < 0 ? [196, 197, 201] : Math.abs(d) <= 3 ? [216, 217, 220] : [227, 228, 231];
+      if (Math.abs(d) <= 3 && Math.abs(d - Math.round(d)) < .05) c = [179, 181, 187];
+      if (Math.abs(a) < .09 && (px + py) % 6 < 3) c = [139, 141, 147];
+      if (Math.abs(d) < .1) c = [21, 22, 24];
+      img.data[o] = c[0]; img.data[o + 1] = c[1]; img.data[o + 2] = c[2]; img.data[o + 3] = 255;
+    }
+    ctx.putImageData(img, 0, 0);
+  }
+  renderVals() {
+    const disp = Array.from({ length: 21 }, (_, i) => { const x = -2 + i * .2, h = Math.exp(-(((x - .2) / .6) ** 2) / 2); return { h: Math.max(2, Math.round(h * 100)), c: x > .05 ? '#151618' : x < -.05 ? '#8B8D93' : '#55575D' }; });
+    return { cv: this.cv, disp };
+  }
+}
+</script>
+</body>
+</html>
