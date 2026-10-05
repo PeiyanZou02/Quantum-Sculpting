@@ -2,6 +2,7 @@
 // variants (stored comma-separated, e.g. "v1,v3") or off. Presets set them together; anything changed by hand makes the composition "Custom".
 // Modules that follow the object draw over the whole view; the rest sit in slots (corners, edges)
 // stacked so they never overlap each other.
+import { Moving } from './Moving'
 import { useLayoutEffect, useRef, useState } from 'react'
 import type { ReactNode, RefObject } from 'react'
 import type { HudCtx, HudModule, Rect } from './types'
@@ -254,7 +255,7 @@ export function HudLayer({ ctx, compose, chrome, positions = {}, fit = 1, terse 
   const slotted = (s: string) => chosen.filter((m) => m.slot === s && !positions[key(m)])
   const dim = (k: string) => !!hl && hl !== k
   const piece = (m: HudModule, pos?: Placement) => (
-    <Piece key={key(m)} k={key(m)} label={m.label} ctx={ctx} pos={pos} arrange={arrange} edit={edit} onMove={onMove} live={m.interactive} look={looks[key(m)]} dim={dim(key(m))} ghost={ghost === key(m)} fit={fit}>{m.render(ctx)}</Piece>
+    <Piece key={key(m)} k={key(m)} label={m.label} ctx={ctx} pos={pos} arrange={arrange} edit={edit} onMove={onMove} live={m.interactive} look={looks[key(m)]} dim={dim(key(m))} ghost={ghost === key(m)} fit={fit}><Moving k={key(m)} ctx={ctx} render={m.render} /></Piece>
   )
   const chromeAt = (s: (typeof SLOTS)[number]) => (chrome?.[s] && !positions[`chrome:${s}`] ? (
     <Piece k={`chrome:${s}`} label="controls" ctx={ctx} arrange={arrange} onMove={onMove} live>{chrome[s]}</Piece>
