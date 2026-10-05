@@ -1,0 +1,78 @@
+/* HUD layer: free modules fill the view; slot modules stack in corners and along edges. */
+.hud-layer { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
+.hud-free { position: absolute; inset: 0; pointer-events: none; }
+.hud-free--live > * { pointer-events: none; }
+.hud-free--live [data-live], .hud-free--live .hud-live, .hud-free--live [data-tip] { pointer-events: auto; }
+
+.hud-slot { position: absolute; display: flex; gap: 12px; pointer-events: none; max-width: calc(50% - 40px); }
+.hud-slot > * { pointer-events: none; }
+.hud-slot > .hud-mod--live, .hud-slot > .hud-chrome { pointer-events: auto; }
+.hud-slot--tl { left: 36px; top: 34px; flex-direction: column; align-items: flex-start; }
+.hud-slot--tr { right: 36px; top: 34px; flex-direction: column; align-items: flex-end; }
+.hud-slot--bl { left: 36px; bottom: 34px; flex-direction: column-reverse; align-items: flex-start; }
+.hud-slot--br { right: 36px; bottom: 34px; flex-direction: column-reverse; align-items: flex-end; }
+.hud-slot--top { left: 50%; top: 18px; transform: translateX(-50%); flex-direction: column; align-items: center; max-width: 60%; }
+.hud-slot--bottom { left: 50%; bottom: 22px; transform: translateX(-50%); flex-direction: column; align-items: center; max-width: 60%; }
+.hud-slot--left { left: 14px; top: 50%; transform: translateY(-50%); flex-direction: column; align-items: flex-start; }
+.hud-slot--right { right: 14px; top: 50%; transform: translateY(-50%); flex-direction: column; align-items: flex-end; }
+
+/* composer menu */
+.cmp-presets { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 6px; }
+.cmp-preset { all: unset; box-sizing: border-box; display: flex; flex-direction: column; gap: 4px; padding: 9px 12px; border-radius: 14px; border: 1px solid var(--qs-line); cursor: pointer; transition: background .15s, border-color .15s; }
+.cmp-preset:hover { background: var(--qs-faint); }
+.cmp-preset--on { border-color: var(--qs-ink); background: var(--qs-sel); }
+.cmp-preset__t { font: 500 12px/1 var(--qs-sans); color: var(--qs-ink); }
+.cmp-preset__d { font: italic 300 11px/1.25 var(--qs-sans); color: var(--qs-ink3); }
+.cmp-fam { display: grid; grid-template-columns: 1fr; gap: 6px; padding: 8px 0; }
+.cmp-fam__head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.cmp-fam__t { font: 500 12px/1 var(--qs-sans); color: var(--qs-ink); }
+.cmp-fam__d { font: italic 300 11px/1.2 var(--qs-sans); color: var(--qs-ink3); text-align: right; }
+.cmp-vars { display: flex; flex-wrap: wrap; gap: 4px; }
+.cmp-var { all: unset; height: 24px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--qs-line); display: inline-flex; align-items: center; gap: 6px; font: 400 11.5px/1 var(--qs-sans); color: var(--qs-ink2); cursor: pointer; transition: background .15s, border-color .15s, color .15s; }
+.cmp-var:hover { background: var(--qs-faint); color: var(--qs-ink); }
+.cmp-var--on { border-color: var(--qs-ink); background: var(--qs-sel); color: var(--qs-ink); }
+.cmp-var__n { font: 400 10.5px/1 var(--qs-mono); color: var(--qs-ink3); }
+
+/* pieces: in a slot, or placed where they were dragged */
+.hud-piece { position: relative; pointer-events: none; }
+.hud-piece.hud-mod--live { pointer-events: auto; }
+.hud-piece--placed { position: absolute; z-index: 3; }
+.hud-layer--arrange .hud-piece { pointer-events: auto; outline: 1px dashed var(--qs-ink3); outline-offset: 6px; border-radius: 4px; }
+.hud-layer--arrange .hud-piece:hover { outline-color: var(--qs-ink); }
+.hud-piece__handle {
+  all: unset; position: absolute; left: -6px; top: -30px; z-index: 4; display: inline-flex; align-items: center; gap: 6px;
+  height: 22px; padding: 0 10px 0 8px; border-radius: 999px; background: var(--qs-ink); color: var(--qs-bg);
+  font: 500 11px/1 var(--qs-sans); cursor: grab; white-space: nowrap; pointer-events: auto;
+}
+.hud-piece__handle:active { cursor: grabbing; }
+.hud-piece__grip { width: 6px; height: 10px; background: radial-gradient(circle, currentColor 1px, transparent 1.2px) 0 0 / 3px 3.4px; opacity: .8; }
+
+/* piece body carries the look (tier, size); the bar holds the handle and PNG */
+.hud-piece__body { pointer-events: inherit; }
+.hud-piece__bar { position: absolute; left: -6px; top: -30px; z-index: 4; display: flex; gap: 4px; pointer-events: auto; }
+.hud-piece__bar .hud-piece__handle { position: static; }
+.hud-piece__btn {
+  all: unset; height: 22px; padding: 0 9px; border-radius: 999px; background: var(--qs-bg); color: var(--qs-ink); border: 1px solid var(--qs-line);
+  font: 500 10.5px/22px var(--qs-sans); cursor: pointer; box-sizing: border-box; display: inline-flex; align-items: center;
+}
+.hud-piece__btn:hover { border-color: var(--qs-ink); }
+/* Present: pieces are picked up directly; the bar appears on hover */
+.hud-layer--grab .hud-piece { pointer-events: auto; cursor: grab; border-radius: 6px; }
+.hud-layer--grab .hud-piece.hud-mod--live { cursor: auto; }
+.hud-layer--grab .hud-piece::before { content: ''; position: absolute; inset: -34px -8px -8px -8px; }
+.hud-layer--grab .hud-piece:hover { outline: 1px dashed var(--qs-ink3); outline-offset: 6px; }
+.hud-piece--grab > .hud-piece__bar { opacity: 0; transition: opacity .12s; }
+.hud-piece--grab:hover > .hud-piece__bar, .hud-piece--dragging > .hud-piece__bar { opacity: 1; }
+.hud-piece--dragging { cursor: grabbing !important; }
+
+/* free text */
+.hud-text { display: inline-block; min-width: 24px; font: 500 22px/1.15 var(--qs-sans); color: var(--qs-ink); outline: none; white-space: pre-wrap; max-width: 520px; }
+.hud-text--edit { cursor: text; box-shadow: 0 1px 0 var(--qs-ink3); }
+
+/* previews */
+.mini { position: relative; overflow: hidden; border-radius: 10px; background: var(--qs-view, var(--qs-bg)); flex: none; }
+.mini__frame { position: absolute; left: 0; top: 0; transform-origin: 0 0; pointer-events: none; }
+.mini__bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: .9; }
+.mini .hud-layer { z-index: 1; }
+.hud-slot--bottom.hud-slot--lean-l { left: 36px; transform: none; align-items: flex-start; }
+.hud-slot--bottom.hud-slot--lean-r { left: auto; right: 36px; transform: none; align-items: flex-end; }

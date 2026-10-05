@@ -1,31 +1,22 @@
 // INPUT: only the things you set, in pipeline order. Each step folds to a one-line summary;
 // the scrollbar carries an index (01–04) to jump between them. Results live in the Output column.
 import { useRef, useState, type ReactNode } from 'react'
-import { useStore } from '../store'
+import { useStore, NATIONS_MAX_GRID } from '../store'
 import type { Fill, Field as FieldKind, UpAxis, Values, VFilter } from '../api'
 import { QPill } from '../qs/QPill'
 import { Segmented, AxisToggle } from '../qs/Segmented'
 import { Slider, Select, Input } from '../qs/Slider'
-import { ScrollArea, type ScrollIndex } from '../qs/ScrollArea'
+import { ScrollArea } from '../qs/ScrollArea'
+import { SectionTabs } from './SectionTabs'
 import { Dot, Spinner, fmt } from './parts'
+import './evolve.css'
 
 export const MODEL_EXT = ['.stl', '.obj', '.ply', '.glb', '.off']
-const MARKERS = [{ id: 'in-01', label: 'Model' }, { id: 'in-02', label: 'Voxelise' }, { id: 'in-03', label: 'Quantum' }, { id: 'in-04', label: 'Mesh' }]
+const MARKERS = [
+  { id: 'in-01', label: 'Model', icon: 'model' }, { id: 'in-02', label: 'Voxelise', icon: 'grid' },
+  { id: 'in-03', label: 'Quantum', icon: 'quantum' }, { id: 'in-04', label: 'Mesh', icon: 'print' },
+]
 
-/** A vertical bar with one knot per step: click a knot to go to the step. No numbers, no scrollbar. */
-export function Knots({ markers, active, go, frac }: ScrollIndex) {
-  return (
-    <div className="knots" aria-label="Steps">
-      <span className="knots__line" />
-      {markers.map((mk) => (
-        <button key={mk.id} className={'knots__k' + (active === mk.id ? ' knots__k--on' : '')} style={{ top: `calc(${(frac(mk.id) * 100).toFixed(2)}% + 14px)` }}
-          onClick={() => go(mk.id)} aria-label={mk.label}>
-          <span className="knots__tip">{mk.label}</span>
-        </button>
-      ))}
-    </div>
-  )
-}
 
 function useFold() {
   const [open, setOpen] = useState<Record<string, boolean>>(() => {
@@ -60,7 +51,7 @@ export function InputPane() {
   const fold = useFold()
   return (
     <div className="panel" aria-label="Parameters">
-      <ScrollArea markers={MARKERS} className="pane-scroll pane-scroll--knots" bar={false} renderIndex={(ix) => <Knots {...ix} />}>
+      <ScrollArea markers={MARKERS} className="pane-scroll pane-scroll--tabs" bar={false} renderIndex={(ix) => <SectionTabs {...ix} label="Parameter sections" />}>
         <ModelIn fold={fold} />
         <VoxIn fold={fold} />
         <QuantumIn fold={fold} />
@@ -146,8 +137,8 @@ function QubitBars() {
         {th.map((t, k) => (
           <g key={k}>
             <rect x={k * bw + 6} y={H - t * H} width={bw - 12} height={Math.max(0.5, t * H)} fill="var(--qs-ink)" />
-            <text x={k * bw + bw / 2} y={H + 12} textAnchor="middle" fontFamily="Geist Mono" fontSize="9" fill="var(--qs-ink2)">q{k}</text>
-            <text x={k * bw + bw / 2} y={H - t * H - 4} textAnchor="middle" fontFamily="Geist Mono" fontSize="9" fill="var(--qs-ink)">{t.toFixed(2)}</text>
+            <text x={k * bw + bw / 2} y={H + 12} textAnchor="middle" fontFamily="TWK Everett Mono, monospace" fontSize="9" fill="var(--qs-ink2)">q{k}</text>
+            <text x={k * bw + bw / 2} y={H - t * H - 4} textAnchor="middle" fontFamily="TWK Everett Mono, monospace" fontSize="9" fill="var(--qs-ink)">{t.toFixed(2)}</text>
           </g>
         ))}
       </svg>
@@ -159,23 +150,29 @@ const MODE_HELP = {
   gaussian: 'An ordinary blur, only for checking the pipeline.',
   emulator: 'Local approximation of Quantum Blur Core, same tiling as Atlas. Updates live.',
   atlas: 'Submits to Atlas blur-core-v1. Results are cached in grids/ and never submitted twice.',
+  nations: 'Splits the model into nations, one qubit each, that evolve turn by turn: every nation is asked one question a turn and all the answers are measured together. Runs on this machine.',
 }
+const MODE_LABEL = { gaussian: 'gaussian', emulator: 'emulation', atlas: 'atlas', nations: 'evolve' }
 
 function QuantumIn({ fold }: F) {
   const st = useStore()
   const { q, grid, job, key, proc } = st
   const running = job?.status === 'running'
-  const summary = q.mode === 'gaussian' ? `gaussian · σ ${q.sigma}` : `${q.mode === 'atlas' ? 'atlas' : 'emulation'} · s ${fmt.f2(q.strength)} · r ${fmt.f2(q.reach)} · ${q.style} · ${q.run}`
+  const summary = q.mode === 'gaussian' ? `gaussian · σ ${q.sigma}`
+    : q.mode === 'nations' ? `evolve · ${q.k} nations · ${q.turns} turns · reach ${q.spread}% · ${q.run}`
+    : `${MODE_LABEL[q.mode]} · s ${fmt.f2(q.strength)} · r ${fmt.f2(q.reach)} · ${q.style} · ${q.run}`
   return (
     <Step id="in-03" no="03" title="Quantum" fold={fold} off={!grid} summary={summary}
       state={running ? <><Spinner /> {job.tiles_done}/{job.tiles_total}</> : st.busy.proc ? <Spinner /> : proc ? <Dot live /> : <Dot />}>
-      <div className="seg-block">
-        <Segmented options={[{ value: 'gaussian', label: 'Gaussian' }, { value: 'emulator', label: 'Emulation' }, { value: 'atlas', label: 'Atlas' }]}
-          value={q.mode} onChange={(v) => st.setQ({ mode: v as typeof q.mode })} />
+      <div className="seg-block ev-modes">
+        <Segmented options={[{ value: 'gaussian', label: 'Gaussian' }, { value: 'emulator', label: 'Emulation' }, { value: 'atlas', label: 'Atlas' }, { value: 'nations', label: 'Evolve' }]}
+          value={q.mode} onChange={(v) => st.setQ({ mode: v as typeof q.mode })} aria-label="Quantum mode" />
         <p className="qs-help">{MODE_HELP[q.mode]}</p>
       </div>
       {q.mode === 'gaussian' ? (
         <Slider label="Sigma" value={q.sigma} min={0.3} max={3} step={0.1} defaultValue={1} onChange={(v) => st.setQ({ sigma: v })} />
+      ) : q.mode === 'nations' ? (
+        <EvolveIn />
       ) : (
         <>
           <Slider label="Strength" value={q.strength} min={0} max={1} step={0.01} defaultValue={0.3} onChange={(v) => st.setQ({ strength: v })} />
@@ -199,7 +196,8 @@ function QuantumIn({ fold }: F) {
           )}
         </>
       )}
-      <Input label="Run name" value={q.run} onChange={(v) => st.setQ({ run: v.replace(/[^\w-]/g, '_').slice(0, 40) })} />
+      <Input label="Run name" value={q.run} onChange={(v) => st.setQ({ run: v.replace(/[^\w-]/g, '_').slice(0, 40) })}
+        help={q.mode === 'nations' ? 'The run name seeds the measurements: the same name gives the same history, another name another one.' : undefined} />
       {q.mode === 'atlas' && (
         <div className="row">
           <QPill kind={key?.set && !running ? 'commit' : 'disabled'} size="s"
@@ -209,6 +207,33 @@ function QuantumIn({ fold }: F) {
         </div>
       )}
     </Step>
+  )
+}
+
+/** Evolve's settings (app/nations.py through /api/process mode "nations"). */
+function EvolveIn() {
+  const q = useStore((s) => s.q)
+  const n = useStore((s) => s.grid?.n ?? null)
+  const setQ = useStore((s) => s.setQ)
+  return (
+    <>
+      {n != null && n > NATIONS_MAX_GRID && (
+        <p className="qs-help" style={{ color: 'var(--qs-ink)' }}>! Evolve works on grids up to {NATIONS_MAX_GRID}³; this one is {n}³. Choose a smaller grid size under Voxelise.</p>
+      )}
+      <Slider label="Nations" value={q.k} min={3} max={16} step={1} ticks={13} defaultValue={12} onChange={(v) => setQ({ k: v })}
+        help="Regions the model is split into at the start, one qubit each. Nations can split later; at most 16 are alive at once." />
+      <Slider label="Turns" value={q.turns} min={5} max={300} step={5} ticks={10} defaultValue={60} onChange={(v) => setQ({ turns: v })}
+        help="How long the history runs. It stops early if every nation dies; a shorter run is exactly the beginning of a longer one." />
+      <Slider label="Growth reach · % of the grid" value={q.spread} min={0} max={8} step={0.5} ticks={8} defaultValue={4} format={(v) => `${v.toFixed(1)}%`}
+        onChange={(v) => setQ({ spread: v })}
+        help="How far walls and new growth may reach beyond the original surface. At 0 the shape only loses voxels: annexing, cracks, fleeing and withering." />
+      <div className="seg-block">
+        <span className="qs-field-label">Final borders</span>
+        <Segmented size="s" options={[{ value: 'flush', label: 'Flush' }, { value: 'grooves', label: 'Carve grooves' }]}
+          value={q.grooves ? 'grooves' : 'flush'} onChange={(v) => setQ({ grooves: v === 'grooves' })} aria-label="Final borders" />
+        <p className="qs-help">Grooves cut a one-voxel channel along every border of the last turn, so the nations still read on a one-colour print.</p>
+      </div>
+    </>
   )
 }
 

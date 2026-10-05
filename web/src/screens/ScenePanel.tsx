@@ -11,7 +11,7 @@ export function ScenePanel() {
   const rows: { id: Layer; view: View; icon: string; t: string; d: string; has: boolean }[] = [
     { id: 'model', view: 'model', icon: 'model', t: model.builtin ? 'test cup' : model.file, d: `${fmt.int(model.faces)} faces`, has: !!modelMesh },
     { id: 'voxels', view: 'voxels', icon: 'grid', t: 'Input grid', d: grid ? `${grid.n}³ · ${fmt.int(grid.solid)} solid` : 'not voxelised', has: !!gridData },
-    { id: 'processed', view: 'processed', icon: 'quantum', t: 'Quantum result', d: proc ? `${proc.run} · ${proc.mode === 'emulator' ? 'emulation' : proc.mode}` : 'not computed', has: !!procData },
+    { id: 'processed', view: 'processed', icon: 'quantum', t: 'Quantum result', d: proc ? `${proc.run} · ${proc.mode === 'emulator' ? 'emulation' : proc.mode === 'nations' ? 'Evolve' : proc.mode}` : 'not computed', has: !!procData },
     { id: 'result', view: 'result', icon: 'print', t: 'Surface', d: report ? `${fmt.int(report.faces)} faces` : 'not meshed', has: !!resultMesh },
   ]
   const shown = view === 'scan' ? 'processed' : view
@@ -23,7 +23,7 @@ export function ScenePanel() {
           const main = r.id === shown
           return (
             <div key={r.id} role="treeitem" aria-selected={main} className={'ol-row' + (main ? ' ol-row--on' : '') + (r.has ? '' : ' ol-row--off')}>
-              <button className="ol-row__name" disabled={!r.has} onClick={() => st.setView(r.view)} data-tip={`Show ${r.t}`}>
+              <button className="ol-row__name" disabled={!r.has} onClick={() => st.setView(r.view)} data-tip={`Show the ${r.t.charAt(0).toLowerCase() + r.t.slice(1)}`}>
                 <Icon name={r.icon} />
                 <span className="ol-row__t">{r.t}</span>
                 <span className="ol-row__d">{r.d}</span>

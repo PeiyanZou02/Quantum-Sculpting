@@ -10,17 +10,26 @@ import { InputPane } from './screens/InputPane'
 import { Stage } from './screens/Stage'
 import { OutputPane } from './screens/OutputPane'
 import { ScenePanel } from './screens/ScenePanel'
-import { StatusBar, RuntimePanel, AtlasPanel } from './screens/Terminal'
+import { QuantumPanel } from './screens/QuantumPanel'
+import { EvolvePanel } from './screens/EvolvePanel'
+import { RuntimePanel, AtlasPanel } from './screens/Terminal'
 import { KeyDialog } from './screens/KeyDialog'
 import { Toasts } from './screens/Toasts'
 import { TooltipLayer } from './qs/Tooltip'
+import { usePresent } from './present'
+import { PresentBar } from './screens/PresentBar'
+import { PresentPanel } from './screens/PresentPanel'
 import { Dock, type PanelDef } from './dock/Dock'
-import { loadLayout, saveLayout, type DockLayout } from './dock/layout'
+import { closePanel, findPanel, loadLayout, movePanel, saveLayout, type DockLayout } from './dock/layout'
+import './styles/system.css'
+import './styles/bento.css'
 
 const PANELS: PanelDef[] = [
   { id: 'params', title: 'Parameters', icon: 'sliceTool', render: () => <InputPane /> },
   { id: 'scene', title: 'Scene', icon: 'layers', render: () => <ScenePanel /> },
   { id: 'props', title: 'Properties', icon: 'model', render: () => <OutputPane /> },
+  { id: 'quantum', title: 'Quantum', icon: 'quantum', render: () => <QuantumPanel /> },
+  { id: 'evolve', title: 'Evolve', icon: 'entangle', render: () => <EvolvePanel /> },
   { id: 'runtime', title: 'Runtime', icon: 'terminal', render: () => <RuntimePanel /> },
   { id: 'atlas', title: 'Atlas jobs', icon: 'atlas', render: () => <AtlasPanel /> },
 ]
@@ -30,18 +39,21 @@ const DEFAULT_LAYOUT: DockLayout = {
     left: [{ id: 'a-params', tabs: ['params'], active: 'params', size: 1 }],
     right: [
       { id: 'a-scene', tabs: ['scene'], active: 'scene', size: 0.62 },
-      { id: 'a-props', tabs: ['props'], active: 'props', size: 1.38 },
+      { id: 'a-props', tabs: ['props', 'quantum', 'evolve'], active: 'props', size: 1.38 },
     ],
     bottom: [{ id: 'a-runtime', tabs: ['runtime', 'atlas'], active: 'runtime', size: 1 }],
   },
   width: { left: 320, right: 330 },
   height: { bottom: 190 },
 }
-const KEY = 'qs-dock-v2'
+const KEY = 'qs-dock-v3'
 
 export default function App() {
   const init = useStore((s) => s.init)
   const keyOpen = useStore((s) => s.keyOpen)
+  const mode = usePresent((p) => p.mode)
+  const bare = usePresent((p) => p.bare)
+  const drawer = usePresent((p) => p.drawer)
   const [layout, setLayout] = useState(() => loadLayout(KEY, DEFAULT_LAYOUT, IDS))
   const onLayout = (l: DockLayout) => { setLayout(l); saveLayout(KEY, l) }
 
@@ -62,13 +74,22 @@ export default function App() {
   }, [init])
 
   return (
-    <div className="app">
-      <TopBar />
+    <div className={'app' + (mode === 'present' ? ' app--present' : '') + (bare ? ' app--bare' : '') + (mode === 'present' && drawer && !bare ? ' app--drawer' : '')}>
+      <TopBar
+        panels={PANELS.map((p) => ({ id: p.id, title: p.title, icon: p.icon, shown: !!findPanel(layout, p.id) }))}
+        onTogglePanel={(id) => {
+          if (findPanel(layout, id)) return onLayout(closePanel(layout, id))
+          // show it where the default layout keeps it
+          const home = findPanel(DEFAULT_LAYOUT, id)
+          onLayout(movePanel(layout, id, home && layout.zones[home.zone].length ? { zone: home.zone, area: layout.zones[home.zone][0].id } : { zone: home?.zone ?? 'right', index: 0 }))
+        }}
+      />
       <div className="app__dock">
         <Dock panels={PANELS} layout={layout} onLayout={onLayout} center={<Stage />}
           onReset={() => onLayout(structuredClone(DEFAULT_LAYOUT))} />
       </div>
-      <StatusBar />
+      {mode === 'present' && <PresentBar />}
+      {mode === 'present' && drawer && !bare && <PresentPanel />}
       {keyOpen && <KeyDialog />}
       <Toasts />
       <TooltipLayer />

@@ -33,3 +33,5 @@ web/node_modules/
 web/public/fonts/*.ttf
 web/public/fonts/*.otf
 app/static/studio/
+web/public/fonts/*.woff2
+web/public/fonts/*.woff

@@ -26,14 +26,14 @@ export const QCAM_STATIONS: ReadonlyArray<{ label: string; az: number; el: numbe
   { label: 'Iso', az: 45, el: 35 },
 ]
 
-const INK = '#151618'
-const INK2 = '#55575D'
-const INK3 = '#8B8D93'
-const INK4 = '#B3B5BB'
-const CTL = 'rgba(21,22,24,.26)'
-const SEL = '#CBCCD0'
+const INK = 'var(--qs-ink)'
+const INK2 = 'var(--qs-ink2)'
+const INK3 = 'var(--qs-ink3)'
+const INK4 = 'var(--qs-ink4)'
+const CTL = 'var(--qs-ctl)'
+const SEL = 'var(--qs-sel)'
 const EDGE = 'rgba(20,22,28,.3)'
-const MONO = "var(--qs-mono, 'Geist Mono', monospace)"
+const MONO = "var(--qs-mono, 'TWK Everett Mono', monospace)"
 
 const SNAP_MS = 480
 const W = 188

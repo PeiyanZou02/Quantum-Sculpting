@@ -27,6 +27,13 @@ const RULES: [RegExp, string | ((...m: string[]) => string)][] = [
   [/^网格尺寸只能是 (.+) 之一/, (_, s) => `Grid size must be one of ${s}.`],
   [/^填充方式只能是 (.+) 之一/, (_, s) => `Fill must be one of ${s}.`],
   [/^不支持的朝向 (.+)/, (_, u) => `Unsupported up axis ${u}.`],
+  // Evolve (app/nations.py, server.evolve)
+  [/^未知的模式 nations/, 'This service does not know Evolve yet. Restart the local service to load it.'],
+  [/^「演化」最大支持 (\d+)³ 的网格/, (_, n) => `Evolve works on grids up to ${n}³. Choose a smaller grid size first.`],
+  [/^体素网格里没有实体格子/, 'The voxel grid has no solid cells.'],
+  [/^实体体素比国家数还少/, 'There are fewer solid voxels than nations. Use fewer nations or a larger grid.'],
+  [/^国家数要在 (\d+) 到 (\d+) 之间/, (_, a, b) => `The number of nations must be between ${a} and ${b}.`],
+  [/^国家数最多 (\d+) 个/, (_, n) => `At most ${n} nations can be simulated at once.`],
   [/^未知的(模式|分块方式|场|填充方式|平滑方式) (.+)/, (_, k, v) => `Unknown ${({ 模式: 'mode', 分块方式: 'tiling', 场: 'field', 填充方式: 'fill', 平滑方式: 'smoothing' } as Record<string, string>)[k]} ${v}.`],
   // quantum parameters
   [/^至少选择一个模糊方向/, 'Choose at least one blur axis (X, Y or Z).'],

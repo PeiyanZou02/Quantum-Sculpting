@@ -1,6 +1,6 @@
 /* Drawn scrollbar: 1px rail, 3px ink thumb, index markers. Native bar hidden. */
 .qs-scroll { position: relative; min-height: 0; display: flex; flex-direction: column; }
-.qs-scroll__box { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; scrollbar-width: none; overscroll-behavior: contain; }
+.qs-scroll__box { position: relative; flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; scrollbar-width: none; overscroll-behavior: contain; }
 .qs-scroll__box::-webkit-scrollbar { display: none; }
 
 .qs-scroll__rail { position: absolute; top: 6px; bottom: 6px; right: 0; width: 14px; cursor: pointer; }

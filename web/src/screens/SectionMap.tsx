@@ -80,7 +80,7 @@ export function SectionMap({ grid, input, axis, index, level, onIndex, size: S =
   const [hu, hv] = hover ?? [0, 0]
   const coords = axis === 'z' ? `x ${hu} · y ${hv} · z ${index}` : axis === 'x' ? `x ${index} · y ${hu} · z ${hv}` : `x ${hu} · y ${index} · z ${hv}`
   return (
-    <div style={{ position: 'relative', width: S, height: S }}
+    <div className="slice-map" style={{ position: 'relative', width: S, height: S }}
       onPointerMove={(e) => setHover(cell(e))}
       onPointerLeave={() => setHover(null)}
       onWheel={(e) => onIndex?.(Math.max(0, Math.min(n - 1, index + (e.deltaY > 0 ? -1 : 1))))}

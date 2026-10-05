@@ -1,0 +1,53 @@
+/* HUD marks: orbit rings, camera abstracted, orbit abstracted. Colours come only from the tokens,
+   so the marks follow the light and dark themes. Ink is what you act on; grey is context. */
+
+.qh-layer { position: absolute; left: 0; top: 0; pointer-events: none; overflow: visible; }
+.qh-svg { display: block; overflow: visible; }
+.qh-svg .qh-clip { overflow: hidden; }
+
+/* strokes (1px hairlines; fill none) */
+.qh-k1, .qh-k2, .qh-k3, .qh-k4 { fill: none; stroke-width: 1px; }
+.qh-k1 { stroke: var(--qs-ink); }
+.qh-k2 { stroke: var(--qs-ink2); }
+.qh-k3 { stroke: var(--qs-ink3); }
+.qh-k4 { stroke: var(--qs-ink4); }
+
+/* fills */
+.qh-f1 { fill: var(--qs-ink); stroke: none; }
+.qh-f3 { fill: var(--qs-ink3); stroke: none; }
+.qh-fbg { fill: var(--qs-bg); }
+.qh-ffaint { fill: var(--qs-faint); stroke: none; }
+
+/* dashes */
+.qh-guide { stroke-dasharray: 2 3; }
+.qh-drop { stroke-dasharray: 1 2.5; }
+.qh-prev { stroke-dasharray: 3 3; }
+.qh-halo { stroke-dasharray: 2 2; }
+.qh-dot3 { stroke-dasharray: 1 3; }
+
+/* text inside diagrams: mono 10 */
+.qh-t1, .qh-t2, .qh-t3 { font: 400 10px/1 var(--qs-mono); font-variant-numeric: tabular-nums; stroke: none; }
+.qh-t1 { fill: var(--qs-ink); }
+.qh-t2 { fill: var(--qs-ink2); }
+.qh-t3 { fill: var(--qs-ink3); }
+/* a halo of ground behind labels drawn over the model */
+.qh-th { paint-order: stroke; stroke: var(--qs-bg); stroke-width: 3px; stroke-linejoin: round; }
+
+/* interactive bits */
+.qh-hit { fill: transparent; stroke: none; pointer-events: all; }
+.qh-ring-hit { fill: none; stroke: transparent; stroke-width: 20px; pointer-events: stroke; }
+.qh-grab { cursor: grab; touch-action: none; }
+.qh-grab.qh-on { cursor: grabbing; }
+.qh-press { cursor: pointer; }
+.qh-ew { cursor: ew-resize; touch-action: none; }
+.qh-ns { cursor: ns-resize; touch-action: none; }
+
+/* corner module: small-caps head, diagram, mono readout */
+.qh-card { display: inline-flex; flex-direction: column; gap: 8px; color: var(--qs-ink); pointer-events: none; user-select: none; }
+.qh-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.qh-sc { font: 500 10.5px/1 var(--qs-sans); letter-spacing: .06em; text-transform: uppercase; color: var(--qs-ink); }
+.qh-capt { font: 400 12px/1.3 var(--qs-sans); color: var(--qs-ink3); }
+.qh-val { font: 400 10px/1 var(--qs-mono); font-variant-numeric: tabular-nums; color: var(--qs-ink3); white-space: nowrap; }
+
+/* live ring: fades out 800ms after the camera stops */
+.qh-live { transition: opacity 320ms var(--qs-ease); }

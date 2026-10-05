@@ -95,6 +95,7 @@ export class Engine {
   onChange?: () => void
 
   private host: HTMLElement
+  private lights!: { hemi: THREE.HemisphereLight; key: THREE.DirectionalLight; rim: THREE.DirectionalLight }
 
   constructor(host: HTMLElement) {
     this.host = host
@@ -112,6 +113,10 @@ export class Engine {
     const key = new THREE.DirectionalLight(0xffffff, 1.6)
     key.position.set(-0.6, 0.9, 1)
     this.camera.add(key)
+    const rim = new THREE.DirectionalLight(0xffffff, 0)
+    rim.position.set(0.4, -0.6, -1)
+    this.camera.add(rim)
+    this.lights = { hemi, key, rim }
 
     this.root.add(this.frame)
     this.renderer.localClippingEnabled = true
@@ -168,8 +173,24 @@ export class Engine {
     this.renderer.domElement.remove()
   }
 
-  /** Swing the camera to an azimuth / elevation (degrees). az 0 = front (camera on −y). */
+  private lastOrbit = 0
+
+  /** Swing the camera to an azimuth / elevation (degrees). az 0 = front (camera on −y).
+   *  Calls in quick succession (a drag on a HUD mark) move the camera directly, keeping its distance. */
   orbitTo(azDeg: number, elDeg: number, distScale = 1) {
+    const now = performance.now(), dragging = now - this.lastOrbit < 120
+    this.lastOrbit = now
+    if (dragging) {
+      const az = THREE.MathUtils.degToRad(azDeg), el = THREE.MathUtils.degToRad(Math.max(-89.5, Math.min(elDeg, 89.5)))
+      const d = this.camera.position.distanceTo(this.controls.target)
+      this.tween = null
+      this.camera.position.copy(this.controls.target).add(new THREE.Vector3(Math.cos(el) * Math.sin(az), -Math.cos(el) * Math.cos(az), Math.sin(el)).multiplyScalar(d))
+      this.camera.lookAt(this.controls.target)
+      this.controls.update()
+      this.dirty = true
+      this.onChange?.()
+      return
+    }
     const az = THREE.MathUtils.degToRad(azDeg), el = THREE.MathUtils.degToRad(Math.min(elDeg, 89.5))
     const v = THREE.MathUtils.degToRad(this.camera.fov) / 2
     const h = Math.atan(Math.tan(v) * this.camera.aspect)
@@ -205,10 +226,123 @@ export class Engine {
     this.onChange?.()
   }
 
+  /** Fly to a saved shot: azimuth, elevation (degrees) and distance (grid-box units). */
+  flyTo(azDeg: number, elDeg: number, dist: number) {
+    const az = THREE.MathUtils.degToRad(azDeg), el = THREE.MathUtils.degToRad(Math.max(-89.5, Math.min(elDeg, 89.5)))
+    const to = new THREE.Vector3(Math.cos(el) * Math.sin(az), -Math.cos(el) * Math.cos(az), Math.sin(el)).multiplyScalar(dist)
+    this.tween = { from: this.camera.position.clone().sub(this.controls.target), to, t0: performance.now() }
+  }
+
+  /** Turntable: the camera circles the model slowly. */
+  setSpin(on: boolean, degPerSec = 8) {
+    this.controls.autoRotate = on
+    this.controls.autoRotateSpeed = degPerSec / 6   // OrbitControls: 2.0 ≈ 30 s per turn at 60 fps
+    this.dirty = true
+  }
+
+  /** A small still of the view as it is, `w` px wide (PNG data URL), for previews in the compose drawer. */
+  snapshot(w: number): string | null {
+    const vw = this.host.clientWidth, vh = this.host.clientHeight
+    if (!vw || !vh) return null
+    this.renderer.render(this.scene, this.camera)   // read back in the same task, so no preserveDrawingBuffer
+    const c = document.createElement('canvas')
+    c.width = w
+    c.height = Math.round((w * vh) / vw)
+    c.getContext('2d')!.drawImage(this.renderer.domElement, 0, 0, c.width, c.height)
+    return c.toDataURL('image/png')
+  }
+
+  /** A still of the geometry alone at `scale`× the view's pixels, transparent background (PNG blob). */
+  async render(scale = 2): Promise<Blob | null> {
+    const pr = this.renderer.getPixelRatio()
+    const w = this.host.clientWidth, h = this.host.clientHeight
+    this.renderer.setPixelRatio(pr * scale)
+    this.renderer.setSize(w, h, false)
+    const frame = this.frame.visible, plane = this.plane.visible
+    this.frame.visible = false
+    this.plane.visible = false
+    this.renderer.render(this.scene, this.camera)
+    const blob = await new Promise<Blob | null>((res) => this.renderer.domElement.toBlob(res, 'image/png'))
+    this.frame.visible = frame
+    this.plane.visible = plane
+    this.renderer.setPixelRatio(pr)
+    this.renderer.setSize(w, h, false)
+    this.dirty = true
+    return blob
+  }
+
+  private rt: THREE.WebGLRenderTarget | null = null
+
+  /** Off-screen renders of single layers from the current camera, as PNG data URLs (for the stages strip).
+   *  Nothing is drawn to the screen, so there is no flicker. */
+  thumbs(names: LayerName[], w: number, h: number): Partial<Record<LayerName, string>> {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2)
+    const W = Math.round(w * dpr), H = Math.round(h * dpr)
+    if (!this.rt || this.rt.width !== W || this.rt.height !== H) {
+      this.rt?.dispose()
+      this.rt = new THREE.WebGLRenderTarget(W, H, { samples: 4 })
+    }
+    const cam = this.camera.clone()
+    cam.aspect = w / h
+    cam.updateProjectionMatrix()
+    const keep = { view: this.view, active: this.active, ghosts: this.ghosts, frame: this.frame.visible, plane: this.plane.visible, scanner: this.scanner.visible }
+    const px = new Uint8Array(W * H * 4)
+    const canvas = document.createElement('canvas')
+    canvas.width = W
+    canvas.height = H
+    const ctx = canvas.getContext('2d')!
+    const out: Partial<Record<LayerName, string>> = {}
+    this.ghosts = new Set()
+    this.plane.visible = false
+    for (const name of names) {
+      if (!this.layers[name]) continue
+      this.view = name
+      this.active = name
+      this.apply()
+      this.scanner.visible = false
+      this.renderer.setRenderTarget(this.rt)
+      this.renderer.setClearColor(0x000000, 0)
+      this.renderer.clear()
+      this.renderer.render(this.scene, cam)
+      this.renderer.readRenderTargetPixels(this.rt, 0, 0, W, H, px)
+      const img = ctx.createImageData(W, H)
+      for (let y = 0; y < H; y++) img.data.set(px.subarray((H - 1 - y) * W * 4, (H - y) * W * 4), y * W * 4)   // GL rows are bottom-up
+      ctx.putImageData(img, 0, 0)
+      out[name] = canvas.toDataURL('image/png')
+    }
+    this.renderer.setRenderTarget(null)
+    this.view = keep.view
+    this.active = keep.active
+    this.ghosts = keep.ghosts
+    this.apply()
+    this.frame.visible = keep.frame
+    this.plane.visible = keep.plane
+    this.scanner.visible = keep.scanner
+    this.dirty = true
+    return out
+  }
+
   /** Back to the starting view, centred on the grid. */
   home() {
     this.controls.target.set(0, 0, 0.42)
     this.orbitTo(35, 22)
+  }
+
+  /** Camera distance to the target in grid-box units, and the vertical field of view. */
+  lens() {
+    return { dist: this.camera.position.distanceTo(this.controls.target), fov: this.camera.fov }
+  }
+
+  /** Grid-space bounding box of what is shown (the active layer, else the model). */
+  boxGrid(): { min: [number, number, number]; max: [number, number, number] } | null {
+    const layer = this.layers[this.active] ?? this.layers.model
+    if (!layer) return null
+    this.scene.updateMatrixWorld(true)
+    const b = new THREE.Box3().setFromObject(layer)
+    if (b.isEmpty()) return null
+    const inv = new THREE.Matrix4().copy(this.root.matrixWorld).invert()
+    b.applyMatrix4(inv)
+    return { min: [b.min.x, b.min.y, b.min.z], max: [b.max.x, b.max.y, b.max.z] }
   }
 
   /** Current azimuth / elevation in degrees, for the readout. */
@@ -395,6 +529,21 @@ export class Engine {
     this.grids[name] = grid
   }
 
+  /** The cells drawn for a voxel layer, as x, y, z, value quads (see setVoxels), or null. */
+  cellsOf(name: LayerName): number[] | null {
+    const l = this.layers[name]
+    return l instanceof THREE.InstancedMesh ? (l.userData.cells as number[]) : null
+  }
+
+  /** Per-cell colours for a voxel layer (linear RGB triples, in the order of cellsOf), e.g. Evolve's nations. */
+  setVoxelColors(name: LayerName, rgb: Float32Array) {
+    const l = this.layers[name]
+    if (!(l instanceof THREE.InstancedMesh) || !l.instanceColor) return
+    l.instanceColor.array.set(rgb.subarray(0, l.instanceColor.array.length))
+    l.instanceColor.needsUpdate = true
+    this.dirty = true
+  }
+
   show(name: ViewName) {
     this.view = name
     this.active = name === 'scan' ? 'processed' : name
@@ -415,6 +564,22 @@ export class Engine {
     if (p.floor != null) this.showFloor = p.floor
     if (this.outline) this.outline.visible = this.showBounds
     if (this.floor) this.floor.visible = this.showFloor
+    this.dirty = true
+  }
+
+  /** Lighting presets: studio (key from the camera's upper left), soft, flat (no shading), rim (backlit edge). */
+  setLighting(preset: 'studio' | 'soft' | 'flat' | 'rim') {
+    const { hemi, key, rim } = this.lights
+    const p = {
+      studio: [2.1, 1.6, 0, [-0.6, 0.9, 1]],
+      soft: [2.8, 0.7, 0, [-0.3, 0.5, 1]],
+      flat: [3.6, 0, 0, [0, 0, 1]],
+      rim: [1.2, 0.9, 2.4, [-0.8, 0.6, 0.6]],
+    }[preset] as [number, number, number, number[]]
+    hemi.intensity = p[0]
+    key.intensity = p[1]
+    rim.intensity = p[2]
+    key.position.set(p[3][0], p[3][1], p[3][2])
     this.dirty = true
   }
 

@@ -301,7 +301,7 @@ export function Dock({ panels, layout, onLayout, center, onReset }: {
         <AreaMenu anchor={menu.anchor} area={menuArea.area} panels={panels} layout={layout}
           onClose={() => setMenu(null)}
           onChoose={(p) => { choose(menu.area, p); setMenu(null) }}
-          onCloseTab={() => { onLayout(closePanel(layoutRef.current, menuArea.area.active)); setMenu(null) }}
+          onHide={(id: string) => { onLayout(closePanel(layoutRef.current, id)) }}
           onReset={onReset && (() => { setMenu(null); onReset() })} />,
         document.body,
       )}
@@ -366,17 +366,10 @@ function AreaView({ zone, index, area, tabs, byId, target, menuOpen, onTabDown, 
 
 // ---------- editor-type menu ----------
 
-function Check() {
-  return (
-    <svg width={12} height={12} viewBox="0 0 16 16" aria-hidden style={{ display: 'block' }}>
-      <path d="M3 8.5 6.5 12 13 4.5" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="square" vectorEffect="non-scaling-stroke" />
-    </svg>
-  )
-}
 
-function AreaMenu({ anchor, area, panels, layout, onClose, onChoose, onCloseTab, onReset }: {
+function AreaMenu({ anchor, area, panels, layout, onClose, onChoose, onHide, onReset }: {
   anchor: DOMRect; area: Area; panels: PanelDef[]; layout: DockLayout
-  onClose: () => void; onChoose: (panel: string) => void; onCloseTab: () => void; onReset?: () => void
+  onClose: () => void; onChoose: (panel: string) => void; onHide: (panel: string) => void; onReset?: () => void
 }) {
   const ref = useRef<HTMLDivElement>(null)
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null)
@@ -441,26 +434,28 @@ function AreaMenu({ anchor, area, panels, layout, onClose, onChoose, onCloseTab,
   return (
     <div ref={ref} className="qd-menu" role="menu" aria-label="Panel" onKeyDown={nav}
       style={pos ? { left: pos.left, top: pos.top } : { left: 0, top: 0, visibility: 'hidden' }}>
-      <div className="qd-menu__label">Panel</div>
+      <div className="qd-menu__label">Panels</div>
       {panels.map((p) => {
         const here = area.tabs.includes(p.id)
-        const where = here ? null : findPanel(layout, p.id)
+        const where = findPanel(layout, p.id)
+        const shown = !!where
         return (
-          <button key={p.id} type="button" role="menuitemcheckbox" aria-checked={here}
-            className={'qd-menu__item' + (p.id === area.active ? ' qd-menu__item--on' : '')} onClick={() => onChoose(p.id)}>
-            <span className="qd-menu__check">{here && <Check />}</span>
-            <Icon name={p.icon} size={14} />
-            <span className="qd-menu__title">{p.title}</span>
-            <span className="qd-menu__hint">{where ? where.zone : here ? '' : 'closed'}</span>
-          </button>
+          <div key={p.id} className={'qd-menu__row' + (p.id === area.active ? ' qd-menu__row--on' : '')}>
+            <button type="button" role="menuitem" className="qd-menu__item" onClick={() => onChoose(p.id)}
+              data-tip={shown ? (here ? `Show ${p.title.toLowerCase()} here` : `Move ${p.title.toLowerCase()} here`) : `Open ${p.title.toLowerCase()} here`}>
+              <Icon name={p.icon} size={14} />
+              <span className="qd-menu__title">{p.title}</span>
+              <span className="qd-menu__hint">{here ? 'here' : where ? where.zone : 'hidden'}</span>
+            </button>
+            <button type="button" role="menuitemcheckbox" aria-checked={shown} className={'qd-menu__eye' + (shown ? ' qd-menu__eye--on' : '')}
+              aria-label={shown ? `Hide ${p.title}` : `Show ${p.title}`} data-tip={shown ? 'Hide this panel' : 'Show this panel here'}
+              onClick={() => (shown ? onHide(p.id) : onChoose(p.id))}>
+              <Icon name={shown ? 'eye' : 'eyeOff'} size={14} />
+            </button>
+          </div>
         )
       })}
       <div className="qd-menu__rule" role="separator" />
-      <button type="button" role="menuitem" className="qd-menu__item" onClick={onCloseTab}>
-        <span className="qd-menu__check" />
-        <Icon name="clear" size={14} />
-        <span className="qd-menu__title">Close tab</span>
-      </button>
       {onReset && (
         <button type="button" role="menuitem" className="qd-menu__item" onClick={onReset}>
           <span className="qd-menu__check" />

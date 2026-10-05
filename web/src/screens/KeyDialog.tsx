@@ -1,5 +1,5 @@
 // Atlas API key. Kept in the user folder by the service, never in the project.
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useStore } from '../store'
 import { QPill } from '../qs/QPill'
 import { Dot } from './parts'
@@ -9,6 +9,11 @@ export function KeyDialog() {
   const [key, setKey] = useState('')
   const [show, setShow] = useState(false)
   const [test, setTest] = useState<null | { ok: boolean; ms: number; msg?: string }>(null)
+  // return focus to whatever opened the dialog (the Atlas button)
+  useEffect(() => {
+    const before = document.activeElement as HTMLElement | null
+    return () => before?.focus?.()
+  }, [])
   const close = () => useStore.setState({ keyOpen: false, error: null })
   const runTest = async () => {
     const t0 = performance.now()
@@ -18,15 +23,7 @@ export function KeyDialog() {
   }
   return (
     <div className="modal-scrim" onMouseDown={(e) => e.target === e.currentTarget && close()}>
-      <div className="modal" role="dialog" aria-labelledby="key-title">
-        <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
-          {(['tl', 'tr', 'bl', 'br'] as const).map((p) => (
-            <div key={p} style={{
-              position: 'absolute', width: 20, height: 20, [p[0] === 't' ? 'top' : 'bottom']: 0, [p[1] === 'l' ? 'left' : 'right']: 0,
-              [p[0] === 't' ? 'borderTop' : 'borderBottom']: '1px solid var(--qs-ink)', [p[1] === 'l' ? 'borderLeft' : 'borderRight']: '1px solid var(--qs-ink)',
-            }} />
-          ))}
-        </div>
+      <div className="modal" role="dialog" aria-modal="true" aria-labelledby="key-title">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <span className="qs-label">Atlas</span>
           <span id="key-title" className="qs-title">API key</span>
@@ -51,9 +48,9 @@ export function KeyDialog() {
         </label>
         <div className="row">
           <QPill kind={key ? 'commit' : 'disabled'} label="Save key" loading={st.busy.key} onClick={() => st.saveKey(key).then(close)} />
-          <QPill kind="faint" label="Test connection" loading={st.busy.keytest} onClick={runTest} />
-          {st.key?.set && <QPill kind="ghost" label="Remove" onClick={() => st.clearKey()} />}
+          <QPill kind="ghost" label="Test connection" loading={st.busy.keytest} onClick={runTest} />
           <span style={{ flex: 1 }} />
+          {st.key?.set && <QPill kind="ghost" size="s" label="Remove saved key" onClick={() => { if (window.confirm('Remove the saved Atlas key from this computer?')) st.clearKey() }} />}
           <QPill kind="ghost" label="Close" onClick={close} />
         </div>
         <span className="qs-mono" style={{ lineHeight: 1.5, color: 'var(--qs-ink3)' }}>

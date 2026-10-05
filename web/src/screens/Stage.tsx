@@ -13,7 +13,17 @@ import { Icon, IconButton } from '../qs/Icon'
 import { Popover, PopSection, Check } from '../qs/Popover'
 import { Slider } from '../qs/Slider'
 import { Spinner } from './parts'
+import { HudLayer, FAMILIES, PRESETS, presetOf, full, PRESENT_PRESETS, presentPresetOf, toggleVariant, variantsOf } from '../hud/Composer'
+import { MarkLibrary } from './MarkLibrary'
+import { usePresent } from '../present'
+import { PresentChrome } from './PresentBar'
+import type { HudCtx, Vec3 } from '../hud/types'
 import { MODEL_EXT } from './InputPane'
+import { live, bump } from '../live'
+import { ownerGrid, ownerToColors } from '../view/nations'
+
+const MODE_LABEL: Record<string, string> = { gaussian: 'Gaussian', emulator: 'Emulation', atlas: 'Atlas', nations: 'Evolve' }
+const modeLabel = (m: string) => MODE_LABEL[m] ?? m
 
 const SWEEP_SECONDS = 10
 
@@ -30,6 +40,20 @@ const LAYERS: { id: Layer; icon: string; t: string }[] = [
   { id: 'processed', icon: 'quantum', t: 'Quantum result' },
   { id: 'result', icon: 'print', t: 'Surface' },
 ]
+const LIGHTS = [
+  { id: 'studio', t: 'Key', d: 'A key light from the upper left of the camera, with sky fill.' },
+  { id: 'soft', t: 'Soft', d: 'Mostly sky light; gentle shading, good for dense voxels.' },
+  { id: 'flat', t: 'Flat', d: 'No shading at all: tone shows only the value.' },
+  { id: 'rim', t: 'Rim', d: 'A backlight outlines the silhouette.' },
+] as const
+const BACKDROPS = [
+  { id: 'plain', t: 'Plain', d: 'The page background.' },
+  { id: 'dots', t: 'Dots', d: 'A 24 px dot grid behind the model.' },
+  { id: 'lines', t: 'Grid', d: 'A fine square grid, like graph paper.' },
+  { id: 'gradient', t: 'Vignette', d: 'Lighter at the centre, darker at the edges.' },
+  { id: 'studio', t: 'Studio', d: 'A soft horizon, like a photo cyclorama.' },
+] as const
+
 const SHADINGS: { id: Shading; icon: string; t: string; d: string }[] = [
   { id: 'wire', icon: 'wire', t: 'Wireframe', d: 'Edges only: voxels as a lattice, meshes as triangles.' },
   { id: 'solid', icon: 'solid', t: 'Solid', d: 'Plain studio shading in one grey.' },
@@ -40,10 +64,14 @@ const SHADINGS: { id: Shading; icon: string; t: string; d: string }[] = [
 export function Stage() {
   const host = useRef<HTMLDivElement>(null)
   const [engine, setEngine] = useState<Engine | null>(null)
-  const [, setTick] = useState(0)
+  const [tick, setTick] = useState(0)
   const [over, setOver] = useState(false)
   const [tables, setTables] = useState<ShaderTables[]>([])
   const st = useStore()
+  const pr = usePresent()
+  const present = pr.mode === 'present'
+  const labCompose = Object.keys(st.compose).length ? st.compose : (PRESETS.find((p) => p.id === 'clean')!.set() as Record<string, string>)
+  const shown: Record<string, string> = present ? (pr.preview ?? pr.compose) : labCompose
   const { model, modelMesh, grid, gridData, procData, resultMesh, view, slice, m, hud, scan, theme, tool, shading, shade, layers } = st
 
   useEffect(() => {
@@ -61,12 +89,22 @@ export function Stage() {
   }, [engine, modelMesh, grid])
   const valued = shading === 'value' || shading === 'entangle'
   useEffect(() => { engine?.setVoxels('voxels', gridData, 0.5, valued) }, [engine, gridData, valued])
-  useEffect(() => { engine?.setVoxels('processed', procData, m.level, valued) }, [engine, procData, m.level, valued])
+  // Evolve draws the turn on screen, each cell in its nation's colour; other modes draw the result by value
+  const ev = st.evolve
+  const nations = st.proc?.mode === 'nations' && ev.owner && ev.n ? { owner: ev.owner, n: ev.n } : null
+  useEffect(() => {
+    if (!engine) return
+    if (!nations) { engine.setVoxels('processed', procData, m.level, valued); return }
+    engine.setVoxels('processed', ownerGrid(nations.owner, nations.n), 0.5, false)
+    const cells = engine.cellsOf('processed')
+    if (cells) engine.setVoxelColors('processed', ownerToColors(nations.owner, cells, nations.n, theme))
+  }, [engine, procData, m.level, valued, nations?.owner, nations?.n, theme]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { engine?.setMesh('result', resultMesh) }, [engine, resultMesh])
   useEffect(() => { engine?.show(view as ViewName) }, [engine, view, gridData, procData, resultMesh, modelMesh])
   useEffect(() => { engine?.setGhosts((Object.keys(layers) as Layer[]).filter((k) => layers[k].visible)) }, [engine, layers, gridData, procData, resultMesh, modelMesh])
   useEffect(() => { engine?.setFrame({ bounds: hud.bounds, floor: hud.floor }) }, [engine, hud.bounds, hud.floor, grid])
-  useEffect(() => { engine?.setSlice(hud.slice || tool === 'slice' ? slice : null) }, [engine, slice, view, hud.slice, tool])
+  const planeOn = hud.slice || tool === 'slice' || (present && (pr.sweep || ((pr.preview ?? pr.compose).slicecard ?? 'off') !== 'off'))
+  useEffect(() => { engine?.setSlice(planeOn ? slice : null) }, [engine, slice, view, planeOn])
   useEffect(() => { if (engine && view === 'scan') engine.setScan(slice.axis === 'z' ? slice.index + 1 : 0) }, [engine, view, slice, grid])
   useEffect(() => { if (view === 'scan' && slice.axis !== 'z') st.setSlice({ axis: 'z' }) }, [view]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -90,11 +128,49 @@ export function Stage() {
     engine.setShading(shading === 'entangle' && !entMats ? 'value' : shading, entMats)
   }, [engine, shading, entMats, theme])
 
+  useEffect(() => { engine?.setLighting(shade.light) }, [engine, shade.light])
+  // present: turntable, and a reel that flies through the saved shots
+  useEffect(() => { engine?.setSpin(present && pr.spin, pr.spinSpeed * pr.spinDir) }, [engine, present, pr.spin, pr.spinSpeed, pr.spinDir])
+  useEffect(() => {
+    if (!engine || !present) return
+    const sh = pr.shots[pr.shot]
+    if (sh) engine.flyTo(sh.az, sh.el, sh.dist)
+  }, [engine, present, pr.fly]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!present || !pr.reel || pr.shots.length < 2) return
+    const t = setInterval(() => { const p = usePresent.getState(); p.setShot((p.shot + 1) % p.shots.length) }, pr.reelSec * 1000)
+    return () => clearInterval(t)
+  }, [present, pr.reel, pr.shots.length, pr.reelSec])
+  useEffect(() => { if (engine) { (window as unknown as { __qsEngine?: Engine }).__qsEngine = engine; live.engine = engine } }, [engine])
+  // present opens on navigate: the probe's hover readout and the slice drag are lab tools
+  useEffect(() => { if (present && (useStore.getState().tool === 'probe' || useStore.getState().tool === 'slice')) st.setTool('navigate') }, [present]) // eslint-disable-line react-hooks/exhaustive-deps
+  // present: the cutting plane sweeps up and down; compositions can cycle on their own
+  useEffect(() => {
+    if (!present || !pr.sweep || !grid) return
+    let dir = 1
+    const t = setInterval(() => {
+      const s0 = useStore.getState().slice
+      let next = s0.index + dir
+      if (next > grid.n - 1 || next < 0) { dir = -dir; next = s0.index + dir }
+      useStore.getState().setSlice({ index: next })
+    }, 6000 / grid.n)
+    return () => clearInterval(t)
+  }, [present, pr.sweep, grid])
+  useEffect(() => {
+    if (!present || !pr.cycle) return
+    const t = setInterval(() => {
+      const p = usePresent.getState()
+      const i = PRESENT_PRESETS.findIndex((x) => x.id === presentPresetOf(p.compose))
+      p.setCompose(full(PRESENT_PRESETS[(i + 1) % PRESENT_PRESETS.length].set()))
+    }, pr.cycleSec * 1000)
+    return () => clearInterval(t)
+  }, [present, pr.cycle, pr.cycleSec])
+
   // tools: the slice tool takes the left drag; navigate turns the probe off
   useEffect(() => { if (engine) engine.controls.enableRotate = tool !== 'slice' }, [engine, tool])
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
-      if (e.metaKey || e.ctrlKey || e.altKey || (e.target as HTMLElement)?.closest('input,textarea,select')) return
+      if (e.metaKey || e.ctrlKey || e.altKey || (e.target instanceof Element && e.target.closest('input,textarea,select,[contenteditable="true"]'))) return
       const t = TOOLS.find((x) => x.key.toLowerCase() === e.key.toLowerCase())
       if (t) st.setTool(t.id)
       if (e.key === 'Home') engine?.home()
@@ -136,13 +212,63 @@ export function Stage() {
     return { x, y, z, p, lines: [cell, `surface · ${val.toFixed(2)} ${val >= g.m.level ? '≥' : '<'} level ${g.m.level.toFixed(2)}`] }
   }
   const reading = tool === 'probe' || tool === 'annotate' || tool === 'measure'
-  const probe = useProbe({ pick, enabled: !!model && reading, maxPins: tool === 'measure' ? 6 : 4, pinning: tool === 'annotate' || tool === 'measure' })
+  const probe = useProbe({ pick, enabled: !!model && reading, maxPins: tool === 'measure' ? 6 : 8, pinning: tool === 'annotate' || tool === 'measure' })
   const project = (h: ProbeHit) => {
     if (!engine) return null
     const [x, y] = engine.project(h.p ? new THREE.Vector3(...h.p) : new THREE.Vector3(h.x, h.y, h.z))
     return { x, y }
   }
   useEffect(() => { probe.clear() }, [model?.model_id]) // eslint-disable-line react-hooks/exhaustive-deps
+  live.probe = probe
+  useEffect(() => { bump() }, [probe.pins])
+
+  /** Auto-annotate: pins the notable cells of what was computed last (quantum result, else the voxels). */
+  live.autoAnnotate = () => {
+    const g = useStore.getState()
+    const src = g.procData ?? g.gridData
+    if (!src || !engine) return 0
+    const n = src.n, d = src.data, lvl = g.procData ? m.level : 0.5, mmc = grid?.voxel_size ?? 1
+    const cnt = new Array<number>(n).fill(0)
+    let peak = -Infinity, pk: Vec3 = [0, 0, 0], top = -1, base = n, sx = 0, sy = 0, total = 0
+    for (let x = 0; x < n; x++) for (let y = 0; y < n; y++) for (let z = 0; z < n; z++) {
+      const v = d[(x * n + y) * n + z]
+      if (v > peak || (v === peak && (x - n / 2) ** 2 + (y - n / 2) ** 2 < (pk[0] - n / 2) ** 2 + (pk[1] - n / 2) ** 2)) { peak = v; pk = [x, y, z] }
+      if (v >= lvl) { cnt[z]++; total++; sx += x; sy += y; if (z > top) top = z; if (z < base) base = z }
+    }
+    if (!total) return 0
+    const cx = sx / total, cy = sy / total
+    const wz = cnt.indexOf(Math.max(...cnt))
+    const inLayer = (z: number, far: boolean): Vec3 => {
+      let best: Vec3 = [Math.round(cx), Math.round(cy), z], bd = far ? -1 : Infinity
+      for (let x = 0; x < n; x++) for (let y = 0; y < n; y++) {
+        if (d[(x * n + y) * n + z] < lvl) continue
+        const dd = (x - cx) ** 2 + (y - cy) ** 2
+        if (far ? dd > bd : dd < bd) { bd = dd; best = [x, y, z] }
+      }
+      return best
+    }
+    const notes: [Vec3, string, string][] = [
+      [pk, 'Peak', `value ${peak.toFixed(2)} · cell ${pk.join(' ')}`],
+      [inLayer(top, false), 'Top', `layer ${top} · ${((top + 1) * mmc).toFixed(1)} mm up`],
+      [inLayer(wz, true), 'Widest layer', `layer ${wz} · ${cnt[wz]} cells`],
+      [inLayer(base, false), 'Base', `layer ${base} · footprint ${cnt[base]} cells`],
+    ]
+    if (g.procData && g.gridData && g.gridData.n === n) {
+      let dm = -1, dc: Vec3 = [0, 0, 0], a = 0, b = 0
+      for (let i = 0; i < d.length; i++) {
+        const dv = Math.abs(d[i] - g.gridData.data[i])
+        if (dv > dm) { dm = dv; a = g.gridData.data[i]; b = d[i]; dc = [Math.floor(i / (n * n)), Math.floor(i / n) % n, i % n] }
+      }
+      if (dm > 0.01) notes.push([dc, 'Most changed', `${a.toFixed(2)} → ${b.toFixed(2)} · cell ${dc.join(' ')}`])
+    }
+    const seen = new Set<string>()
+    const uniq = notes.filter(([c]) => { const k = c.join(); if (seen.has(k)) return false; seen.add(k); return true })
+    probe.setPins(uniq.map(([c, t, info]) => {
+      const [px, py] = engine.project(new THREE.Vector3(...c))
+      return { px, py, hit: { x: c[0], y: c[1], z: c[2], p: c, lines: [t, info] as [string, string] } }
+    }))
+    return uniq.length
+  }
 
   // slice tool: vertical drag moves the cutting plane one layer per 6 px
   const sliceDrag = useRef<{ y: number; i: number } | null>(null)
@@ -157,6 +283,55 @@ export function Stage() {
     onPointerLeave: () => { sliceDrag.current = null },
   } : {}
 
+  // live size of the view, for the HUD
+  const [vsize, setVsize] = useState({ w: 800, h: 600 })
+  useEffect(() => {
+    const el = host.current
+    if (!el) return
+    const ro = new ResizeObserver(() => setVsize({ w: el.clientWidth, h: el.clientHeight }))
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+  const hudCtx = (e: Engine): HudCtx => {
+    const a = e.angles(), lens = e.lens()
+    const done = [!!model, !!gridData, !!procData, !!st.report]
+    const modeName = modeLabel(st.proc?.mode ?? st.q.mode)
+    const bits = Math.ceil(Math.log2(Math.min(grid?.n ?? 32, 32)))
+    return {
+      w: vsize.w, h: vsize.h, tick,
+      cam: { az: a.az, el: a.el, dist: lens.dist, fov: lens.fov },
+      project: (p: Vec3) => {
+        const [x, y] = e.project(new THREE.Vector3(...p))
+        return Number.isFinite(x) && Number.isFinite(y) ? [x, y] : null
+      },
+      box: e.boxGrid(), rect: e.bounds2D(),
+      n: grid?.n ?? e.n, mm: grid?.voxel_size ?? 1,
+      view, tool, model, grid, proc: st.proc, job: st.job, report: st.report,
+      q: { ...st.q, shots: st.q.shots ?? null },
+      level: m.level, slice,
+      hover: probe.hover?.hit ? { x: probe.hover.px, y: probe.hover.py, cell: [probe.hover.hit.x, probe.hover.hit.y, probe.hover.hit.z], value: null, lines: probe.hover.hit.lines } : null,
+      pins: probe.pins.map((pin, i) => {
+        const pos = project(pin.hit)
+        return { n: i + 1, cell: [pin.hit.x, pin.hit.y, pin.hit.z] as Vec3, p: pin.hit.p, lines: pin.hit.lines, x: pos?.x ?? null, y: pos?.y ?? null }
+      }),
+      steps: {
+        done, live: Math.max(0, done.lastIndexOf(true)),
+        labels: [
+          ['Model', model ? (model.builtin ? 'test_cup.stl' : model.file) : '—'],
+          ['Voxelise', grid ? `${grid.n}³ · ${bits * 3} qubits` : '—'],
+          ['Quantum', st.proc ? `${modeName} · ${st.job?.status === 'running' ? 'running' : 'live'}` : '—'],
+          ['Mesh', st.report ? `Level ${m.level.toFixed(2)}` : '—'],
+        ],
+      },
+      runs: present && pr.shots.length ? pr.shots.map((sh, i) => ({ id: i, label: `Shot ${i + 1} · az ${Math.round(sh.az)}° el ${Math.round(sh.el)}°`, mode: 'shot', strength: sh.el / 90, reach: sh.az / 360, t: Date.now() - (pr.shots.length - i) * 60000 })) : st.runs,
+      busy: Object.values(st.busy).some(Boolean),
+      orbitTo: (az, el) => e.orbitTo(az, el),
+      thumbs: (names, tw, th) => e.thumbs(names, tw, th),
+      setSlice: (p) => st.setSlice(p),
+      goStep: (i) => { const v = (['model', 'voxels', 'processed', 'result'] as View[])[i]; if (avail[v]) st.setView(v) },
+    }
+  }
+
   const avail: Record<View, boolean> = { model: !!model, voxels: !!gridData, processed: !!procData, result: !!resultMesh, scan: !!procData && !!gridData }
   const info = (() => {
     if (!model) return null
@@ -164,7 +339,7 @@ export function Stage() {
     const mode = SHADINGS.find((x) => x.id === shading)!.t.toLowerCase()
     if (view === 'model') return [`Original mesh · ${mode}`, `${name} · ${model.faces.toLocaleString()} faces`]
     if (view === 'voxels' && grid) return [`Input grid · ${mode}`, `${grid.n}³ · ${grid.solid.toLocaleString()} solid cells`]
-    if (view === 'processed' && st.proc) return [`Quantum result · ${mode}`, `${st.proc.mode === 'atlas' ? 'Atlas' : st.proc.mode === 'emulator' ? 'emulation' : 'Gaussian'} · cells ≥ ${m.level.toFixed(2)}`]
+    if (view === 'processed' && st.proc) return [`Quantum result · ${mode}`, st.proc.mode === 'nations' ? `Evolve · turn ${ev.turn} of ${ev.turns} · one colour per nation` : `${modeLabel(st.proc.mode)} · cells ≥ ${m.level.toFixed(2)}`]
     if (view === 'result' && st.report) return [`Surface · ${mode}`, `${st.report.faces.toLocaleString()} faces · ${st.report.watertight ? 'watertight' : 'open'}`]
     if (view === 'scan') {
       const layered = st.job?.status === 'running' ? st.job.frontier != null : st.proc?.tiles?.mode === 'layers' && (st.proc.tiles.jobs ?? 1) > 1
@@ -175,7 +350,6 @@ export function Stage() {
   const busy = st.busy.model ? 'Opening' : st.busy.vox ? 'Voxelising' : st.busy.proc && st.q.mode !== 'atlas' ? 'Processing' : st.busy.mesh ? 'Meshing' : null
   const shaded = view === 'processed' || view === 'scan'
   const ghostCount = LAYERS.filter((l) => layers[l.id].visible).length
-  const overlayCount = (['bounds', 'floor', 'caption', 'frame', 'dims', 'slice', 'legend'] as const).filter((k) => hud[k]).length
 
   return (
     <main className="stage">
@@ -217,34 +391,17 @@ export function Stage() {
               <Check label="Tool shelf" note="probe, annotate, measure, slice" checked={hud.tools} onChange={(v) => st.setHud({ tools: v })} />
             </PopSection>
           </Popover>
-          <Popover icon="layers" title="Overlays" desc="Guides and readouts drawn over the geometry." on={overlayCount > 0} width={300}>
-            <PopSection label="Guides">
-              <Check label="Grid box" note="dashed n³ outline" checked={hud.bounds} onChange={(v) => st.setHud({ bounds: v })} />
-              <Check label="Floor" note="lines under the model" checked={hud.floor} onChange={(v) => st.setHud({ floor: v })} />
-              <Check label="Cutting plane" note="the slice in the view" checked={hud.slice} onChange={(v) => st.setHud({ slice: v })} />
-            </PopSection>
-            <PopSection label="Readouts">
-              <Check label="Info" note="what the view shows" checked={hud.caption} onChange={(v) => st.setHud({ caption: v })} />
-              <Check label="Size marks" note="width and height in mm" checked={hud.dims} onChange={(v) => st.setHud({ dims: v })} />
-              <Check label="Value scale" note="in shaded views" checked={hud.legend} onChange={(v) => st.setHud({ legend: v })} />
-              <Check label="Frame" note="corners and centre cross" checked={hud.frame} onChange={(v) => st.setHud({ frame: v })} />
-            </PopSection>
-          </Popover>
-          <div className="shading" role="radiogroup" aria-label="Shading">
-            {SHADINGS.map((sh) => (
-              <button key={sh.id} role="radio" aria-checked={shading === sh.id} className={'shading__b' + (shading === sh.id ? ' shading__b--on' : '')}
-                data-tip={`${sh.t} shading`} data-tip-desc={sh.d} disabled={sh.id === 'entangle' && !tables.length} onClick={() => st.setShading(sh.id)}>
-                <Icon name={sh.icon} />
-              </button>
-            ))}
-          </div>
+          <ComposeMenu compose={labCompose} setCompose={(c) => st.setCompose({ ...labCompose, ...c })} />
+          <IconButton name="drag" title="Arrange" desc="Drag the readouts and marks around the view. Double-click a handle to send a piece back." on={pr.arrange} onClick={() => pr.setArrange(!pr.arrange)} />
           <ShadingOptions tables={tables} />
+          <button className="stage__present" disabled={!model} onClick={() => pr.setMode('present')}
+            data-tip="Present this result" data-tip-desc="Open it full-window in a composed HUD to photograph, record or diagram it. Your pins and view come along.">Present →</button>
         </div>
       </div>
 
       <div
         ref={host}
-        className={'stage__view stage__view--' + tool}
+        className={'stage__view stage__view--' + tool + (model ? ' backdrop--' + shade.backdrop : '')}
         {...probe.handlers}
         {...sliceHandlers}
         onDragOver={(e) => { e.preventDefault(); setOver(true) }}
@@ -257,22 +414,24 @@ export function Stage() {
         }}
         style={{ background: model ? undefined : 'radial-gradient(circle,var(--qs-dot) 1px,transparent 1.5px) 12px 12px/24px 24px' }}
       >
-        {hud.frame && <ViewMarks />}
+        {hud.frame && !present && <ViewMarks />}
         {!model && <Landing over={over} />}
         {model && over && <div className="stage__drop">Release to open</div>}
-        {model && engine && <QProbeAnchored probe={probe} project={project} n={grid?.n ?? 32} mm={grid?.voxel_size ?? 1} measure={tool === 'measure'} />}
-
         {model && engine && (
-          <div className="hud">
-            {hud.dims && <SizeMarks engine={engine} />}
-            {hud.legend && shaded && <Legend level={m.level} mode={shading} />}
-          </div>
+          <QProbeAnchored probe={probe} project={project} n={grid?.n ?? 32} mm={grid?.voxel_size ?? 1} measure={tool === 'measure'}
+            hideHover={(shown.selection ?? 'off') !== 'off'} hidePins={(shown.callout ?? 'off') !== 'off'} showPins={present} />
         )}
 
-        {model && (
-          <div className="vp-tl" onPointerDown={(e) => e.stopPropagation()} onPointerUp={(e) => e.stopPropagation()}>
-            {hud.tools && (
-              <div className="toolshelf" role="toolbar" aria-label="Tools">
+        {model && engine && (
+          <HudLayer ctx={(live.ctx = hudCtx(engine))} compose={shown}
+            arrange={pr.arrange && !pr.bare} grab={present && !pr.bare && !pr.recording}
+            looks={present ? pr.looks : undefined} hl={present ? pr.hl : null}
+            texts={present ? pr.texts : undefined} onText={pr.setText}
+            positions={Object.fromEntries(Object.entries(pr.pos).filter(([k]) => k.startsWith(pr.mode + '|')).map(([k, v]) => [k.slice(pr.mode.length + 1), v]))}
+            onMove={(k, p) => pr.setPos(`${pr.mode}|${k}`, p)}
+            chrome={present ? { top: <PresentChrome /> } : {
+            left: hud.tools ? (
+              <div className="toolshelf hud-chrome" role="toolbar" aria-label="Tools" onPointerDown={(e) => e.stopPropagation()} onPointerUp={(e) => e.stopPropagation()}>
                 {TOOLS.map((t, i) => (
                   <span key={t.id} style={{ display: 'contents' }}>
                     {i === 1 && <span className="toolshelf__sep" />}
@@ -287,33 +446,72 @@ export function Stage() {
                   </>
                 )}
               </div>
-            )}
-            {hud.caption && info && (
+            ) : undefined,
+            tl: hud.caption && info ? (
               <div className="hud__info">
                 <span>{info[0]}</span>
                 <span>{info[1]}</span>
                 {tool === 'slice' && grid && <span>slice · drag up or down · z {slice.index}</span>}
               </div>
-            )}
-          </div>
-        )}
-
-        {model && engine && (hud.axes || hud.nav || hud.camera) && (
-          <div className="nav" onPointerDown={(e) => e.stopPropagation()} onPointerUp={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
-            {hud.axes && <Gizmo engine={engine} />}
-            {hud.camera && <CameraReadout engine={engine} />}
-            {hud.nav && (
-              <div className="nav__col">
+            ) : undefined,
+            tr: hud.axes || hud.camera ? (
+              <div className="nav hud-chrome" onPointerDown={(e) => e.stopPropagation()} onPointerUp={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
+                {hud.axes && <Gizmo engine={engine} />}
+                {hud.camera && <CameraReadout engine={engine} />}
+              </div>
+            ) : undefined,
+            right: hud.nav ? (
+              <div className="nav__col hud-chrome" onPointerDown={(e) => e.stopPropagation()} onPointerUp={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
                 <DragButton name="zoom" title="Zoom" desc="Drag up or down here, or scroll in the view." onDrag={(_, dy) => engine.nudge({ zoom: dy })} />
                 <DragButton name="pan" title="Pan" desc="Drag here, or right-drag in the view." onDrag={(dx, dy) => engine.nudge({ pan: [dx, dy] })} />
                 <DragButton name="orbit" title="Orbit" desc="Drag here, or drag in the view." onDrag={(dx, dy) => engine.nudge({ orbit: [dx, dy] })} />
                 <IconButton name="frame" title="Reset view" desc="Back to the starting angle, centred on the grid." hotkey="Home" side="left" onClick={() => engine.home()} />
               </div>
-            )}
-          </div>
+            ) : undefined,
+            br: hud.legend && shaded && !(nations && (view === 'processed' || view === 'scan')) ? <Legend level={m.level} mode={shading} /> : undefined,
+          }} />
         )}
       </div>
     </main>
+  )
+}
+
+/** The composer: presets, then one variant (or off) per mark family, then the scene guides. */
+export function ComposeMenu({ compose, setCompose, guides = true, align = 'right' }: {
+  compose: Record<string, string>; setCompose: (c: Record<string, string>) => void; guides?: boolean; align?: 'left' | 'right'
+}) {
+  const st = useStore()
+  const { hud } = st
+  const current = presetOf(compose)
+  const onCount = FAMILIES.filter((f) => variantsOf(compose, f.id).length).length
+  return (
+    <Popover icon="layers" title="Compose the view" desc="Choose which marks and readouts are drawn over the geometry, family by family, or start from a preset." on={onCount > 0} width={384} align={align}>
+      <PopSection label="Compositions">
+        <div className="cmp-presets">
+          {PRESETS.map((p) => (
+            <button key={p.id} className={'cmp-preset' + (current === p.id ? ' cmp-preset--on' : '')} onClick={() => setCompose(full(p.set()))} data-tip={p.title} data-tip-desc={p.desc}>
+              <span className="cmp-preset__t">{p.title}</span>
+              <span className="cmp-preset__d">{p.desc}</span>
+            </button>
+          ))}
+          <span className={'cmp-preset' + (current ? '' : ' cmp-preset--on')} style={{ cursor: 'default' }}>
+            <span className="cmp-preset__t">Custom</span>
+            <span className="cmp-preset__d">{current ? 'change any family below' : `${onCount} families on`}</span>
+          </span>
+        </div>
+      </PopSection>
+      <PopSection label="Marks · several per family">
+        <MarkLibrary compose={compose} onToggle={(f, id) => setCompose({ [f]: toggleVariant(compose, f, id) })} tile={160} />
+      </PopSection>
+      {guides && <PopSection label="Guides">
+        <Check label="Grid box" note="dashed n³ outline" checked={hud.bounds} onChange={(v) => st.setHud({ bounds: v })} />
+        <Check label="Floor" note="lines under the model" checked={hud.floor} onChange={(v) => st.setHud({ floor: v })} />
+        <Check label="Cutting plane" note="the slice in the view" checked={hud.slice} onChange={(v) => st.setHud({ slice: v })} />
+        <Check label="Info" note="what the view shows" checked={hud.caption} onChange={(v) => st.setHud({ caption: v })} />
+        <Check label="Value scale" note="in shaded views" checked={hud.legend} onChange={(v) => st.setHud({ legend: v })} />
+        <Check label="Corners" note="the view's corner marks" checked={hud.frame} onChange={(v) => st.setHud({ frame: v })} />
+      </PopSection>}
+    </Popover>
   )
 }
 
@@ -322,11 +520,37 @@ function ShadingOptions({ tables }: { tables: ShaderTables[] }) {
   const { shading, shade } = st
   const table = tables.find((t) => t.id === shade.tables) ?? tables[0]
   return (
-    <Popover icon={SHADINGS.find((s) => s.id === shading)!.icon} title="Shading" desc="Options for the current shading mode." width={320} onIcon={undefined}>
-      <PopSection label="Mode">
-        <Segmented<Shading> size="s" value={shading} onChange={(v) => st.setShading(v)}
-          options={SHADINGS.map((s) => ({ value: s.id, label: s.t, disabled: s.id === 'entangle' && !tables.length }))} />
-        <p className="qs-help" style={{ marginTop: 8 }}>{SHADINGS.find((s) => s.id === shading)!.d}</p>
+    <Popover icon={SHADINGS.find((x) => x.id === shading)!.icon} title="Shading and render" desc="Shading mode, lighting, backdrop and the entanglement shader." width={340}>
+      <PopSection label="Shading">
+        <div className="swatches swatches--4">
+          {SHADINGS.map((sh) => (
+            <button key={sh.id} className={'swatch' + (shading === sh.id ? ' swatch--on' : '')} aria-pressed={shading === sh.id} aria-label={sh.t}
+              disabled={sh.id === 'entangle' && !tables.length} onClick={() => st.setShading(sh.id)} data-tip={sh.t} data-tip-desc={sh.d}>
+              <Icon name={sh.icon} size={22} />
+              <span className="swatch__t">{sh.t}</span>
+            </button>
+          ))}
+        </div>
+      </PopSection>
+      <PopSection label="Lighting">
+        <div className="swatches">
+          {LIGHTS.map((l) => (
+            <button key={l.id} className={'swatch' + (shade.light === l.id ? ' swatch--on' : '')} onClick={() => st.setShading(shading, { light: l.id })} data-tip={l.t} data-tip-desc={l.d}>
+              <span className={'swatch__ball swatch__ball--' + l.id} />
+              <span className="swatch__t">{l.t}</span>
+            </button>
+          ))}
+        </div>
+      </PopSection>
+      <PopSection label="Backdrop">
+        <div className="swatches">
+          {BACKDROPS.map((b) => (
+            <button key={b.id} className={'swatch' + (shade.backdrop === b.id ? ' swatch--on' : '')} onClick={() => st.setShading(shading, { backdrop: b.id })} data-tip={b.t} data-tip-desc={b.d}>
+              <span className={'swatch__bd backdrop--' + b.id} />
+              <span className="swatch__t">{b.t}</span>
+            </button>
+          ))}
+        </div>
       </PopSection>
       <PopSection label="Entanglement shader">
         {tables.length === 0 ? <p className="qs-help">No shader tables found.</p> : (
@@ -370,7 +594,7 @@ function LutThumb({ t }: { t: ShaderTables }) {
   return <canvas ref={ref} className="ent-row__lut" />
 }
 
-function QProbeAnchored({ probe, project, n, mm, measure }: { probe: ReturnType<typeof useProbe>; project: (h: ProbeHit) => { x: number; y: number } | null; n: number; mm: number; measure: boolean }) {
+function QProbeAnchored({ probe, project, n, mm, measure, hideHover, hidePins, showPins }: { probe: ReturnType<typeof useProbe>; project: (h: ProbeHit) => { x: number; y: number } | null; n: number; mm: number; measure: boolean; hideHover: boolean; hidePins: boolean; showPins: boolean }) {
   const ref = useRef<HTMLDivElement>(null)
   const [size, setSize] = useState({ w: 800, h: 600 })
   useEffect(() => {
@@ -383,7 +607,7 @@ function QProbeAnchored({ probe, project, n, mm, measure }: { probe: ReturnType<
   return (
     <>
       <div ref={ref} style={{ display: 'none' }} />
-      <QProbe w={size.w} h={size.h} n={n} probe={probe} project={project} mmPerCell={mm} hideClear measure={measure} />
+      <QProbe w={size.w} h={size.h} n={n} probe={probe} project={project} mmPerCell={mm} hideClear measure={measure} hideHover={hideHover} hidePins={hidePins} showPins={showPins} />
     </>
   )
 }
@@ -434,7 +658,7 @@ function Landing({ over }: { over: boolean }) {
 function DragButton({ name, title, desc, onDrag }: { name: string; title: string; desc: string; onDrag: (dx: number, dy: number) => void }) {
   const [on, setOn] = useState(false)
   return (
-    <IconButton name={name} title={title} desc={desc} side="left" on={on} onPointerDown={(e) => {
+    <IconButton name={name} title={title} desc={desc} side="left" on={on} drag={name} onPointerDown={(e) => {
       e.preventDefault()
       e.stopPropagation()
       setOn(true)
@@ -452,10 +676,10 @@ function ViewMarks() {
   const c = { position: 'absolute', width: 18, height: 18, pointerEvents: 'none' } as const
   return (
     <>
-      <div style={{ ...c, left: 0, top: 0, borderLeft: b, borderTop: b }} />
-      <div style={{ ...c, right: 0, top: 0, borderRight: b, borderTop: b }} />
-      <div style={{ ...c, left: 0, bottom: 0, borderLeft: b, borderBottom: b }} />
-      <div style={{ ...c, right: 0, bottom: 0, borderRight: b, borderBottom: b }} />
+      <div style={{ ...c, left: 24, top: 24, borderLeft: b, borderTop: b }} />
+      <div style={{ ...c, right: 24, top: 24, borderRight: b, borderTop: b }} />
+      <div style={{ ...c, left: 24, bottom: 24, borderLeft: b, borderBottom: b }} />
+      <div style={{ ...c, right: 24, bottom: 24, borderRight: b, borderBottom: b }} />
       <span style={{
         position: 'absolute', left: '50%', top: '50%', width: 22, height: 22, marginLeft: -11, marginTop: -11, pointerEvents: 'none',
         background: 'linear-gradient(var(--qs-ink3),var(--qs-ink3)) center/1px 100% no-repeat,linear-gradient(var(--qs-ink3),var(--qs-ink3)) center/100% 1px no-repeat',
@@ -482,8 +706,9 @@ function Gizmo({ engine }: { engine: Engine }) {
       {ax.map(([x, y], i) => <line key={i} x1={c} y1={c} x2={c + x * R} y2={c + y * R} stroke="var(--qs-ink)" strokeWidth="1" />)}
       {ends.map((e) => (
         <g key={`${e.i}${e.pos}`} className="gizmo__end" onClick={() => look(e.i, e.pos)} data-tip={`View along ${e.pos ? '+' : '−'}${'XYZ'[e.i]}`} data-tip-side="left">
+          <circle cx={e.x} cy={e.y} r={9} fill="transparent" />
           <circle cx={e.x} cy={e.y} r={e.pos ? 7 : 4} fill={e.pos ? 'var(--qs-ink)' : 'var(--qs-bg)'} stroke="var(--qs-ink)" strokeWidth="1" />
-          {e.pos && <text x={e.x} y={e.y + 3} textAnchor="middle" fontFamily="Geist Mono" fontSize="8.5" fill="var(--qs-bg)">{'XYZ'[e.i]}</text>}
+          {e.pos && <text x={e.x} y={e.y + 3} textAnchor="middle" fontFamily="TWK Everett Mono, monospace" fontSize="8.5" fill="var(--qs-bg)">{'XYZ'[e.i]}</text>}
         </g>
       ))}
     </svg>
@@ -500,29 +725,6 @@ function CameraReadout({ engine }: { engine: Engine }) {
   )
 }
 
-function SizeMarks({ engine }: { engine: Engine }) {
-  const model = useStore((s) => s.model)
-  const report = useStore((s) => s.report)
-  const view = useStore((s) => s.view)
-  const box = engine.bounds2D()
-  if (!box || !model) return null
-  const ext = view === 'result' && report ? report.extents : model.extents
-  const top = Math.max(24, box.t - 26), right = box.r + 22
-  const ln = { position: 'absolute', background: 'var(--qs-ink)' } as const
-  return (
-    <>
-      <div style={{ ...ln, left: box.l, top, width: box.r - box.l, height: 1 }} />
-      <div style={{ ...ln, left: box.l, top: top - 5, width: 1, height: 11 }} />
-      <div style={{ ...ln, left: box.r - 1, top: top - 5, width: 1, height: 11 }} />
-      <span className="hud__tag" style={{ left: (box.l + box.r) / 2, top: top - 6, transform: 'translateX(-50%)' }}>{ext[0].toFixed(0)} mm</span>
-      <div style={{ ...ln, left: right, top: box.t, width: 1, height: box.b - box.t }} />
-      <div style={{ ...ln, left: right - 5, top: box.t, width: 11, height: 1 }} />
-      <div style={{ ...ln, left: right - 5, top: box.b - 1, width: 11, height: 1 }} />
-      <span className="hud__tag" style={{ left: right + 10, top: (box.t + box.b) / 2 - 6 }}>{ext[2].toFixed(0)} mm</span>
-    </>
-  )
-}
-
 function Legend({ level, mode }: { level: number; mode: Shading }) {
   if (mode !== 'value' && mode !== 'entangle') return null
   return (
@@ -532,7 +734,7 @@ function Legend({ level, mode }: { level: number; mode: Shading }) {
         <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${level * 100}%`, background: 'var(--qs-bg)', opacity: 0.85 }} />
         <div style={{ position: 'absolute', left: `${level * 100}%`, top: -3, bottom: -3, width: 1, background: 'var(--qs-ink)' }} />
       </div>
-      <span className="qs-small" style={{ color: 'var(--qs-ink2)' }}>1 · value · shown ≥ {level.toFixed(2)}</span>
+      <span className="qs-small" style={{ color: 'var(--qs-ink2)' }}>1 · {mode === 'entangle' ? 'film phase' : 'value'} · shown ≥ {level.toFixed(2)}</span>
     </div>
   )
 }

@@ -112,3 +112,9 @@ html.qd-dragging, html.qd-dragging * { cursor: grabbing !important; user-select:
 .qd-menu__title { flex: 1; }
 .qd-menu__hint { color: var(--qs-ink4); padding-left: 16px; }
 .qd-menu__rule { height: 1px; background: var(--qs-line); margin: 4px 0; }
+.qd-menu__row { display: flex; align-items: center; gap: 2px; border-radius: 999px; }
+.qd-menu__row .qd-menu__item { flex: 1; margin: 0; }
+.qd-menu__row--on .qd-menu__item { color: var(--qs-ink); background: var(--qs-sel); }
+.qd-menu__eye { all: unset; flex: none; width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center; border-radius: 999px; color: var(--qs-ink3); cursor: pointer; }
+.qd-menu__eye:hover { background: var(--qs-faint); color: var(--qs-ink); }
+.qd-menu__eye--on { color: var(--qs-ink); }

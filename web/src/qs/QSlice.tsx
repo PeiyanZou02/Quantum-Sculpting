@@ -31,7 +31,7 @@ const BG = '#E3E4E7'
 const CTL = 'rgba(21,22,24,.26)'
 const SEL = '#CBCCD0'
 const DOT = '#C4C6CB'
-const MONO = "var(--qs-mono, 'Geist Mono', monospace)"
+const MONO = "var(--qs-mono, 'TWK Everett Mono', monospace)"
 
 const FLASH_MS = 240
 const M = 300 // section map size

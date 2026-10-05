@@ -64,16 +64,18 @@ export function Icon({ name, size = 16, style, title }: { name: IconName | strin
 }
 
 /** Square icon button. `on` inverts it (ink fill), as the design system shows state. */
-export function IconButton({ name, title, desc, hotkey, side, onClick, on, dim, size = 28, badge, disabled, onPointerDown }: {
+export function IconButton({ name, title, desc, hotkey, side, onClick, on, dim, size = 28, badge, disabled, onPointerDown, drag }: {
   name: IconName | string; title: string; desc?: string; hotkey?: string; side?: 'top' | 'bottom' | 'left' | 'right'
   /** Quiet off-state for toggles that are usually on (drawn ink4 instead of inverted when on). */
   dim?: boolean
   onClick?: () => void; on?: boolean; size?: number; badge?: number | string; disabled?: boolean
   onPointerDown?: (e: React.PointerEvent) => void
+  /** Marks a drag control (cursor shows how it moves). */
+  drag?: string
 }) {
   return (
     <button className={'qs-ib' + (on ? ' qs-ib--on' : '') + (dim ? ' qs-ib--dim' : '')} style={{ width: size, height: size }} aria-label={title} aria-pressed={on}
-      data-tip={title} data-tip-desc={desc} data-tip-key={hotkey} data-tip-side={side}
+      data-tip={title} data-tip-desc={desc} data-tip-key={hotkey} data-tip-side={side} data-drag={drag}
       onClick={onClick} disabled={disabled} onPointerDown={onPointerDown}>
       <Icon name={name} />
       {badge != null && badge !== 0 && <span className="qs-ib__badge">{badge}</span>}

@@ -28,11 +28,12 @@ import type { RefObject, PointerEvent as RPointerEvent } from 'react'
  * it after); the canvas must not set its own cursor for this to show (OrbitControls does not).
  */
 
-const INK = '#151618'
-const INK2 = '#55575D'
-const INK3 = '#8B8D93'
-const BG = '#E3E4E7'
-const CTL = 'rgba(21,22,24,.26)'
+// theme tokens, so pins read in light and dark
+const INK = 'var(--qs-ink)'
+const INK2 = 'var(--qs-ink2)'
+const INK3 = 'var(--qs-ink3)'
+const BG = 'var(--qs-bg)'
+const CTL = 'var(--qs-ctl)'
 const MONO = 'var(--qs-mono)'
 const HALO = `0 0 2px ${BG},0 0 6px ${BG}`
 
@@ -253,12 +254,17 @@ export interface QProbeProps {
   hideClear?: boolean
   /** Join consecutive pins with a dashed line and a Δ distance chip (default true). */
   measure?: boolean
+  /** The composer draws the hover mark / the pins itself (HUD selection / callout families). */
+  hideHover?: boolean
+  hidePins?: boolean
+  /** Draw the pins even while the probe is off (Present keeps its annotations on screen). */
+  showPins?: boolean
 }
 
 const noPick = () => null
 const n1 = (v: number) => +v.toFixed(1)
 
-export function QProbe({ w, h, n, pick, enabled, maxPins, mmPerCell = 3.2, onPointer, probe, project, hideClear, measure = true }: QProbeProps) {
+export function QProbe({ w, h, n, pick, enabled, maxPins, mmPerCell = 3.2, onPointer, probe, project, hideClear, measure = true, hideHover = false, hidePins = false, showPins = false }: QProbeProps) {
   const own = useProbe({ pick: pick ?? noPick, enabled, maxPins })
   const p = probe ?? own
   const auto = !probe
@@ -331,12 +337,12 @@ export function QProbe({ w, h, n, pick, enabled, maxPins, mmPerCell = 3.2, onPoi
 
   const ro = hv ? 1 : 0
 
-  const pins = on
+  const pins = on || showPins
     ? p.pins.flatMap((q, i) => {
         const pos = project ? project(q.hit) : { x: q.px, y: q.py }
         if (!pos) return []
         const { x, y } = pos
-        const flip = x > w - 240
+        const flip = x > w - 340
         const sg = flip ? -1 : 1
         return [
           {
@@ -356,7 +362,7 @@ export function QProbe({ w, h, n, pick, enabled, maxPins, mmPerCell = 3.2, onPoi
 
   let meas = ''
   const chips: { x: number; y: number; t: string }[] = []
-  for (let i = 1; measure && i < pins.length; i++) {
+  for (let i = 1; measure && !hidePins && i < pins.length; i++) {
     const a = pins[i - 1], b = pins[i]
     meas += `M${n1(a.x)} ${n1(a.y)}L${n1(b.x)} ${n1(b.y)}`
     const [ax, ay, az] = a.hit.p ?? [a.hit.x, a.hit.y, a.hit.z], [bx, by, bz] = b.hit.p ?? [b.hit.x, b.hit.y, b.hit.z]
@@ -370,7 +376,7 @@ export function QProbe({ w, h, n, pick, enabled, maxPins, mmPerCell = 3.2, onPoi
   let hvEl = null
   if (hv) {
     const { px: x, py: y, hit } = hv
-    const flip = x > w - 220
+    const flip = x > w - 320
     hvEl = { x, y, hit, flip }
   }
 
@@ -384,7 +390,7 @@ export function QProbe({ w, h, n, pick, enabled, maxPins, mmPerCell = 3.2, onPoi
           <path d={ruler.b} fill="none" stroke={INK3} strokeWidth={1} />
           <path d={ruler.r} fill="none" stroke={INK3} strokeWidth={1} />
         </g>
-        {hvEl && (
+        {hvEl && !hideHover && (
           <>
             <path
               d={`M${n1(hvEl.x)} ${n1(hvEl.y + 16)}V${h - 18}M${n1(hvEl.x + 16)} ${n1(hvEl.y)}H${w - 18}`}
@@ -406,7 +412,7 @@ export function QProbe({ w, h, n, pick, enabled, maxPins, mmPerCell = 3.2, onPoi
           </>
         )}
         {meas && <path d={meas} fill="none" stroke={INK} strokeWidth={1} strokeDasharray="3 3" />}
-        {pins.map((q) => (
+        {(hidePins ? [] : pins).map((q) => (
           <g key={q.key}>
             <circle cx={n1(q.x)} cy={n1(q.y)} r={3.2} fill={INK} />
             <circle cx={n1(q.x)} cy={n1(q.y)} r={8} fill="none" stroke={INK} strokeWidth={1} />
@@ -426,7 +432,7 @@ export function QProbe({ w, h, n, pick, enabled, maxPins, mmPerCell = 3.2, onPoi
         ))}
       </div>
 
-      {hvEl && (
+      {hvEl && !hideHover && (
         <>
           <div
             style={{
@@ -459,7 +465,7 @@ export function QProbe({ w, h, n, pick, enabled, maxPins, mmPerCell = 3.2, onPoi
         </>
       )}
 
-      {pins.map((q) => (
+      {(hidePins ? [] : pins).map((q) => (
         <div
           key={q.key}
           style={{

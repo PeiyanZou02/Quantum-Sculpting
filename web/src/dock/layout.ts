@@ -3,7 +3,7 @@
 
 export type ZoneId = 'left' | 'right' | 'bottom'
 export interface Area { id: string; tabs: string[]; active: string; size: number /* flex weight within its zone */ }
-export interface DockLayout { zones: Record<ZoneId, Area[]>; width: { left: number; right: number }; height: { bottom: number } }
+export interface DockLayout { zones: Record<ZoneId, Area[]>; width: { left: number; right: number }; height: { bottom: number }; hidden?: string[] }
 
 export const ZONES: ZoneId[] = ['left', 'right', 'bottom']
 export const SIDE_MIN = 220
@@ -65,6 +65,7 @@ function detach(l: DockLayout, panel: string): DockLayout {
 }
 
 export function movePanel(l: DockLayout, panel: string, to: { zone: ZoneId; area?: string; index?: number }): DockLayout {
+  if (l.hidden?.includes(panel)) l = { ...l, hidden: l.hidden.filter((h) => h !== panel) }
   const from = findPanel(l, panel)
 
   if (to.area != null) {
@@ -110,7 +111,7 @@ export function closePanel(l: DockLayout, panel: string): DockLayout {
     const active = a.active === panel ? (tabs[Math.min(i, tabs.length - 1)] ?? '') : a.active
     return { ...a, tabs, active }
   })
-  return normalise({ ...l, zones })
+  return normalise({ ...l, zones, hidden: [...new Set([...(l.hidden ?? []), panel])] })
 }
 
 export function resizeAreas(l: DockLayout, zone: ZoneId, sizes: number[]): DockLayout {
@@ -146,6 +147,7 @@ function parse(raw: unknown, fallback: DockLayout): DockLayout | null {
     zones,
     width: { left: num(w.left, fallback.width.left), right: num(w.right, fallback.width.right) },
     height: { bottom: num(h.bottom, fallback.height.bottom) },
+    hidden: Array.isArray(raw.hidden) ? raw.hidden.filter((t): t is string => typeof t === 'string') : [],
   }
 }
 
@@ -176,7 +178,7 @@ export function loadLayout(key: string, fallback: DockLayout, known: string[]): 
 
   // known panels missing from the layout go back where the fallback puts them
   for (const p of known) {
-    if (findPanel(l, p)) continue
+    if (findPanel(l, p) || l.hidden?.includes(p)) continue
     const home = findPanel(fallback, p)
     if (home) {
       if (findArea(l, home.area.id)) l = movePanel(l, p, { zone: home.zone, area: home.area.id })

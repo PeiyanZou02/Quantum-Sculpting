@@ -5,7 +5,8 @@ import { en } from './i18n'
 export type UpAxis = '+z' | '-z' | '+y' | '-y' | '+x' | '-x'
 export type Fill = 'holes' | 'capped' | 'none'
 export type Values = 'coverage' | 'binary'
-export type Mode = 'gaussian' | 'emulator' | 'atlas'
+/** 'nations' is Evolve (app/nations.py): regions of the model as nations, one qubit each. */
+export type Mode = 'gaussian' | 'emulator' | 'atlas' | 'nations'
 export type Tiling = 'cube' | 'layers'
 export type Field = 'threshold' | 'difference' | 'gradient'
 export type VFilter = 'none' | 'gaussian' | 'mean' | 'median' | 'curvature'
@@ -50,6 +51,8 @@ export interface ProcMeta {
   grid_id: number
   min: number
   max: number
+  /** Evolve only: what happened over the whole history. */
+  nations?: NationsSummary
 }
 
 export interface KeyStatus { set: boolean; source: 'saved' | 'env' | null; hint: string; base: string; official: boolean }
@@ -186,7 +189,7 @@ const post = (data?: unknown, signal?: AbortSignal): RequestInit => ({
   body: JSON.stringify(data ?? {}),
   signal,
 })
-const getJSON = async <T>(path: string) => (await request(path)).json() as Promise<T>
+const getJSON = async <T>(path: string, signal?: AbortSignal) => (await request(path, signal ? { signal } : undefined)).json() as Promise<T>
 const postJSON = async <T>(path: string, data?: unknown, signal?: AbortSignal) => (await request(path, post(data, signal))).json() as Promise<T>
 
 async function binary<M>(path: string, init?: RequestInit) {
@@ -231,6 +234,11 @@ export interface ProcessParams {
   axes: number[]
   shots: number | null
   cached_only?: boolean
+  /** Evolve: nations at the start (2–16), turns (1–300), growth reach in % of the grid edge (0–10), grooves on the final borders. */
+  k?: number
+  turns?: number
+  spread?: number
+  grooves?: boolean
 }
 export interface MeshParams {
   method: 'threshold' | 'advect'
@@ -293,4 +301,102 @@ export const api = {
   },
   export: (p: MeshParams) => postJSON<{ file: string; folder: string; report: MeshReport }>('/api/export', p),
   downloadUrl: (file: string) => `/api/download/${encodeURIComponent(file)}`,
+
+  /** Evolve: the territory at the end of `turn` (0 = founding), expanded to n³ bytes of owner + 1 (0 = empty). */
+  nationsFrame: async (turn: number, signal?: AbortSignal) => {
+    const { meta, buffer } = await binary<NationsFrameMeta>(`/api/nations/frame/${turn}`, { signal })
+    return { meta, owner: expandOwners(meta, new Uint8Array(buffer)) }
+  },
+  /** Evolve: the whole history, one record per turn (record 0 is the founding). */
+  nationsHistory: (signal?: AbortSignal) => getJSON<NationsHistory>('/api/nations/history', signal),
+}
+
+// ── Evolve (app/nations.py, /api/nations/*) ──────────────────────────────────────────────────────
+
+export type NationAsk = 'attack' | 'defend' | 'explore'
+/** What a nation did: yes → attack / fortify / grow, no → flee / split / wither; waver = could not split. */
+export type NationAction = 'attack' | 'fortify' | 'grow' | 'flee' | 'split' | 'wither' | 'waver'
+export type DeathCause = 'conquered' | 'withered' | 'war' | 'fled' | 'gone'
+
+/** Events in a turn. Numbers are nation ids (0-based). */
+export type NationEvent =
+  | { type: 'war'; who: number; whom: number }                  // attacked each other: both fronts gone, a crack
+  | { type: 'breach'; who: number[]; whom: number }             // two or more broke a defending nation
+  | { type: 'annex'; who: number; whom: number }                // whom had too little left and was taken whole
+  | { type: 'split'; who: number; whom: number }                // whom (new) broke away from who
+  | { type: 'death'; who: number; cause: DeathCause; by: number[] | null }
+  | { type: 'exile'; who: number }                              // fled out of contact: left the continent
+  | { type: 'ally'; who: number; whom: number }                 // tie rose to 0.5 or more
+  | { type: 'rift'; who: number; whom: number }                 // tie fell below 0.5
+
+/** One turn. Per-nation arrays are indexed by nation id and are as long as the nations that exist by
+ *  then (it grows when nations split); null where the nation was not alive this turn. */
+export interface NationTurn {
+  turn: number
+  /** Voxels held at the end of the turn (0 = gone). */
+  size: number[]
+  /** Not on the founding record (turn 0). */
+  asked?: (NationAsk | null)[]
+  /** Chance of answering yes before the measurement. */
+  odds?: (number | null)[]
+  said?: (boolean | null)[]
+  action: (NationAction | null)[]
+  /** Length of the nation's own Bloch vector: below 1 it is entangled with others. */
+  certainty?: (number | null)[]
+  /** [attacker, target] this turn. */
+  attacks: [number, number][]
+  /** [i, j, strength 0..1] between living nations; 0.5 and above is an alliance. */
+  ties: [number, number, number][]
+  /** [i, j] pairs that share a border at the end of the turn. */
+  borders: [number, number][]
+  /** Centre of each nation in box coordinates, null once gone. */
+  home: ([number, number, number] | null)[]
+  /** Nations that have left the continent (so far). */
+  exiled: number[]
+  events: NationEvent[]
+  wars?: [number, number][]
+  broken?: number[]
+}
+
+export interface NationsHistory {
+  proc_id: number
+  /** Nations at the founding. */
+  k: number
+  /** Nations over the whole history. */
+  total: number
+  /** Which nation each one broke away from; null for the founders. */
+  parent: (number | null)[]
+  /** Shape of the world box the frames cover. */
+  shape: [number, number, number]
+  turns: NationTurn[]
+}
+
+export interface NationsFrameMeta { n: number; k: number; box: [number, number][]; turn: number; turns: number; proc_id: number }
+
+export interface NationsSummary {
+  k: number
+  turns: number
+  total: number
+  alive: number
+  wars: number
+  annexed: number
+  died: number
+  split: number
+  exiled: number
+  grown: number
+  carved: number
+  start: number
+  end: number
+}
+
+/** Frames cover only the world box; expand back to n³. */
+function expandOwners(meta: NationsFrameMeta, bytes: Uint8Array) {
+  const n = meta.n, n2 = n * n
+  const owner = new Uint8Array(n * n2)
+  const [[x0, x1], [y0, y1], [z0, z1]] = meta.box
+  const sz = z1 - z0
+  let i = 0
+  for (let x = x0; x < x1; x++)
+    for (let y = y0; y < y1; y++, i += sz) owner.set(bytes.subarray(i, i + sz), x * n2 + y * n + z0)
+  return owner
 }

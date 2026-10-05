@@ -35,7 +35,7 @@ export function QReadout({ title, rows, leader = false, kw = 88, w = 260 }: QRea
             <div key={i} className="qs-readout__row">
               <span className={dim(r)}>{r.k}</span>
               <span className="qs-readout__dots" />
-              <span className={dim(r)}>{r.v}</span>
+              <span className={'qs-readout__val ' + dim(r)}>{r.v}</span>
               <span className="qs-readout__e">{r.flag}</span>
             </div>
           ))}

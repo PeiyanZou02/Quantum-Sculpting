@@ -1,11 +1,12 @@
 // OUTPUT: what each step produced. Read-only readouts and charts, plus the export.
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useStore } from '../store'
 import { Segmented } from '../qs/Segmented'
 import { Slider } from '../qs/Slider'
 import { QReadout } from '../qs/QReadout'
 import { QPill } from '../qs/QPill'
-import { ScrollArea, type ScrollIndex } from '../qs/ScrollArea'
+import { ScrollArea } from '../qs/ScrollArea'
+import { SectionTabs } from './SectionTabs'
 import { IconButton } from '../qs/Icon'
 import { LevelHistogram } from '../qs/LevelHistogram'
 import { histogram, solidPerLayer, type Axis } from '../qs/grid'
@@ -18,22 +19,11 @@ const MARKERS = [
   { id: 'out-print', label: 'Print check', icon: 'print' }, { id: 'out-export', label: 'Export', icon: 'export' },
 ]
 
-/** Blender-style property tabs: one icon per output section, the active one inverted. */
-function Tabs({ markers, active, go }: ScrollIndex) {
-  return (
-    <nav className="tabs" aria-label="Output sections">
-      {markers.map((mk) => (
-        <IconButton key={mk.id} name={mk.icon ?? 'grid'} title={mk.label} on={active === mk.id} onClick={() => go(mk.id)} />
-      ))}
-    </nav>
-  )
-}
-
 function Blk({ id, label, note, tools, children }: { id: string; label: string; note?: ReactNode; tools?: ReactNode; children: ReactNode }) {
   return (
     <div className="blk" data-mark={id}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', minHeight: 22 }}>
-        <span className="qs-label">{label}</span>
+        <span className="blk__title">{label}</span>
         <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           {note != null && <span className="qs-mono" style={{ color: 'var(--qs-ink3)' }}>{note}</span>}
           {tools}
@@ -44,12 +34,42 @@ function Blk({ id, label, note, tools, children }: { id: string; label: string; 
   )
 }
 
+/** A large number with its label, infographic style. */
+function Hero({ k, v, unit, note, wide }: { k: string; v: ReactNode; unit?: string; note?: ReactNode; wide?: boolean }) {
+  return (
+    <div className={'hero' + (wide ? ' hero--wide' : '')}>
+      <span className="hero__k">{k}</span>
+      <span className="hero__v">{v}{unit && <small>{unit}</small>}</span>
+      {note != null && <span className="hero__n">{note}</span>}
+    </div>
+  )
+}
+
+/** Present renders figures as large infographic numbers; Lab as a compact, practical readout. */
+export const PresentStyle = createContext(false)
+interface Fig { k: string; v: ReactNode; unit?: string; note?: ReactNode; wide?: boolean }
+function Figures({ items }: { items: Fig[] }) {
+  const present = useContext(PresentStyle)
+  if (present) return <div className="heroes">{items.map((f) => <Hero key={f.k} {...f} />)}</div>
+  return (
+    <div className="figs">
+      {items.map((f) => (
+        <div key={f.k} className="figs__row">
+          <span className="figs__k">{f.k}</span>
+          <span className="figs__v">{f.v}{f.unit && <small> {f.unit}</small>}</span>
+          {f.note != null && <span className="figs__n">{f.note}</span>}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 const Empty = ({ children }: { children: ReactNode }) => <p className="qs-help">{children}</p>
 
 export function OutputPane() {
   return (
     <div className="panel" aria-label="Properties">
-      <ScrollArea markers={MARKERS} className="pane-scroll pane-scroll--tabs" bar={false} renderIndex={(ix) => <Tabs {...ix} />}>
+      <ScrollArea markers={MARKERS} className="pane-scroll pane-scroll--tabs" bar={false} renderIndex={(ix) => <SectionTabs {...ix} label="Properties sections" />}>
         <ModelOut />
         <GridOut />
         <SliceOut />
@@ -67,7 +87,7 @@ function Shows({ on, what, set }: { on: boolean; what: string; set: (v: boolean)
   return <IconButton size={22} name={on ? 'eye' : 'eyeOff'} title={`${on ? 'Hide' : 'Show'} ${what} in the view`} on={on} onClick={() => set(!on)} />
 }
 
-function ModelOut() {
+export function ModelOut() {
   const model = useStore((s) => s.model)
   const dims = useStore((s) => s.hud.dims)
   const setHud = useStore((s) => s.setHud)
@@ -75,10 +95,9 @@ function ModelOut() {
   const max = Math.max(...model.extents)
   return (
     <Blk id="out-model" label="Model" note={model.builtin ? 'built-in' : model.file} tools={<Shows on={dims} what="size marks" set={(v) => setHud({ dims: v })} />}>
-      <QReadout w="100%" kw={92} rows={[
-        { k: 'Faces', v: fmt.int(model.faces) },
-        { k: 'Vertices', v: fmt.int(model.vertices) },
-        { k: 'Watertight', v: model.watertight ? 'yes' : 'no', flag: model.watertight ? '✓' : '!' },
+      <Figures items={[
+        { wide: true, k: 'Size', v: model.extents.map((v) => v.toFixed(0)).join(' × '), unit: 'mm' },
+        { k: 'Faces', v: fmt.int(model.faces), note: `${fmt.int(model.vertices)} vertices · ${model.watertight ? 'watertight' : 'open'}` },
       ]} />
       <div className="qs-mono" style={{ display: 'grid', gridTemplateColumns: '14px 1fr 44px', rowGap: 8, alignItems: 'center' }}>
         {model.extents.map((v, i) => (
@@ -95,35 +114,39 @@ function ModelOut() {
   )
 }
 
-function GridOut() {
+export function GridOut() {
   const grid = useStore((s) => s.grid)
   const g = useStore((s) => s.gridData)
   const sliceIdx = useStore((s) => s.slice)
+  const setSlice = useStore((s) => s.setSlice)
   const counts = useMemo(() => (g ? solidPerLayer(g, 'z') : []), [g])
   if (!grid) return <Blk id="out-grid" label="Grid"><Empty>Voxelise to see the grid.</Empty></Blk>
   const cube = grid.tiles.cube
   const peak = Math.max(1, ...counts)
   return (
     <Blk id="out-grid" label="Grid" note={`${grid.n}³`}>
-      <QReadout w="100%" kw={92} rows={[
-        { k: 'Solid', v: `${fmt.int(grid.solid)}`, flag: `${((grid.solid / grid.total) * 100).toFixed(1)}%` },
-        { k: 'Voxel', v: `${grid.voxel_size} mm` },
-        { k: 'Atlas', v: cube.jobs > 1 ? `${cube.jobs} jobs · ${cube.shape.join('×')}` : 'one job' },
+      <Figures items={[
+        { k: 'Solid cells', v: fmt.int(grid.solid), note: `${((grid.solid / grid.total) * 100).toFixed(1)}% of ${grid.n}³` },
+        { k: 'Voxel', v: grid.voxel_size, unit: 'mm', note: cube.jobs > 1 ? `${cube.jobs} Atlas jobs` : 'one Atlas job' },
       ]} />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <div className="qs-field-head"><span>Solid cells per layer · z</span><output>max {fmt.int(peak)}</output></div>
+        <div className="qs-field-head"><span>Solid cells per layer</span><output>max {fmt.int(peak)}</output></div>
         <svg width="100%" height="40" viewBox={`0 0 ${counts.length} 40`} preserveAspectRatio="none">
           {counts.map((c, i) => (
-            <rect key={i} x={i + 0.15} width={0.7} y={40 - (c / peak) * 39} height={(c / peak) * 39}
-              fill={sliceIdx.axis === 'z' && i === sliceIdx.index ? 'var(--qs-ink)' : 'var(--qs-ink3)'} />
+            <g key={i} className="spark-bar" onClick={() => setSlice({ axis: 'z', index: i })} data-tip={`z ${i} · ${c} solid cells`} data-tip-side="top">
+              <rect x={i} width={1} y={0} height={40} fill="transparent" />
+              <rect x={i + 0.15} width={0.7} y={40 - (c / peak) * 39} height={(c / peak) * 39}
+                fill={sliceIdx.axis === 'z' && i === sliceIdx.index ? 'var(--qs-ink)' : 'var(--qs-ink3)'} />
+            </g>
           ))}
         </svg>
+        <p className="qs-help">Click a bar to cut there.</p>
       </div>
     </Blk>
   )
 }
 
-function SliceOut() {
+export function SliceOut() {
   const st = useStore()
   const { slice, gridData, procData, m, hud, view, scan } = st
   const [src, setSrc] = useState<'input' | 'processed'>('input')
@@ -177,7 +200,7 @@ function SliceOut() {
   )
 }
 
-function QuantumOut() {
+export function QuantumOut() {
   const proc = useStore((s) => s.proc)
   const procData = useStore((s) => s.procData)
   const level = useStore((s) => s.m.level)
@@ -187,13 +210,23 @@ function QuantumOut() {
   const bins = useMemo(() => (procData ? histogram(procData, 48) : new Array(48).fill(0)), [procData])
   if (!proc) return <Blk id="out-quantum" label="Quantum result"><Empty>Run the quantum step to see the result.</Empty></Blk>
   const src = proc.mode === 'atlas' ? (proc.cached ? 'Atlas · cache' : 'Atlas') : proc.mode === 'emulator' ? 'emulation' : 'gaussian'
+  const nat = proc.mode === 'nations' ? proc.nations : undefined
+  if (nat) return (
+    <Blk id="out-quantum" label="Evolve result" note={proc.run}>
+      <Figures items={[
+        { k: 'Nations', v: `${nat.alive}`, note: `alive of ${nat.total} after ${nat.turns} turns` },
+        { k: 'Wars', v: nat.wars, note: `${nat.annexed} annexed · ${nat.died} fell` },
+        { k: 'Splits', v: nat.split, note: `${nat.exiled} left the continent` },
+        { k: 'Solid cells', v: fmt.int(nat.end), note: `${fmt.int(nat.start)} at the start · +${fmt.int(nat.grown)} grown · −${fmt.int(nat.carved)} carved` },
+      ]} />
+    </Blk>
+  )
   return (
     <Blk id="out-quantum" label="Quantum result" note={proc.run} tools={<Shows on={legend} what="value scale" set={(v) => setHud({ legend: v })} />}>
-      <QReadout w="100%" kw={92} rows={[
-        { k: 'Source', v: src },
-        { k: 'Time', v: proc.seconds != null ? `${proc.seconds} s` : '—' },
-        { k: 'Range', v: `${proc.min.toFixed(3)} – ${proc.max.toFixed(3)}` },
-        ...(proc.tiles ? [{ k: 'Tiles', v: `${proc.tiles.jobs} · ${proc.tiles.mode}` }] : []),
+      <Figures items={[
+        { k: 'Peak value', v: proc.max.toFixed(2), note: `range ${proc.min.toFixed(2)} – ${proc.max.toFixed(2)}` },
+        { k: 'Computed', v: proc.seconds != null ? (proc.seconds < 1 ? Math.round(proc.seconds * 1000) : proc.seconds) : '—', unit: proc.seconds != null && proc.seconds < 1 ? 'ms' : 's',
+          note: `${src}${proc.tiles ? ` · ${proc.tiles.jobs} tile${proc.tiles.jobs === 1 ? '' : 's'}` : ''}` },
       ]} />
       <div style={{ paddingTop: 4 }}>
         <LevelHistogram bins={bins} level={level} onLevel={(v) => setM({ level: v })} height={64} />
@@ -202,16 +235,17 @@ function QuantumOut() {
   )
 }
 
-function PrintOut() {
+export function PrintOut() {
   const r = useStore((s) => s.report)
   if (!r) return <Blk id="out-print" label="Print check"><Empty>After the mesh step, the check of the printed model appears here.</Empty></Blk>
   return (
     <Blk id="out-print" label="Print check" note={r.method === 'advect' ? 'push' : 'threshold'}>
+      <Figures items={[
+        { k: 'Volume', v: r.volume_cm3 ?? '—', unit: r.volume_cm3 != null ? 'cm³' : undefined, note: r.extents.map((v) => v.toFixed(0)).join(' × ') + ' mm' },
+        { k: 'Parts', v: r.parts, note: r.total_parts > r.parts ? `kept ${r.parts} of ${r.total_parts}` : 'single piece' },
+      ]} />
       <QReadout w="100%" leader rows={[
-        { k: 'Size mm', v: r.extents.map((v) => v.toFixed(1)).join(' × ') },
         { k: 'Watertight', v: r.watertight ? 'yes' : 'no', flag: r.watertight ? '✓' : '!' },
-        { k: 'Volume', v: r.volume_cm3 != null ? `${r.volume_cm3} cm³` : '—' },
-        { k: 'Parts', v: r.total_parts > r.parts ? `${r.parts} of ${r.total_parts}` : String(r.parts), flag: r.parts === 1 ? '✓' : '!' },
         { k: 'Faces', v: fmt.int(r.faces) },
         { k: 'Cell', v: r.refine > 1 ? `${r.fine_voxel_mm} mm fine` : `${r.voxel_mm} mm` },
       ]} />

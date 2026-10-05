@@ -24,7 +24,9 @@ export function LevelHistogram({ bins, level, onLevel, height = 72, min = 0.05, 
       </div>
       <div
         ref={ref}
-        style={{ position: 'relative', height, cursor: 'ew-resize', touchAction: 'none' }}
+        className="lvl-hist"
+        data-tip="Drag to set the level" data-tip-side="top"
+        style={{ position: 'relative', height, touchAction: 'none' }}
         onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); setDrag(true); onLevel(at(e.clientX)) }}
         onPointerMove={(e) => { if (drag) onLevel(at(e.clientX)); else setHover(at(e.clientX)) }}
         onPointerUp={() => setDrag(false)}
