@@ -90,3 +90,8 @@ em, i, cite, dfn, var, address, svg text { font-style: normal; }
    Warnings always show, in ink. */
 .sec:not(.sec--focus) .qs-help:not(.qs-help--warn) { display: none; }
 .qs-help--warn { color: var(--qs-ink) !important; font-weight: 500 !important; }
+
+/* Present drawer: same roles. Group titles are titles; the name over a row of choices is a label. */
+.pd-sec__t { font: var(--qs-t-title) !important; text-transform: uppercase; letter-spacing: .04em; }
+.pd-k { font: var(--qs-t-label) !important; text-transform: uppercase; letter-spacing: var(--qs-track-label); color: var(--qs-ink2); }
+.pd-note__info, .pd-save__n { font: var(--qs-t-meta) !important; color: var(--qs-ink2); }
