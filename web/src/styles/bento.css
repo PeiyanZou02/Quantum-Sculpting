@@ -326,3 +326,26 @@
 .stage__view--drop { box-shadow: inset 0 0 0 2px var(--qs-ink); }
 .pd-warn { margin: 4px 8px; font: 400 12px/1.35 var(--qs-sans); color: var(--qs-ink); }
 .ly-row__t em { font: 400 12px/1 var(--qs-sans); color: var(--qs-ink3); }
+
+/* Present artboard: the view in the frame's shape, centred on a darker mat; its size under it */
+.app--present .stage--framed { background: var(--qs-canvas); align-items: center; justify-content: center; padding-bottom: 64px; position: relative; }
+.app--present.app--bare .stage--framed { padding-bottom: 0; }
+.app--present .stage--framed .stage__view { margin: 0; background-color: var(--qs-bg); box-shadow: 0 0 0 1px var(--qs-line), 0 18px 40px rgba(20, 22, 28, .12); }
+.stage__board-label { position: absolute; left: 0; right: 0; bottom: 70px; text-align: center; font: var(--qs-t-meta); color: var(--qs-ink2); pointer-events: none; }
+.app--drawer .stage__board-label { right: 0; }
+
+/* Output page and presets */
+.pd-frames { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.pd-frame { all: unset; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 4px 8px; border-radius: 12px; border: 1px solid var(--qs-line); font: var(--qs-t-meta); color: var(--qs-ink2); cursor: pointer; text-align: center; }
+.pd-frame:hover { background: var(--qs-faint); color: var(--qs-ink); }
+.pd-frame--on, .pd-frame--on:hover { border-color: var(--qs-ink); background: var(--qs-sel); color: var(--qs-ink); }
+.pd-frame:focus-visible { box-shadow: 0 0 0 2px var(--qs-ink); }
+.pd-grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.pd-grid3 .pd-chip { justify-content: center; padding: 0 6px; }
+.pd-presets { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+.pd-preset { all: unset; box-sizing: border-box; display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--qs-line); cursor: pointer; }
+.pd-preset:hover { border-color: var(--qs-ink); background: var(--qs-faint); }
+.pd-preset:focus-visible { box-shadow: 0 0 0 2px var(--qs-ink); }
+.pd-preset__t { font: var(--qs-t-title); color: var(--qs-ink); }
+.pd-preset__t em { font-style: normal; font-weight: 400; color: var(--qs-ink2); }
+.pd-preset__d { font: var(--qs-t-prose); color: var(--qs-ink2); }

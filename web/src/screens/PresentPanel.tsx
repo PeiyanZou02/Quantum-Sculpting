@@ -4,7 +4,7 @@
 // library by category: scene, marks, navigation, quantum glyphs, data and runtime, controls; each
 // category's families open to their variants), Annotate, Motion, Capture.
 import { useState, type ReactNode } from 'react'
-import { useStore, type Layer, type Shading, type Tool, type View } from '../store'
+import { useStore, type Layer, type Shading, type Stage as FocusStage, type Tool, type View } from '../store'
 import { isDirty, usePresent, type PanelTab, type Sweep } from '../present'
 import { CATEGORIES, savePng } from '../hud/Composer'
 import { Icon, IconButton } from '../qs/Icon'
@@ -13,12 +13,18 @@ import { Slider } from '../qs/Slider'
 import { Check } from '../qs/Popover'
 import { ScrollArea } from '../qs/ScrollArea'
 import { useLive } from '../live'
-import { renderStill, screenshot, toggleRecording } from './capture'
+import { exportFrame, exportGlb, renderStill, screenshot, toggleRecording } from './capture'
+import { FRAMES, frameOf, type FrameId } from '../frames'
+import { CURATED, TIDY_LEVELS } from '../hud/tidy'
 import { FloorSize, LayerList, LibRow, MarkLibrary, countOn } from './MarkLibrary'
 
 const VIEWS: { id: View; t: string }[] = [
   { id: 'model', t: 'Model' }, { id: 'voxels', t: 'Voxels' }, { id: 'processed', t: 'Quantum' }, { id: 'result', t: 'Mesh' }, { id: 'scan', t: 'Scan' },
 ]
+/** Present picks what to show on purpose: each view is the focus of a stage. */
+const STAGE_OF: Record<View, (mode: string) => FocusStage> = {
+  model: () => 'model', voxels: () => 'voxels', processed: (m) => (m === 'nations' ? 'evolve' : 'quantum'), result: () => 'mesh', scan: () => 'scan',
+}
 const SHADES: { id: Shading; t: string }[] = [{ id: 'wire', t: 'Wire' }, { id: 'solid', t: 'Solid' }, { id: 'value', t: 'Value' }, { id: 'entangle', t: 'Entangle' }]
 const LIGHTS = [{ id: 'studio', t: 'Key' }, { id: 'soft', t: 'Soft' }, { id: 'flat', t: 'Flat' }, { id: 'rim', t: 'Rim' }] as const
 const BACKDROPS = [{ id: 'plain', t: 'Plain' }, { id: 'dots', t: 'Dots' }, { id: 'lines', t: 'Grid' }, { id: 'gradient', t: 'Vignette' }, { id: 'studio', t: 'Studio' }] as const
@@ -36,10 +42,10 @@ const TABS: { id: PanelTab; icon: string; t: string }[] = [
   { id: 'library', icon: 'drag', t: 'Library' },
   { id: 'notes', icon: 'annotate', t: 'Annotate' },
   { id: 'motion', icon: 'orbit', t: 'Motion' },
-  { id: 'capture', icon: 'frame', t: 'Capture' },
+  { id: 'output', icon: 'export', t: 'Output' },
 ]
 /** The library's categories as tabs: the scene's own guides and text first, then the Quicksilver sheets. */
-const CATS = [{ id: 'scene', short: 'Scene' }, ...CATEGORIES.map((c) => ({ id: c.id, short: c.id === 'glyphs' ? 'Glyphs' : c.id === 'data' ? 'Data' : c.title }))]
+const CATS = [{ id: 'presets', short: 'Presets' }, { id: 'scene', short: 'Scene' }, ...CATEGORIES.map((c) => ({ id: c.id, short: c.id === 'glyphs' ? 'Glyphs' : c.id === 'data' ? 'Data' : c.title }))]
 
 /** A group within a page: a small heading and its controls. */
 function Group({ label, children }: { label?: string; children: ReactNode }) {
@@ -124,7 +130,7 @@ function ViewPage() {
   return (
     <>
       <Group label="Display">
-        <Pills<View> value={st.view} onChange={st.setView} options={VIEWS.map((v) => ({ id: v.id, t: v.t, off: !avail[v.id] }))} />
+        <Pills<View> value={st.view} onChange={(v) => st.setFocus(STAGE_OF[v](st.proc?.mode ?? st.q.mode), `Showing the ${VIEWS.find((x) => x.id === v)!.t.toLowerCase()}`)} options={VIEWS.map((v) => ({ id: v.id, t: v.t, off: !avail[v.id] }))} />
         <div className="pd-group">
           {GHOSTS.map((g) => {
             const main = g.id === (st.view === 'scan' ? 'processed' : st.view)
@@ -152,14 +158,48 @@ function LayersPage() {
         <Group>
           <LayerList />
           {p.crowded > 0 && <p className="pd-warn">{p.crowded === 1 ? 'One piece has' : `${p.crowded} pieces have`} no free room left and overlap others. Remove some, or make them smaller.</p>}
-          {on > 1 && (
-            <div className="pd-row">
-              <button className="pd-chip pd-chip--s" onClick={p.tidyUp} data-tip="Tidy up" data-tip-desc="Moves every piece that overlaps another to the nearest free place, yours included.">Tidy up</button>
-            </div>
-          )}
+          {on > 0 && <TidyRow />}
         </Group>
       ) : <Compositions />}
     </>
+  )
+}
+
+/** Auto-compose: lay everything out for the frame, at three degrees of keeping. */
+function TidyRow() {
+  const p = usePresent()
+  return (
+    <div className="pd-field">
+      <span className="pd-k">Auto-compose for {frameOf(p.frame).t}</span>
+      <div className="pd-grid3">
+        {TIDY_LEVELS.map((l) => (
+          <button key={l.id} className="pd-chip pd-chip--s" onClick={() => p.tidy(l.id)} data-tip={l.t} data-tip-desc={l.d}>{l.t}</button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/** Curated compositions, laid out for the frame as soon as they are put on. */
+function Presets() {
+  const p = usePresent()
+  const mode = useStore((s) => s.q.mode)
+  const evolve = mode === 'nations'
+  return (
+    <Group>
+      <TidyRow />
+      <div className="pd-presets">
+        {CURATED.map((c) => {
+          const off = c.mode === 'nations' ? !evolve : c.mode === 'blur' ? evolve : false
+          return (
+            <button key={c.id} className="pd-preset" onClick={() => p.applyCurated(c.id)}>
+              <span className="pd-preset__t">{c.title}{off && <em>{c.mode === 'nations' ? ' · needs Evolve' : ' · for blur modes'}</em>}</span>
+              <span className="pd-preset__d">{c.desc}</span>
+            </button>
+          )
+        })}
+      </div>
+    </Group>
   )
 }
 
@@ -167,7 +207,7 @@ function LibraryPage({ hover }: { hover: (k: string | null, on: boolean) => void
   const p = usePresent()
   const counts: Record<string, number> = { scene: p.texts.length + +p.guides.box + +p.guides.floor }
   for (const c of CATEGORIES) counts[c.id] = countOn(p.compose, c.fams)
-  const cat = CATS.some((c) => c.id === p.libCat) ? p.libCat : 'marks'
+  const cat = CATS.some((c) => c.id === p.libCat) ? p.libCat : 'presets'
   const guide = (g: 'box' | 'floor', name: string) => (
     <LibRow on={p.guides[g]} name={name}
       onToggle={() => { p.setGuides({ [g]: !p.guides[g] }); hover(`guide:${g}`, !p.guides[g]) }}
@@ -176,7 +216,7 @@ function LibraryPage({ hover }: { hover: (k: string | null, on: boolean) => void
   return (
     <>
       <SubTabs label="Library categories" value={cat} onChange={p.setLibCat} options={CATS.map((c) => ({ id: c.id, t: c.short, n: counts[c.id] }))} />
-      {cat === 'scene' ? (
+      {cat === 'presets' ? <Presets /> : cat === 'scene' ? (
         <Group>
           <div className="mk">
             <div className="mk-fam mk-fam--open">
@@ -291,23 +331,76 @@ function MotionPage() {
   )
 }
 
-function CapturePage() {
+/** A frame's shape drawn small, so the ratios read at a glance. */
+function FrameGlyph({ ratio }: { ratio: number | null }) {
+  const r = ratio ?? 1.6, w = r >= 1 ? 18 : 18 * r, h = r >= 1 ? 18 / r : 18
+  return <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden><rect x={10 - w / 2} y={10 - h / 2} width={w} height={h} fill="none" stroke="currentColor" strokeDasharray={ratio ? undefined : '2 2'} /></svg>
+}
+
+/** Everything that leaves the app: the frame and its size, images, video and 3D. */
+function OutputPage() {
   const p = usePresent()
+  const st = useStore()
   const lv = useLive()
+  const fr = frameOf(p.frame)
+  const size = fr.sizes[Math.min(p.outSize, fr.sizes.length - 1)]
+  const [busy, setBusy] = useState<string | null>(null)
+  const run = (k: string, fn: () => Promise<unknown>) => { setBusy(k); fn().catch(() => {}).finally(() => setBusy(null)) }
   const hudPng = () => {
     const el = document.querySelector<HTMLElement>('.stage__view')
-    if (el) savePng(el, 'hud', 2).catch(() => {})
+    if (el) return savePng(el, 'hud', 2)
+    return Promise.resolve()
+  }
+  const stl = async () => {
+    await st.exportStl()
+    const f = useStore.getState().exported?.file
+    if (f) window.open(`/api/download/${encodeURIComponent(f)}`)
   }
   return (
-    <Group>
-      <div className="pd-grid2">
-        <button className="pd-chip" onClick={() => screenshot().catch(() => {})} data-tip="Screenshot" data-tip-desc="A PNG of exactly what the view shows, HUD included."><Icon name="frame" size={14} />Screenshot</button>
-        <button className={'pd-chip' + (p.recording ? ' pd-chip--on' : '')} onClick={() => toggleRecording().catch(() => {})} data-tip={p.recording ? 'Stop recording' : 'Record'} data-tip-desc="A WebM video of the view with its motion."><span className="pd-rec" />{p.recording ? 'Stop' : 'Record'}</button>
-        <button className="pd-chip" onClick={() => renderStill(lv.engine, 3)} data-tip="Render the geometry" data-tip-desc="The geometry alone at 3×, on a transparent background."><Icon name="export" size={14} />Geometry</button>
-        <button className="pd-chip" onClick={hudPng} data-tip="Save the HUD" data-tip-desc="Every piece, pin and note without the geometry, transparent, at 2×."><Icon name="layers" size={14} />HUD only</button>
-      </div>
-      <Pills<'auto' | 'dark' | 'light'> label="PNG ink" value={p.pngInk} onChange={p.setPngInk} options={[{ id: 'auto', t: 'As shown' }, { id: 'dark', t: 'Dark' }, { id: 'light', t: 'Light' }]} />
-    </Group>
+    <>
+      <Group label="Frame">
+        <div className="pd-frames" role="radiogroup" aria-label="Frame">
+          {FRAMES.map((f) => (
+            <button key={f.id} role="radio" aria-checked={p.frame === f.id} className={'pd-frame' + (p.frame === f.id ? ' pd-frame--on' : '')}
+              onClick={() => p.setFrame(f.id as FrameId)} data-tip={f.t} data-tip-desc={f.use}>
+              <FrameGlyph ratio={f.ratio} /><span>{f.t}</span>
+            </button>
+          ))}
+        </div>
+        <p className="pd-hint">{fr.use}. The view takes this shape and the HUD lays itself out for it.</p>
+        {fr.sizes.length > 0 && (
+          <Pills<string> label="Size" value={String(Math.min(p.outSize, fr.sizes.length - 1))} onChange={(v) => p.setOutSize(+v)}
+            options={fr.sizes.map(([w, h], i) => ({ id: String(i), t: `${w} × ${h}` }))} />
+        )}
+      </Group>
+      <Group label="Image">
+        <div className="pd-grid2">
+          <button className="pd-chip pd-chip--ink" disabled={!size || !!busy} onClick={() => size && run('png', () => exportFrame(lv.engine, size[0], size[1], fr.id))}
+            data-tip="Save the frame" data-tip-desc="Backdrop, geometry, HUD, pins and notes as one PNG at the size above.">
+            <Icon name="export" size={14} />{busy === 'png' ? 'Saving…' : size ? `PNG ${size[0]}×${size[1]}` : 'Pick a frame'}
+          </button>
+          <button className="pd-chip" onClick={() => run('shot', screenshot)} data-tip="Screen grab" data-tip-desc="Exactly what the window shows, via the browser's tab capture."><Icon name="frame" size={14} />Screen grab</button>
+          <button className="pd-chip" onClick={() => run('geo', () => renderStill(lv.engine, 3))} data-tip="Geometry only" data-tip-desc="The geometry alone at 3×, on a transparent background."><Icon name="model" size={14} />Geometry</button>
+          <button className="pd-chip" onClick={() => run('hud', hudPng)} data-tip="HUD only" data-tip-desc="Every piece, pin and note without the geometry, transparent, at 2×."><Icon name="layers" size={14} />HUD only</button>
+        </div>
+        <Pills<'auto' | 'dark' | 'light'> label="Ink of transparent PNGs" value={p.pngInk} onChange={p.setPngInk} options={[{ id: 'auto', t: 'As shown' }, { id: 'dark', t: 'Dark' }, { id: 'light', t: 'Light' }]} />
+      </Group>
+      <Group label="Video">
+        <div className="pd-grid2">
+          <button className={'pd-chip' + (p.recording ? ' pd-chip--on' : '')} onClick={() => toggleRecording().catch(() => {})}
+            data-tip={p.recording ? 'Stop recording' : 'Record'} data-tip-desc={p.frame === 'window' ? 'A WebM of the window with its motion.' : 'A WebM of the frame only, where the browser can crop the capture (Chrome); otherwise the window.'}>
+            <span className="pd-rec" />{p.recording ? 'Stop' : 'Record'}
+          </button>
+          <button className="pd-chip" onClick={() => p.setTab('motion')} data-tip="Motion" data-tip-desc="Turntable, shot reel, slice sweep and cycling compositions: set them up, then record.">Set up motion →</button>
+        </div>
+      </Group>
+      <Group label="3D">
+        <div className="pd-grid2">
+          <button className="pd-chip" disabled={!st.report || !!busy} onClick={() => run('stl', stl)} data-tip="STL" data-tip-desc="The printable surface, with a .json of every setting, written to output/ and downloaded."><Icon name="print" size={14} />STL</button>
+          <button className="pd-chip" disabled={!st.model || !!busy} onClick={() => run('glb', () => exportGlb(lv.engine))} data-tip="glTF" data-tip-desc="What the view shows (mesh or voxels, with colours) as .glb for Blender, Rhino or the web."><Icon name="model" size={14} />GLB</button>
+        </div>
+      </Group>
+    </>
   )
 }
 
@@ -333,7 +426,7 @@ export function PresentPanel() {
         {tab.id === 'library' && <LibraryPage hover={hover} />}
         {tab.id === 'notes' && <NotesPage />}
         {tab.id === 'motion' && <MotionPage />}
-        {tab.id === 'capture' && <CapturePage />}
+        {tab.id === 'output' && <OutputPage />}
       </ScrollArea>
       <nav className="pd-nav" aria-label="Compose pages">
         {TABS.map((t) => (

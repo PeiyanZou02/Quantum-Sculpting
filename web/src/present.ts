@@ -3,6 +3,9 @@
 // diagrams. It starts clean. In compose mode you drag components from the library onto the view, move
 // them, tune them and drag them off again; compositions you like are saved by name.
 import { create } from 'zustand'
+import type { FrameId } from './frames'
+import { CURATED, toRemove, type TidyLevel } from './hud/tidy'
+import { useStore } from './store'
 
 export type Mode = 'lab' | 'present'
 export interface Shot { az: number; el: number; dist: number }
@@ -19,7 +22,7 @@ export interface Guides { box: boolean; floor: boolean; div: number }
 /** The slice sweep: the range it covers (fractions of the grid height), layers per step, seconds for one
  *  pass through the range, and whether it goes up and down, only up or only down. */
 export interface Sweep { from: number; to: number; step: number; sec: number; mode: 'bounce' | 'up' | 'down' }
-export type PanelTab = 'view' | 'layers' | 'library' | 'notes' | 'motion' | 'capture'
+export type PanelTab = 'view' | 'layers' | 'library' | 'notes' | 'motion' | 'output'
 export interface Saved { id: string; name: string; compose: Record<string, string>; pos: Record<string, Pos>; looks: Record<string, Look>; texts: TextNote[]; guides?: Guides }
 
 interface P {
@@ -56,9 +59,18 @@ interface P {
   /** Pieces that found no free room on the view, even scaled down. */
   crowded: number
   setCrowded: (n: number) => void
-  /** Bumped by "Tidy up": the view moves overlapping pieces apart. */
+  /** Bumped by a tidy: the view lays every piece out again for the frame (see hud/tidy.ts). */
   tidyKey: number
   tidyUp: () => void
+  /** Tidy at a degree: arrange everything, drop repeats, or keep only the quantum essentials. */
+  tidy: (level: TidyLevel) => void
+  /** Put a curated preset on the view (replacing the pieces, keeping notes) and lay it out. */
+  applyCurated: (id: string) => void
+  /** The artboard's shape (frames.ts) and the export size picked for it (index into its sizes). */
+  frame: FrameId
+  setFrame: (f: FrameId) => void
+  outSize: number
+  setOutSize: (i: number) => void
   /** Put a component on the view: at a point (centre, fractions of the view) or in its usual place. */
   place: (family: string, id: string, at?: { x: number; y: number }) => void
   /** Take a piece off the view. */
@@ -135,7 +147,7 @@ const keep = (s: P) => {
   try {
     localStorage.setItem(KEY, JSON.stringify({
       v: VERSION, mode: s.mode, compose: s.compose, pos: s.pos, shots: s.shots, spin: s.spin, reelSec: s.reelSec, spinSpeed: s.spinSpeed,
-      cycleSec: s.cycleSec, drawer: s.drawer, looks: s.looks, spinDir: s.spinDir, texts: s.texts, pngInk: s.pngInk, saved: s.saved, current: s.current, guides: s.guides, sweepCfg: s.sweepCfg, tab: s.tab, libCat: s.libCat, opened: s.opened,
+      cycleSec: s.cycleSec, drawer: s.drawer, looks: s.looks, frame: s.frame, outSize: s.outSize, spinDir: s.spinDir, texts: s.texts, pngInk: s.pngInk, saved: s.saved, current: s.current, guides: s.guides, sweepCfg: s.sweepCfg, tab: s.tab, libCat: s.libCat, opened: s.opened,
     }))
   } catch { /* per-viewer only */ }
 }
@@ -170,7 +182,7 @@ export const usePresent = create<P>()((set, get) => {
     },
     arrange: false,
     setArrange: (v) => set({ arrange: v }),
-    tab: saved.tab ?? 'view',
+    tab: (saved.tab as string) === 'capture' ? 'output' : saved.tab ?? 'view',
     setTab: (t) => up({ tab: t }),
     libCat: saved.libCat ?? 'marks',
     setLibCat: (c) => up({ libCat: c }),
@@ -180,6 +192,31 @@ export const usePresent = create<P>()((set, get) => {
     setCrowded: (n) => { if (n !== get().crowded) set({ crowded: n }) },
     tidyKey: 0,
     tidyUp: () => set({ tidyKey: get().tidyKey + 1 }),
+    tidy: (level) => {
+      const s = get()
+      const keys = Object.entries(s.compose).flatMap(([f, v]) => variants(v).map((id) => `${f}:${id}`))
+      const gone = toRemove(keys, level, useStore.getState().q.mode)
+      const compose = { ...s.compose }
+      for (const k of gone) {
+        const [f, id] = k.split(':')
+        const left = variants(compose[f]).filter((v) => v !== id)
+        compose[f] = left.length ? left.join(',') : 'off'
+      }
+      // every piece is laid out afresh: forget where they were put
+      up({ compose, pos: withOthers(s.pos, Object.fromEntries(Object.entries(strip(s.pos)).filter(([k]) => k.startsWith('text:')))), sel: null })
+      set({ tidyKey: get().tidyKey + 1 })
+    },
+    applyCurated: (id) => {
+      const c = CURATED.find((x) => x.id === id)
+      if (!c) return
+      const s = get()
+      up({ compose: { ...c.compose }, pos: withOthers(s.pos, {}), looks: {}, current: null, sel: null })
+      set({ tidyKey: get().tidyKey + 1 })
+    },
+    frame: saved.frame ?? 'window',
+    setFrame: (f) => { up({ frame: f, outSize: 0 }); setTimeout(() => set({ tidyKey: get().tidyKey + 1 }), 80) },
+    outSize: saved.outSize ?? 0,
+    setOutSize: (i) => up({ outSize: i }),
     composing: false,
     setComposing: (v) => set({ composing: v, sel: v ? get().sel : null }),
     sel: null,

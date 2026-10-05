@@ -76,6 +76,13 @@ export async function toggleRecording(): Promise<void> {
     usePresent.getState().setBare(false)
     download(new Blob(chunks, { type: type || 'video/webm' }), `quantum-sculptor-${stamp()}.webm`)
   }
+  // a framed artboard records only itself where the browser can crop a tab capture to an element
+  const view = document.querySelector<HTMLElement>('.stage__view')
+  const crop = (globalThis as unknown as { CropTarget?: { fromElement: (e: Element) => Promise<unknown> } }).CropTarget
+  const track = stream.getVideoTracks()[0] as MediaStreamTrack & { cropTo?: (t: unknown) => Promise<void> }
+  if (view && crop && track?.cropTo && usePresent.getState().frame !== 'window') {
+    try { await track.cropTo(await crop.fromElement(view)) } catch { /* records the whole tab */ }
+  }
   // the browser's own "Stop sharing" also ends the recording
   stream.getVideoTracks()[0]?.addEventListener('ended', () => recorder?.state === 'recording' && recorder.stop())
   p.setRecording(true)
@@ -86,6 +93,56 @@ export async function toggleRecording(): Promise<void> {
 }
 
 export const isRecording = () => !!recorder
+
+const blobOf = (url: string) => fetch(url).then((r) => r.blob())
+const img = (src: Blob) => new Promise<HTMLImageElement>((res, rej) => {
+  const i = new Image()
+  i.onload = () => res(i)
+  i.onerror = rej
+  i.src = URL.createObjectURL(src)
+})
+
+/** The whole composition as one PNG of exactly w × h px: the backdrop, the geometry, then the HUD,
+ *  pins and notes over it. The view has the frame's shape, so nothing is cropped or stretched. */
+export async function exportFrame(engine: Engine | undefined, w: number, h: number, name: string): Promise<void> {
+  const view = document.querySelector<HTMLElement>('.stage__view')
+  if (!engine || !view) return
+  await bare(async () => {
+    const { toPng } = await import('html-to-image')
+    const vw = view.clientWidth, vh = view.clientHeight
+    const scale = w / vw
+    const skip = (n: Node) => !(n instanceof Element && n.matches('canvas, .hud-piece__bar, [data-no-export], [data-hud^="chrome:"], .stage__drop, .landing, .qs-probe-rulers'))
+    // 1 · the ground and its backdrop: the view's own background, no children
+    const ground = await toPng(view, { pixelRatio: scale, width: vw, height: vh, filter: (n) => n === view })
+    // 2 · the geometry, rendered at the target size
+    const pr = engine.pixelRatio()
+    const geo = await engine.render(scale / pr)
+    // 3 · everything drawn over it, on a transparent ground
+    const over = await toPng(view, { pixelRatio: scale, width: vw, height: vh, style: { background: 'none' }, filter: skip })
+    const c = document.createElement('canvas')
+    c.width = w
+    c.height = h
+    const g = c.getContext('2d')!
+    g.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--qs-bg').trim() || '#E3E4E7'
+    g.fillRect(0, 0, w, h)
+    for (const part of [await blobOf(ground), geo, await blobOf(over)]) {
+      if (!part) continue
+      const i = await img(part)
+      g.drawImage(i, 0, 0, w, h)
+      URL.revokeObjectURL(i.src)
+    }
+    const blob = await new Promise<Blob | null>((r) => c.toBlob(r, 'image/png'))
+    if (blob) download(blob, `quantum-sculptor-${name}-${w}x${h}-${stamp()}.png`)
+  })
+}
+
+/** What is on the view as a glTF binary (.glb): meshes and voxels as shown, for Blender, Rhino or the web. */
+export async function exportGlb(engine: Engine | undefined): Promise<void> {
+  if (!engine) return
+  const { GLTFExporter } = await import('three/examples/jsm/exporters/GLTFExporter.js')
+  const data = await new GLTFExporter().parseAsync(engine.exportable(), { binary: true, onlyVisible: true })
+  download(new Blob([data as ArrayBuffer], { type: 'model/gltf-binary' }), `quantum-sculptor-${stamp()}.glb`)
+}
 
 export async function renderStill(engine: Engine | undefined, scale = 3): Promise<void> {
   if (!engine) return

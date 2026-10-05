@@ -23,6 +23,8 @@ import { GLYPH_FAMILIES } from './glyphs'
 import { DATA_FAMILIES } from './datamarks'
 import { NAV_FAMILIES } from './navmore'
 import { CONTROL_FAMILIES } from './controls'
+import { EVOLVE_MODULES } from './evolve'
+import { layout, type Slot } from './tidy'
 import { usePresent, type Look } from '../present'
 import './composer.css'
 
@@ -43,12 +45,14 @@ export const FAMILIES: FamilyDef[] = [
   { id: 'cards', title: 'Data cards', desc: 'Quantum result, print check, model, grid', modules: CARDS_MODULES },
   { id: 'stages', title: 'Stages', desc: 'Model, voxels, quantum and mesh side by side', modules: STAGES_MODULES },
   ...NAV_FAMILIES, ...GLYPH_FAMILIES, ...DATA_FAMILIES, ...CONTROL_FAMILIES,
+  { id: 'evolve', title: 'Evolve', desc: 'Nations: roster, territory over the history, chronicle, relations, record', modules: EVOLVE_MODULES },
 ]
 
 /** The library's categories, in the Quicksilver Library's order: each holds families, each family variants. */
 export const CATEGORIES: { id: string; title: string; icon: string; fams: Family[] }[] = [
   { id: 'marks', title: 'Marks', icon: 'frame', fams: ['frame', 'orbit', 'camera', 'dial', 'bounds', 'focus', 'selection', 'callout', 'scan'] },
   { id: 'nav', title: 'Navigation', icon: 'navigate', fams: ['steps', 'timeline', 'bars', 'indexes', 'captures'] },
+  { id: 'evolve', title: 'Evolve', icon: 'entangle', fams: ['evolve'] },
   { id: 'glyphs', title: 'Quantum glyphs', icon: 'quantum', fams: ['backend', 'register', 'rotation', 'shots', 'processing', 'blur', 'pulse', 'usage'] },
   { id: 'data', title: 'Data and runtime', icon: 'grid', fams: ['meta', 'cards', 'figures', 'density', 'runtime', 'tiles', 'field', 'values', 'levels', 'slicecard', 'stages'] },
   { id: 'controls', title: 'Controls', icon: 'orbit', fams: ['dials', 'numbers', 'viewcam'] },
@@ -358,8 +362,21 @@ export function settle(root: HTMLElement, model: Rect | null, onMove: (k: string
   return { moved, stuck }
 }
 
+/** Lays every piece out afresh for the view's shape (hud/tidy.ts): measures each at its natural size,
+ *  then places it on the grid around the object. Object and full-view marks stay as they are. */
+export function composeLayout(root: HTMLElement, onMove: (k: string, p: Placement) => void, slotOf: (k: string) => Slot, scaleOf: (k: string) => number, reserve: number): Rect | null {
+  const view = root.getBoundingClientRect()
+  const boxes = [...root.querySelectorAll<HTMLElement>('.hud-piece[data-hud]')]
+    .filter((p) => !p.parentElement?.closest('.hud-piece') && !p.dataset.hud!.startsWith('chrome:'))
+    .map((p) => { const r = boxOf(p), z = scaleOf(p.dataset.hud!); return { k: p.dataset.hud!, w: r.width / z, h: r.height / z, slot: slotOf(p.dataset.hud!) } })
+    .filter((b) => b.w > 0 && b.h > 0)
+  const { placed, hero } = layout(boxes, view.width, view.height, reserve)
+  for (const q of placed) onMove(q.k, { x: q.x / view.width, y: q.y / view.height, auto: true, z: q.z < 0.999 ? q.z : undefined })
+  return hero
+}
+
 /** Draws the chosen modules over the view. `chrome` lets the host put its own controls into slots. */
-export function HudLayer({ ctx, compose, chrome, positions = {}, arrange = false, edit, looks = {}, hl = null, ghost = null, texts = [], autoArrange = false, onCrowded, tidyKey = 0, onMove, onText }: {
+export function HudLayer({ ctx, compose, chrome, positions = {}, arrange = false, edit, looks = {}, hl = null, ghost = null, texts = [], autoArrange = false, onCrowded, tidyKey = 0, reserve = 0, onHero, onMove, onText }: {
   ctx: HudCtx; compose: Composition; chrome?: Partial<Record<(typeof SLOTS)[number], ReactNode>>
   positions?: Record<string, Placement>; arrange?: boolean; edit?: Edit; looks?: Record<string, Look>; hl?: string | null
   /** The piece being previewed from the library (outlined, the rest dimmed). */
@@ -368,8 +385,12 @@ export function HudLayer({ ctx, compose, chrome, positions = {}, arrange = false
   autoArrange?: boolean
   /** After settling: how many pieces found no room even at 55 %. */
   onCrowded?: (n: number) => void
-  /** Bump to tidy up every piece on the view (pieces the user placed may move too). */
+  /** Bump to lay every piece out afresh for the view (pieces the user placed move too). */
   tidyKey?: number
+  /** Room kept free at the bottom when laying out (the present bar). */
+  reserve?: number
+  /** After a layout: the room left for the object (view px), so the host can frame it there. */
+  onHero?: (r: Rect) => void
   texts?: { id: string; text: string }[]
   onMove?: (k: string, p: Placement | null) => void; onText?: (id: string, t: string | null) => void
 }) {
@@ -397,6 +418,26 @@ export function HudLayer({ ctx, compose, chrome, positions = {}, arrange = false
     if (!onMove || !root.current || (!all && (!autoArrange || sig === settledSig.current))) return
     tidied.current = tidyKey
     settledSig.current = sig
+    if (all) {
+      // a tidy: lay everything out on the grid, then settle once more for anything that still touches
+      const slotOf = (k: string) => (k.startsWith('text:') ? 'top' : (chosen.find((m) => key(m) === k)?.slot ?? 'br')) as Slot
+      // natural sizes: wait a frame for pieces to render at their own scale first
+      for (const k of Object.keys(positions)) if (positions[k]?.z && positions[k].auto) onMove(k, { ...positions[k], z: undefined })
+      // wait until every piece has rendered (new ones mount a frame or two after the composition changes)
+      const want = chosen.filter((m) => m.slot !== 'object' && m.slot !== 'full').length + texts.length
+      let tries = 0
+      const go = () => {
+        const el = root.current
+        if (!el) return
+        const ready = [...el.querySelectorAll<HTMLElement>('.hud-piece[data-hud]')].filter((p) => !p.dataset.hud!.startsWith('chrome:') && boxOf(p).width > 0).length
+        if (ready < want && ++tries < 12) { setTimeout(go, 60); return }
+        const hero = composeLayout(el, onMove, slotOf, () => 1, reserve)
+        if (hero) onHero?.(hero)
+        setTimeout(() => { if (root.current) onCrowded?.(settle(root.current, ctx.rect, onMove, () => true, (k) => positions[k]?.z ?? 1, ghost).stuck) }, 160)
+      }
+      requestAnimationFrame(() => requestAnimationFrame(go))
+      return
+    }
     const fixed = (k: string) => !all && !!positions[k] && !positions[k].auto
     let pass = 0
     const run = () => {

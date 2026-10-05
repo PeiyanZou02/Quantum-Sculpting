@@ -1,0 +1,41 @@
+/* Evolve HUD figures: same roles as the rest of the interface (label caps, body, meta, display). */
+.hev { display: flex; flex-direction: column; gap: 10px; color: var(--qs-ink); font: var(--qs-t-body); font-variant-numeric: tabular-nums; }
+.hev--nations { width: 280px; }
+.hev--territory { width: 480px; }
+.hev--chronicle { width: 320px; }
+.hev--relations { width: 200px; }
+.hev--record { width: 300px; }
+.hev-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding-bottom: 6px; border-bottom: 1px solid var(--qs-line); }
+.hev-t { font: var(--qs-t-label); text-transform: uppercase; letter-spacing: var(--qs-track-label); color: var(--qs-ink); }
+.hev-n { font: var(--qs-t-meta); color: var(--qs-ink2); white-space: nowrap; }
+.hev-empty { margin: 0; font: var(--qs-t-prose); color: var(--qs-ink2); max-width: 30ch; }
+.hev-chip { display: inline-flex; align-items: center; gap: 5px; font: 500 12px/1 var(--qs-mono); color: var(--qs-ink); }
+.hev-chip i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
+
+.hev-roster { display: flex; flex-direction: column; gap: 5px; }
+.hev-row { display: grid; grid-template-columns: 30px 1fr 48px 56px; align-items: center; gap: 8px; }
+.hev-bar { height: 4px; background: var(--qs-faint); border-radius: 999px; overflow: hidden; }
+.hev-bar > span { display: block; height: 100%; border-radius: 999px; }
+.hev-v { font: var(--qs-t-meta); text-align: right; }
+.hev-act { font: var(--qs-t-meta); color: var(--qs-ink2); }
+.hev-foot { font: var(--qs-t-meta); color: var(--qs-ink2); }
+
+.hev-svg { display: block; overflow: visible; }
+.hev-ax { font: 400 11px var(--qs-mono); fill: var(--qs-ink2); }
+.hev-ax--on { fill: var(--qs-ink); font-weight: 500; }
+.hev-node { font: 500 11px var(--qs-mono); fill: #fff; pointer-events: none; }
+.hev-legend { display: flex; gap: 14px; font: var(--qs-t-meta); color: var(--qs-ink2); }
+.hev-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.hev-legend svg { fill: currentColor; }
+
+.hev-log { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.hev-log li { display: grid; grid-template-columns: 48px 1fr; gap: 10px; align-items: baseline; }
+.hev-lt { font: var(--qs-t-meta); color: var(--qs-ink2); }
+.hev-lw { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; }
+.hev-lw > span:last-child { color: var(--qs-ink2); }
+
+.hev-figs { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 18px; }
+.hev-fig { display: flex; flex-direction: column; gap: 4px; }
+.hev-k { font: var(--qs-t-label); text-transform: uppercase; letter-spacing: var(--qs-track-label); color: var(--qs-ink2); }
+.hev-big { font: var(--qs-t-display); letter-spacing: -.01em; }
+.hev-note { font: var(--qs-t-meta); color: var(--qs-ink2); }

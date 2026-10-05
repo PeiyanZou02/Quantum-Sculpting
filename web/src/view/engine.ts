@@ -228,6 +228,36 @@ export class Engine {
     this.onChange?.()
   }
 
+  /** Dolly and pan (keeping the angle) until what is shown fills `rect` (host px) without spilling:
+   *  how Present frames the object in the room its HUD leaves. */
+  frameInto(rect: { l: number; r: number; t: number; b: number }) {
+    const t = this.controls.target, cam = this.camera
+    const H = this.host.clientHeight
+    for (let i = 0; i < 4; i++) {
+      const cur = this.bounds2D()
+      if (!cur || cur.r - cur.l < 1 || cur.b - cur.t < 1) return
+      const k = Math.min((rect.r - rect.l) / (cur.r - cur.l), (rect.b - rect.t) / (cur.b - cur.t))
+      const off = cam.position.clone().sub(t).multiplyScalar(1 / Math.max(0.2, Math.min(5, k)))
+      cam.position.copy(t).add(off)
+      cam.lookAt(t)
+      cam.updateMatrixWorld()
+      const now = this.bounds2D()
+      if (!now) return
+      const dx = (rect.l + rect.r) / 2 - (now.l + now.r) / 2, dy = (rect.t + rect.b) / 2 - (now.t + now.b) / 2
+      const wpp = (2 * off.length() * Math.tan(THREE.MathUtils.degToRad(cam.fov) / 2)) / H
+      const right = new THREE.Vector3().setFromMatrixColumn(cam.matrixWorld, 0)
+      const up = new THREE.Vector3().setFromMatrixColumn(cam.matrixWorld, 1)
+      const move = right.multiplyScalar(-dx * wpp).add(up.multiplyScalar(dy * wpp))
+      t.add(move)
+      cam.position.add(move)
+      cam.lookAt(t)
+      cam.updateMatrixWorld()
+    }
+    this.controls.update()
+    this.dirty = true
+    this.onChange?.()
+  }
+
   /** Fly to a saved shot: azimuth, elevation (degrees) and distance (grid-box units). */
   flyTo(azDeg: number, elDeg: number, dist: number) {
     const az = THREE.MathUtils.degToRad(azDeg), el = THREE.MathUtils.degToRad(Math.max(-89.5, Math.min(elDeg, 89.5)))
@@ -240,6 +270,20 @@ export class Engine {
     this.controls.autoRotate = on
     this.controls.autoRotateSpeed = degPerSec / 6   // OrbitControls: 2.0 ≈ 30 s per turn at 60 fps
     this.dirty = true
+  }
+
+  /** The renderer's device pixel ratio (render(scale) multiplies it). */
+  pixelRatio() { return this.renderer.getPixelRatio() }
+
+  /** The geometry on view for export: a copy of the root without the frame, plane and scanner guides. */
+  exportable(): THREE.Object3D {
+    const out = new THREE.Group()
+    for (const c of this.root.children) {
+      if (c === this.frame || c === this.plane || c === this.scanner || !c.visible) continue
+      out.add(c.clone())
+    }
+    out.applyMatrix4(this.root.matrixWorld)
+    return out
   }
 
   /** A still of the geometry alone at `scale`× the view's pixels, transparent background (PNG blob). */

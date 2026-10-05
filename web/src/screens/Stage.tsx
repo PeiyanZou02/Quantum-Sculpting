@@ -20,6 +20,7 @@ import type { HudCtx, Vec3 } from '../hud/types'
 import { MODEL_EXT } from './InputPane'
 import { live, bump } from '../live'
 import { ownerGrid, ownerToColors } from '../view/nations'
+import { fit, frameOf } from '../frames'
 
 const MODE_LABEL: Record<string, string> = { gaussian: 'Gaussian', emulator: 'Emulation', atlas: 'Atlas', nations: 'Evolve' }
 const modeLabel = (m: string) => MODE_LABEL[m] ?? m
@@ -62,6 +63,16 @@ const SHADINGS: { id: Shading; icon: string; t: string; d: string }[] = [
 
 export function Stage() {
   const host = useRef<HTMLDivElement>(null)
+  // Present with a frame: the view becomes an artboard of the frame's shape, centred in the window
+  const mainRef = useRef<HTMLElement>(null)
+  const [room, setRoom] = useState({ w: 0, h: 0 })
+  useEffect(() => {
+    const el = mainRef.current
+    if (!el) return
+    const ro = new ResizeObserver(() => setRoom({ w: el.clientWidth, h: el.clientHeight }))
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
   const [engine, setEngine] = useState<Engine | null>(null)
   const [tick, setTick] = useState(0)
   const [over, setOver] = useState(false)
@@ -372,9 +383,14 @@ export function Stage() {
   const busy = st.busy.model ? 'Opening' : st.busy.vox ? 'Voxelising' : st.busy.proc && st.q.mode !== 'atlas' ? 'Processing' : st.busy.mesh ? 'Meshing' : null
   const shaded = view === 'processed' || view === 'scan'
   const ghostCount = LAYERS.filter((l) => layers[l.id].visible).length
+  const frame = frameOf(pr.frame)
+  const framed = present && frame.ratio != null
+  // the artboard keeps clear of the present bar below it and has a margin all round (none while capturing)
+  const pad = pr.bare ? 0 : 28
+  const board = framed && room.w > 0 ? fit(frame.ratio!, room.w - 2 * pad, room.h - 2 * pad - (pr.bare ? 0 : 64)) : null
 
   return (
-    <main className="stage">
+    <main className={'stage' + (framed ? ' stage--framed' : '')} ref={mainRef}>
       <div className="stage__bar">
         <FocusStrip />
         <div className="stage__tools">
@@ -452,7 +468,7 @@ export function Stage() {
           const f = e.dataTransfer.files[0]
           if (f) st.upload(f)
         }}
-        style={{ background: model ? undefined : 'radial-gradient(circle,var(--qs-dot) 1px,transparent 1.5px) 12px 12px/24px 24px' }}
+        style={{ background: model ? undefined : 'radial-gradient(circle,var(--qs-dot) 1px,transparent 1.5px) 12px 12px/24px 24px', ...(board ? { width: board.w, height: board.h, flex: 'none' } : null) }}
       >
         {hud.frame && !present && <ViewMarks />}
         {!model && <Landing over={over} />}
@@ -468,7 +484,7 @@ export function Stage() {
             edit={present && pr.composing && !pr.bare && !pr.recording ? { sel: pr.sel, onSelect: pr.setSel, onRemove: pr.removePiece } : undefined}
             looks={present ? pr.looks : undefined} hl={present ? pr.hl : null} ghost={present ? pr.preview : null}
             texts={present ? pr.texts : undefined} onText={pr.setText}
-            autoArrange={present} onCrowded={pr.setCrowded} tidyKey={present ? pr.tidyKey : 0}
+            autoArrange={present} onCrowded={pr.setCrowded} tidyKey={present ? pr.tidyKey : 0} reserve={present && !pr.bare && !framed ? 76 : 0} onHero={present ? (r) => engine.frameInto(r) : undefined}
             positions={Object.fromEntries(Object.entries(pr.pos).filter(([k]) => k.startsWith(pr.mode + '|')).map(([k, v]) => [k.slice(pr.mode.length + 1), v]))}
             onMove={(k, p) => pr.setPos(`${pr.mode}|${k}`, p)}
             chrome={present ? { top: <PresentChrome /> } : {
@@ -514,6 +530,7 @@ export function Stage() {
           }} />
         )}
       </div>
+      {board && !pr.bare && <div className="stage__board-label" data-no-export>{frame.t} · {frame.use}{frame.sizes[0] ? ` · ${frame.sizes[Math.min(pr.outSize, frame.sizes.length - 1)].join(' × ')} px` : ''}</div>}
     </main>
   )
 }
