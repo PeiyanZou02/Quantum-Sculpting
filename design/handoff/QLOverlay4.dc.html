@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<div style="display:flex;flex-direction:column;gap:28px;color:var(--qs-ink)">
+  <div style="display:grid;grid-template-columns:72px 340px minmax(0,1fr);align-items:baseline;padding-top:14px;border-top:1px solid var(--qs-ink)"><span style="font:400 11px/1 'Geist Mono',monospace;color:var(--qs-ink3)">00</span><span style="font:400 28px/1.15 'TWK Everett',sans-serif">Overlay in use</span><span style="max-width:760px;font:400 14px/1.35 'TWK Everett',sans-serif;color:var(--qs-ink2);text-wrap:pretty">The Quantum step of the app, built from what the code does rather than from the reference. Every element is numbered and has a reason to be there; anything without one was left out.</span></div>
+  <div style="position:relative;width:1472px;height:760px">
+    <div style="position:absolute;left:0;top:0;width:220px;display:flex;flex-direction:column;gap:28px">
+      <div style="position:relative;display:flex;flex-direction:column;gap:16px;padding-left:20px;font:400 11px/1 'Geist Mono',monospace"><div style="position:absolute;left:0;top:-4px;bottom:-4px;width:1px;background:#B3B5BB"></div><div style="position:absolute;left:-1.5px;top:47.5px;width:4px;height:24px;background:#151618"></div><span style="display:flex;justify-content:space-between">01 Model<span style="color:#8B8D93">done</span></span><span style="display:flex;justify-content:space-between">02 Voxelize<span style="color:#8B8D93">done</span></span><span style="display:flex;justify-content:space-between">03 Quantum<span>live</span></span><span style="display:flex;justify-content:space-between;color:#8B8D93">04 Mesh<span>—</span></span></div>
+      <div style="display:flex;flex-direction:column;gap:14px;padding-left:20px"><dc-import name="QReadout" kw="64" w="200" rows="Mode|atlas;Strength|0.30;Reach|0.00;Style|xy;Axes|X Y Z;Shots|exact;Run|run2" hint-size="200px,120px"></dc-import><dc-import name="QPill" kind="commit" size="s" label="Submit to Atlas" hint-size="140px,22px"></dc-import></div>
+    </div>
+    <div data-vox="field" data-theme="light" data-mode="qpu" data-fit="1.15" data-elev="24" style="position:absolute;left:250px;top:70px;width:560px;height:520px"></div>
+    <svg width="560" height="520" viewBox="0 0 560 520" style="position:absolute;left:250px;top:70px;overflow:visible;pointer-events:none"><polygon points="64,360 390,360 500,250 174,250" fill="rgba(21,22,24,.04)" stroke="#151618" stroke-width="1"></polygon><line x1="500" y1="250" x2="610" y2="196" stroke="#151618" stroke-width="1" stroke-dasharray="1 3"></line></svg>
+    <span style="position:absolute;left:268px;top:420px;padding:4px 9px;border-radius:999px;border:1px solid #151618;background:#E3E4E7;font:400 11px/1 'Geist Mono',monospace">z 16 / 31</span>
+    <div style="position:absolute;left:860px;top:90px;display:flex;flex-direction:column;gap:10px"><div style="display:flex;justify-content:space-between;width:230px"><span style="font:600 10px/1 'Geist Mono',monospace;letter-spacing:.04em">SLICE</span><span style="font:400 11px/1 'Geist Mono',monospace;color:#8B8D93">processed · contour 0.50</span></div><canvas data-vslice="field" data-z="16" data-level=".5" data-theme="light" style="width:230px;height:230px"></canvas><div style="display:flex;gap:4px"><dc-import name="QPill" kind="active" size="s" label="Processed" hint-size="80px,22px"></dc-import><dc-import name="QPill" kind="ghost" size="s" label="Input" hint-size="50px,22px"></dc-import><dc-import name="QPill" kind="ghost" size="s" label="X" hint-size="28px,22px"></dc-import><dc-import name="QPill" kind="ghost" size="s" label="Y" hint-size="28px,22px"></dc-import><dc-import name="QPill" kind="active" size="s" label="Z" hint-size="28px,22px"></dc-import></div></div>
+    <div style="position:absolute;left:250px;right:250px;top:4px;height:40px">
+      <div style="position:absolute;left:0;right:0;top:18px;height:1px;background:#B3B5BB"></div><div style="position:absolute;left:0;width:62%;top:18px;height:1px;background:#151618"></div>
+      <span style="position:absolute;left:0;top:14px;width:9px;height:9px;border-radius:50%;background:#151618"></span><span style="position:absolute;left:20%;top:14px;width:9px;height:9px;border-radius:50%;background:#151618"></span><span style="position:absolute;left:62%;top:14px;width:9px;height:9px;margin-left:-4.5px;border-radius:50%;border:1px solid #151618;box-sizing:border-box;background:radial-gradient(circle,#151618 2px,#E3E4E7 2.5px)"></span><span style="position:absolute;right:0;top:14px;width:9px;height:9px;border-radius:50%;border:1px solid #B3B5BB;box-sizing:border-box;background:#E3E4E7"></span>
+      <span style="position:absolute;left:0;top:0;font:400 11px/1 'Geist Mono',monospace">Job 7f3a-91c2</span><span style="position:absolute;left:62%;top:30px;transform:translateX(-50%);display:flex;align-items:center;gap:6px;font:400 11px/1 'Geist Mono',monospace;white-space:nowrap"><span style="width:6px;height:6px;border-radius:50%;background:#151618;animation:qs-blink 1.2s ease-in-out infinite"></span>running · 62% · 26 s</span><span style="position:absolute;right:0;top:0;font:400 11px/1 'Geist Mono',monospace;color:#8B8D93">poll every 2 s</span>
+    </div>
+    <div style="position:absolute;right:0;top:70px;width:170px;display:flex;flex-direction:column;gap:14px"><sc-for list="{{ views }}" as="v" hint-placeholder-count="4"><div style="display:flex;flex-direction:column;gap:6px"><div style="position:relative;width:170px;height:104px;background:{{ v.bg }}"><div data-vox="{{ v.k }}" data-theme="light" data-mode="{{ v.m }}" data-level=".5" data-smooth="5" data-fit="1.35" data-elev="22" style="position:absolute;inset:0"></div><sc-if value="{{ v.on }}"><div style="position:absolute;inset:0;background:{{ cbw }}"></div></sc-if></div><span style="font:400 11px/1 'Geist Mono',monospace;color:{{ v.fg }}">{{ v.t }}</span></div></sc-for></div>
+    <div style="position:absolute;left:440px;top:620px;width:700px;display:flex;flex-direction:column;gap:8px"><div style="display:flex;justify-content:space-between"><span style="font:400 11px/1 'Geist Mono',monospace">Density · drag to set level</span><span style="font:400 11px/1 'Geist Mono',monospace;color:#8B8D93">keeps 2,102 of 2,914 cells</span></div><div style="position:relative"><canvas data-vhist="1" data-level=".5" data-theme="light" style="width:700px;height:90px"></canvas><span style="position:absolute;left:328px;top:-6px;padding:4px 9px;border-radius:999px;border:1px solid #151618;background:#E3E4E7;font:400 11px/1 'Geist Mono',monospace">0.50</span></div></div>
+    <div style="position:absolute;left:0;bottom:0"><dc-import name="QCam" x=".5" y="-.4" az="035" el="24" dist="2.40" hint-size="400px,120px"></dc-import></div>
+    <sc-for list="{{ marks }}" as="m" hint-placeholder-count="7"><span style="position:absolute;left:{{ m.x }}px;top:{{ m.y }}px;width:18px;height:18px;border-radius:50%;background:#151618;color:#E3E4E7;display:flex;align-items:center;justify-content:center;font:400 10px/1 'Geist Mono',monospace">{{ m.n }}</span></sc-for>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));column-gap:40px;row-gap:24px"><sc-for list="{{ why }}" as="w" hint-placeholder-count="7"><div style="display:flex;gap:12px;padding-top:12px;border-top:1px solid var(--qs-line)"><span style="flex:none;width:18px;height:18px;border-radius:50%;background:#151618;color:#E3E4E7;display:flex;align-items:center;justify-content:center;font:400 10px/1 'Geist Mono',monospace">{{ w.n }}</span><div style="display:flex;flex-direction:column;gap:6px"><span style="font:400 14px/1.25 'TWK Everett',sans-serif">{{ w.t }}</span><span style="font:400 12px/1.35 'TWK Everett',sans-serif;color:var(--qs-ink3);text-wrap:pretty">{{ w.d }}</span></div></div></sc-for><div style="display:flex;gap:12px;padding-top:12px;border-top:1px solid var(--qs-line)"><span style="flex:none;width:18px;height:18px;border-radius:50%;border:1px solid #8B8D93;box-sizing:border-box"></span><div style="display:flex;flex-direction:column;gap:6px"><span style="font:400 14px/1.25 'TWK Everett',sans-serif">Left out</span><span style="font:400 12px/1.35 'TWK Everett',sans-serif;color:var(--qs-ink3);text-wrap:pretty">Symmetric corner readouts, a decorative crosshair grid and a capture matrix. The app has no captures, and the corners held nothing it needs.</span></div></div></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1472,&quot;height&quot;:1060}}">
+class Component extends DCLogic {
+  renderVals() {
+    const g = (c, w, l) => ['left top', 'right top', 'left bottom', 'right bottom'].map(p => `linear-gradient(${c},${c}) ${p}/${l}px ${w}px no-repeat,linear-gradient(${c},${c}) ${p}/${w}px ${l}px no-repeat`).join(',');
+    const views = [['Model', 'iso', 'mock'], ['Voxels', 'grid', 'qpu'], ['Processed', 'field', 'qpu'], ['Result', 'iso', 'qpu']].map(([t, k, m], i) => ({ t: (i === 2 ? '● ' : '') + t, k, m, on: i === 2, fg: i === 2 ? '#151618' : '#8B8D93', bg: i === 2 ? 'rgba(21,22,24,.04)' : 'transparent' }));
+    const marks = [[0, -26, 1], [250, 70, 2], [840, 84, 3], [226, 0, 4], [416, 616, 5], [1278, 46, 6], [0, 610, 7]].map(([x, y, n]) => ({ x, y, n }));
+    const why = [
+      ['Pipeline rail', 'The app is four steps in order. The rail shows where the run is and holds the live step’s parameters, so nothing sits in the corners.'],
+      ['Current output', 'The object is this step’s output. In Quantum it shows the blurred density field, not the input cup.'],
+      ['Docked slice', 'The slice panel is the main inspection tool in the code. It is docked to the plane, so the 2D view stays tied to its z position.'],
+      ['Job strip', 'Atlas jobs are remote and slow. Progress runs along the top edge, away from the object, and disappears when no job is running.'],
+      ['Density floor', 'The level is chosen against the value distribution, so the histogram sits under the object with the level handle on it.'],
+      ['View filmstrip', 'Model, voxels, processed and result are the app’s four preview modes. Thumbnails make the switch visual.'],
+      ['Orbit gimbal', 'Needed often but never the focus, so it waits in the corner. The ring sets azimuth, the yoke sets elevation and four stations snap the view.']
+    ].map(([t, d], i) => ({ n: i + 1, t, d }));
+    return { views, marks, why, cbw: g('#8B8D93', 1.5, 14) };
+  }
+}
+</script>
+</body>
+</html>

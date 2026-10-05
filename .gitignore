@@ -27,3 +27,9 @@ Thumbs.db
 
 # 交接记录只留在本地和 OneDrive：里面有指向私有 Claude 文档的链接
 PROGRESS.md
+
+# Quantum Sculptor web front end (web/)
+web/node_modules/
+web/public/fonts/*.ttf
+web/public/fonts/*.otf
+app/static/studio/

@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<div onMouseMove="{{ mv }}" onMouseLeave="{{ lv }}" onClick="{{ ck }}" style="position:relative;width:{{ w }}px;height:{{ h }}px;cursor:{{ cur }};user-select:none">
+  <svg width="{{ w }}" height="{{ h }}" viewBox="{{ vb }}" style="position:absolute;left:0;top:0;overflow:visible;pointer-events:none">
+    <g opacity="{{ ro }}" style="transition:opacity .16s">
+      <path d="{{ rulerB }}" fill="none" stroke="#8B8D93" stroke-width="1"></path>
+      <path d="{{ rulerR }}" fill="none" stroke="#8B8D93" stroke-width="1"></path>
+    </g>
+    <sc-if value="{{ hv }}"><path d="{{ guides }}" fill="none" stroke="#8B8D93" stroke-width="1" stroke-dasharray="2 3"></path><path d="{{ marks }}" fill="#151618"></path><path d="{{ ret }}" fill="none" stroke="#151618" stroke-width="1"></path></sc-if>
+    <path d="{{ meas }}" fill="none" stroke="#151618" stroke-width="1" stroke-dasharray="3 3"></path>
+    <sc-for list="{{ pins }}" as="p" hint-placeholder-count="0"><circle cx="{{ p.x }}" cy="{{ p.y }}" r="3.2" fill="#151618"></circle><circle cx="{{ p.x }}" cy="{{ p.y }}" r="8" fill="none" stroke="#151618" stroke-width="1"></circle><path d="{{ p.ld }}" fill="none" stroke="#151618" stroke-width="1"></path></sc-for>
+  </svg>
+  <div style="position:absolute;inset:0;opacity:{{ ro }};transition:opacity .16s;pointer-events:none"><sc-for list="{{ rlab }}" as="l" hint-placeholder-count="0"><span style="position:absolute;left:{{ l.x }}px;top:{{ l.y }}px;transform:{{ l.tr }};font:400 9px/1 'Geist Mono',monospace;color:#8B8D93;white-space:nowrap">{{ l.t }}</span></sc-for></div>
+  <sc-if value="{{ hv }}">
+    <div style="position:absolute;left:{{ fx }}px;top:{{ fy }}px;transform:{{ ftr }};display:flex;flex-direction:column;gap:4px;font:400 11px/1.2 'Geist Mono',monospace;white-space:nowrap;text-shadow:0 0 2px #E3E4E7,0 0 6px #E3E4E7;pointer-events:none"><span>{{ l1 }}</span><span style="color:#55575D">{{ l2 }}</span></div>
+    <span style="position:absolute;left:{{ bxl }}px;top:{{ bxt }}px;transform:translateX(-50%);font:400 10px/1 'Geist Mono',monospace;white-space:nowrap;pointer-events:none">{{ bxT }}</span>
+    <span style="position:absolute;left:{{ ryl }}px;top:{{ ryt }}px;transform:translate(-100%,-50%);font:400 10px/1 'Geist Mono',monospace;white-space:nowrap;pointer-events:none">{{ ryT }}</span>
+  </sc-if>
+  <sc-for list="{{ pins }}" as="p" hint-placeholder-count="0"><div style="position:absolute;left:{{ p.tx }}px;top:{{ p.ty }}px;transform:{{ p.tr }};display:flex;flex-direction:column;gap:4px;font:400 11px/1.2 'Geist Mono',monospace;white-space:nowrap;text-shadow:0 0 2px #E3E4E7,0 0 6px #E3E4E7;pointer-events:none"><span style="display:flex;align-items:center;gap:6px"><span style="display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;background:#151618;color:#E3E4E7;font-size:9px;text-shadow:none">{{ p.n }}</span>{{ p.l1 }}</span><span style="color:#55575D;padding-left:22px">{{ p.l2 }}</span></div></sc-for>
+  <sc-for list="{{ ms }}" as="m" hint-placeholder-count="0"><span style="position:absolute;left:{{ m.x }}px;top:{{ m.y }}px;transform:translate(-50%,-50%);display:inline-flex;align-items:center;height:18px;padding:0 7px;border-radius:999px;border:1px solid #151618;background:#E3E4E7;font:400 10px/1 'Geist Mono',monospace;white-space:nowrap;box-sizing:border-box;pointer-events:none">{{ m.t }}</span></sc-for>
+  <sc-if value="{{ hasPins }}"><span onClick="{{ clr }}" style="position:absolute;right:28px;bottom:30px;display:inline-flex;align-items:center;height:22px;padding:0 10px;border-radius:999px;border:1px solid rgba(21,22,24,.26);font:400 11px/1 'Geist Mono',monospace;color:#55575D;cursor:pointer;box-sizing:border-box" style-hover="border-color:#151618;color:#151618">{{ clrT }}</span></sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1056,&quot;height&quot;:720},&quot;w&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:1056,&quot;tsType&quot;:&quot;number&quot;},&quot;h&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:720,&quot;tsType&quot;:&quot;number&quot;},&quot;step&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:2,&quot;tsType&quot;:&quot;number&quot;,&quot;min&quot;:0,&quot;max&quot;:3},&quot;level&quot;:{&quot;editor&quot;:&quot;float&quot;,&quot;default&quot;:0.5,&quot;tsType&quot;:&quot;number&quot;},&quot;demo&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;live&quot;,&quot;hover&quot;,&quot;pins&quot;],&quot;default&quot;:&quot;live&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  state = {};
+  sd(x, z) {
+    const b = (cx, cz, hx, hz) => { const qx = Math.abs(x - cx) - hx, qz = Math.abs(z - cz) - hz; return Math.hypot(Math.max(qx, 0), Math.max(qz, 0)) + Math.min(Math.max(qx, qz), 0); };
+    return Math.min(b(4.15, 16, .65, 14), b(27.85, 16, .65, 14), b(16, 2.8, 12.5, .8), Math.max(b(29.7, 16, 1.7, 7), -b(29.4, 16, 1, 5)));
+  }
+  geo() { const p = this.props, w = +(p.w ?? 1056), h = +(p.h ?? 720); return { w, h, x0: w * .3, x1: w * .7, yT: h * .12, yB: h * .88 }; }
+  cell(mx, my) { const g = this.geo(); return { i: (mx - g.x0) / (g.x1 - g.x0) * 32, k: (g.yB - my) / (g.yB - g.yT) * 32 }; }
+  read(i, k) {
+    const p = this.props, st = +(p.step ?? 2), L = +(p.level ?? .5);
+    if (i < 0 || i >= 32 || k < 0 || k >= 32) return ['outside the grid', '—'];
+    const d = this.sd(i, k), cov = Math.max(0, Math.min(1, .5 - d)), bl = .02 + .9 / (1 + Math.exp(d / 1.1)), c = `cell ${Math.floor(i)} · 16 · ${Math.floor(k)}`;
+    if (st <= 0) return [`x ${(i * 3.2).toFixed(1)} · z ${(k * 3.2).toFixed(1)} mm`, d < 0 ? 'inside the wall' : `${(d * 3.2).toFixed(1)} mm from the surface`];
+    if (st === 1) return [c, `coverage ${cov.toFixed(2)}`];
+    if (st === 2) return [c, `${cov.toFixed(2)} → ${bl.toFixed(2)}`];
+    return [c, `${bl.toFixed(2)} · ${bl >= L ? 'kept' : 'removed'} at ${L.toFixed(2)}`];
+  }
+  renderVals() {
+    const p = this.props, s = this.state, { w, h, x0, x1, yT, yB } = this.geo(), n1 = v => (+v).toFixed(1), demo = p.demo || 'live';
+    const X = t => x0 + (x1 - x0) * t / 32, Y = t => yB - (yB - yT) * t / 32;
+    const hvp = s.touched ? s.m : (demo === 'hover' ? { x: w * .62, y: h * .42 } : null);
+    const pins0 = s.pins || (demo === 'pins' ? [{ x: w * .38, y: h * .3 }, { x: w * .63, y: h * .64 }] : []);
+    let rulerB = `M${n1(x0)} ${h - .5}H${n1(x1)}`, rulerR = `M${w - .5} ${n1(yT)}V${n1(yB)}`; const rlab = [];
+    for (let t = 0; t <= 32; t += 2) { const L = t % 8 ? 4 : 8; rulerB += `M${n1(X(t))} ${h}v-${L}`; rulerR += `M${w} ${n1(Y(t))}h-${L}`; if (t % 8 === 0) { rlab.push({ x: n1(X(t)), y: n1(h - 11), t: String(t), tr: 'translate(-50%,-100%)' }); rlab.push({ x: n1(w - 12), y: n1(Y(t)), t: String(t), tr: 'translate(-100%,-50%)' }); } }
+    const o = { hv: false, ret: '', guides: '', marks: '', l1: '', l2: '', fx: 0, fy: 0, ftr: 'none', bxl: 0, bxt: 0, bxT: '', ryl: 0, ryt: 0, ryT: '' };
+    if (hvp) {
+      const { x, y } = hvp, c = this.cell(x, y), r = this.read(c.i, c.k), ing = c.i >= 0 && c.i < 32 && c.k >= 0 && c.k < 32, flip = x > w - 220;
+      Object.assign(o, { hv: true, l1: r[0], l2: r[1], fx: n1(flip ? x - 18 : x + 18), fy: n1(y - 34), ftr: flip ? 'translateX(-100%)' : 'none',
+        ret: `M${n1(x - 13)} ${n1(y)}H${n1(x - 5)}M${n1(x + 5)} ${n1(y)}H${n1(x + 13)}M${n1(x)} ${n1(y - 13)}V${n1(y - 5)}M${n1(x)} ${n1(y + 5)}V${n1(y + 13)}`,
+        guides: `M${n1(x)} ${n1(y + 16)}V${h - 18}M${n1(x + 16)} ${n1(y)}H${w - 18}`,
+        marks: `M${n1(x - 4)} ${h - 15}H${n1(x + 4)}L${n1(x)} ${h - 10}ZM${w - 15} ${n1(y - 4)}V${n1(y + 4)}L${w - 10} ${n1(y)}Z`,
+        bxl: n1(x), bxt: n1(h - 30), bxT: ing ? 'x ' + Math.floor(c.i) : '—', ryl: n1(w - 20), ryt: n1(y), ryT: ing ? 'z ' + Math.floor(c.k) : '—' });
+    }
+    const pins = pins0.map((q, n) => {
+      const c = this.cell(q.x, q.y), r = this.read(c.i, c.k), flip = q.x > w - 240, sg = flip ? -1 : 1;
+      return { x: n1(q.x), y: n1(q.y), c, n: String(n + 1), l1: r[0], l2: r[1], ld: `M${n1(q.x + sg * 5.7)} ${n1(q.y - 5.7)}L${n1(q.x + sg * 18)} ${n1(q.y - 18)}H${n1(q.x + sg * 52)}`, tx: n1(q.x + sg * 56), ty: n1(q.y - 18), tr: flip ? 'translate(-100%,-9px)' : 'translate(0,-9px)' };
+    });
+    let meas = ''; const ms = [];
+    for (let n = 1; n < pins.length; n++) { const a = pins0[n - 1], b = pins0[n], ca = pins[n - 1].c, cb = pins[n].c; meas += `M${n1(a.x)} ${n1(a.y)}L${n1(b.x)} ${n1(b.y)}`; ms.push({ x: n1((a.x + b.x) / 2), y: n1((a.y + b.y) / 2), t: 'Δ ' + (Math.hypot(ca.i - cb.i, ca.k - cb.k) * 3.2).toFixed(1) + ' mm' }); }
+    const pos = e => { const rc = e.currentTarget.getBoundingClientRect(), k = w / (rc.width || w); return { x: (e.clientX - rc.left) * k, y: (e.clientY - rc.top) * k }; };
+    return {
+      ...o, w, h, vb: `0 0 ${w} ${h}`, rulerB, rulerR, rlab, ro: o.hv ? 1 : 0, pins, meas, ms, hasPins: pins.length > 0,
+      clrT: `Clear ${pins.length} pin${pins.length > 1 ? 's' : ''}`, cur: o.hv ? 'none' : 'crosshair',
+      mv: e => this.setState({ m: pos(e), touched: true }),
+      lv: () => this.setState({ m: null, touched: true }),
+      ck: e => { const q = pos(e), cur = pins0.slice(), hit = cur.findIndex(t => Math.hypot(t.x - q.x, t.y - q.y) < 12); if (hit >= 0) cur.splice(hit, 1); else { cur.push(q); if (cur.length > 3) cur.shift(); } this.setState({ pins: cur }); },
+      clr: e => { e.stopPropagation(); this.setState({ pins: [] }); }
+    };
+  }
+}
+</script>
+</body>
+</html>

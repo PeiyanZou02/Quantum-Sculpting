@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>@font-face{font-family:'TWK Everett';src:url(fonts/TWKEverett-Book.ttf) format('truetype');font-weight:300 500;font-style:normal;font-display:swap}body{margin:0;background:#D6D7DA;-webkit-font-smoothing:antialiased}a{color:#151618}a:hover{color:#55575D}
+@keyframes qs-spin{to{transform:rotate(360deg)}}
+@keyframes qs-scan{0%{top:10%}50%{top:86%}100%{top:10%}}
+@keyframes qs-pulse{0%{transform:scale(.7);opacity:.9}100%{transform:scale(1.8);opacity:0}}
+@keyframes qs-blink{0%,100%{opacity:1}50%{opacity:.2}}
+@keyframes qs-dash{to{stroke-dashoffset:-40}}
+@keyframes qs-lock{0%{transform:scale(1.5);opacity:0}12%{transform:scale(.96);opacity:1}18%,100%{transform:scale(1);opacity:1}}
+@keyframes qs-play{from{left:0}to{left:100%}}
+@keyframes qs-wave{to{transform:translateX(-384px)}}
+@keyframes qs-breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.07)}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+<script src="qvoxel.js"></script>
+</helmet>
+<div data-qs-root="lib4" data-motion="{{ motion }}" data-screen-label="Quicksilver library v4 · light" style="--qs-mode:light;--qs-bg:#E3E4E7;--qs-ink:#151618;--qs-ink2:#55575D;--qs-ink3:#8B8D93;--qs-ink4:#B3B5BB;--qs-line:rgba(21,22,24,.16);position:relative;width:1600px;box-sizing:border-box;padding:80px 64px 112px;background:#E3E4E7;color:#151618;display:flex;flex-direction:column;gap:104px">
+  <div style="position:absolute;left:24px;top:24px;width:16px;height:16px;border-left:1px solid #151618;border-top:1px solid #151618"></div><div style="position:absolute;right:24px;top:24px;width:16px;height:16px;border-right:1px solid #151618;border-top:1px solid #151618"></div><div style="position:absolute;left:24px;bottom:24px;width:16px;height:16px;border-left:1px solid #151618;border-bottom:1px solid #151618"></div><div style="position:absolute;right:24px;bottom:24px;width:16px;height:16px;border-right:1px solid #151618;border-bottom:1px solid #151618"></div>
+  <div style="display:grid;grid-template-columns:minmax(0,1fr) 420px;gap:48px;align-items:start">
+    <div style="display:flex;flex-direction:column;gap:18px"><span style="font:400 11px/1 'Geist Mono',monospace;color:var(--qs-ink3)">Component library · light · v0.5 · handoff</span><span style="font:400 56px/1.05 'TWK Everett',sans-serif">Quicksilver</span><span style="max-width:680px;font:400 16px/1.35 'TWK Everett',sans-serif;color:var(--qs-ink2);text-wrap:pretty">A HUD overlay for Quantum Sculpting. This round puts every mark in ink and grey, adds abstract camera and orbit marks, controls that are not dials, more navigation, an interactive explainer of the blur, and views for tiling, distance fields and voxel values from the latest repo.</span></div>
+    <dc-import name="QReadout" title="Source" kw="72" w="420" rows="Repo|PeiyanZou02/Quantum-Computing-3D-Test;App|Quantum Sculpting;Engine|blur-core-v1 · Moth Atlas;Synced|04.10.2026 · 23:25;Previous|Quicksilver Library v3" hint-size="420px,110px"></dc-import>
+  </div>
+  <dc-import name="QLOverlay4" hint-size="1472px,1060px"></dc-import>
+  <dc-import name="QLType" hint-size="1472px,760px"></dc-import>
+  <dc-import name="QLMarks4" hint-size="1472px,3300px"></dc-import>
+  <dc-import name="QLButtons4" hint-size="1472px,620px"></dc-import>
+  <dc-import name="QLControls4" hint-size="1472px,1900px"></dc-import>
+  <dc-import name="QLNav4" hint-size="1472px,1620px"></dc-import>
+  <dc-import name="QLGlyphs4" hint-size="1472px,2100px"></dc-import>
+  <dc-import name="QLData4" hint-size="1472px,1800px"></dc-import>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;motion&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;label&quot;:&quot;3D motion&quot;}}">
+class Component extends DCLogic {
+  renderVals() { return { motion: (this.props.motion ?? true) ? 'true' : 'false' }; }
+}
+</script>
+</body>
+</html>

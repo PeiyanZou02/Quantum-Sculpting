@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet"><style>@font-face{font-family:'TWK Everett';src:url(fonts/TWKEverett-Book.ttf) format('truetype');font-weight:300 500;font-style:normal;font-display:swap}body{margin:0;background:#D6D7DA}a{color:#151618}a:hover{color:#55575D}</style><script src="qvoxel.js"></script></helmet>
+<div data-screen-label="00 Start" style="position:relative;width:1920px;height:1080px;overflow:hidden;background:#E3E4E7;color:#151618;--qs-bg:#E3E4E7;--qs-ink:#151618;--qs-ink2:#55575D;--qs-ink3:#8B8D93;--qs-ink4:#B3B5BB;--qs-line:rgba(21,22,24,.16)">
+  <div style="position:absolute;left:432px;top:112px;width:1056px;height:720px;background:radial-gradient(circle,#C4C6CB 1px,transparent 1.5px) 12px 12px/24px 24px"></div>
+  <dc-import name="SculptorChrome" step="-1" run="No model loaded" atlas="off" view="0" avail="0" cam="{{ false }}" style="position:absolute;left:0;top:0" hint-size="1920px,1080px"></dc-import>
+  <div style="position:absolute;left:48px;top:260px;width:344px;display:flex;flex-direction:column;gap:30px">
+    <div style="display:flex;flex-direction:column;gap:10px"><span style="font:400 11px/1 'Geist Mono',monospace;color:#8B8D93">Start</span><span style="font:400 28px/1.1 'TWK Everett',sans-serif">Open a model</span><span style="font:400 14px/1.35 'TWK Everett',sans-serif;color:#55575D;text-wrap:pretty">Choose a mesh, drop one onto the view, or start from the built-in test cup.</span></div>
+    <div style="display:flex;gap:8px"><dc-import name="QPill" kind="commit" label="Choose file" hint-size="140px,30px"></dc-import><dc-import name="QPill" kind="hair" label="Use test cup" hint-size="130px,30px"></dc-import></div>
+    <div style="display:flex;flex-direction:column"><div style="display:flex;justify-content:space-between;padding-bottom:10px;border-bottom:1px solid #151618"><span style="font:600 10px/1 'Geist Mono',monospace;letter-spacing:.04em">INPUT</span><span style="font:400 11px/1 'Geist Mono',monospace;color:#8B8D93">input/ · 3 files</span></div>
+      <div style="display:grid;grid-template-columns:minmax(0,1fr) 64px 70px;padding:10px 0;border-bottom:1px solid rgba(21,22,24,.16);font:400 11px/1 'Geist Mono',monospace;font-variant-numeric:tabular-nums"><span>vase_scan.obj</span><span style="color:#8B8D93;text-align:right">2.1 MB</span><span style="color:#8B8D93;text-align:right">today</span></div>
+      <div style="display:grid;grid-template-columns:minmax(0,1fr) 64px 70px;padding:10px 0;border-bottom:1px solid rgba(21,22,24,.16);font:400 11px/1 'Geist Mono',monospace;font-variant-numeric:tabular-nums"><span>statue_head.ply</span><span style="color:#8B8D93;text-align:right">8.4 MB</span><span style="color:#8B8D93;text-align:right">03.10</span></div>
+      <div style="display:grid;grid-template-columns:minmax(0,1fr) 64px 70px;padding:10px 0;border-bottom:1px solid rgba(21,22,24,.16);font:400 11px/1 'Geist Mono',monospace;font-variant-numeric:tabular-nums"><span>bracket_v2.stl</span><span style="color:#8B8D93;text-align:right">640 KB</span><span style="color:#8B8D93;text-align:right">28.09</span></div>
+    </div>
+    <span style="font:400 11px/1.5 'Geist Mono',monospace;color:#8B8D93">Opens .stl .obj .ply .glb .off</span>
+  </div>
+  <div style="position:absolute;left:680px;top:300px;width:560px;height:320px"><div style="position:absolute;left:0;top:0;width:24px;height:24px;border-left:1px solid #151618;border-top:1px solid #151618"></div><div style="position:absolute;right:0;top:0;width:24px;height:24px;border-right:1px solid #151618;border-top:1px solid #151618"></div><div style="position:absolute;left:0;bottom:0;width:24px;height:24px;border-left:1px solid #151618;border-bottom:1px solid #151618"></div><div style="position:absolute;right:0;bottom:0;width:24px;height:24px;border-right:1px solid #151618;border-bottom:1px solid #151618"></div><div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px"><span style="font:400 24px/1.1 'TWK Everett',sans-serif">Drop a model here</span><span style="font:400 11px/1 'Geist Mono',monospace;color:#8B8D93">.stl .obj .ply .glb .off</span></div></div>
+  <svg width="420" height="60" viewBox="0 0 420 60" style="position:absolute;left:750px;top:650px"><ellipse cx="210" cy="30" rx="200" ry="22" fill="none" stroke="#8B8D93" stroke-width="1" stroke-dasharray="2 4"></ellipse></svg>
+  <div style="position:absolute;left:1528px;top:112px;width:344px;display:flex;flex-direction:column;gap:34px">
+    <div style="display:flex;flex-direction:column;gap:14px"><span style="font:600 10px/1 'Geist Mono',monospace;letter-spacing:.04em">FLOW</span>
+      <div style="display:grid;grid-template-columns:28px minmax(0,1fr);row-gap:16px;column-gap:8px;font:400 13px/1.35 'TWK Everett',sans-serif;color:#55575D"><span style="font:400 11px/1.6 'Geist Mono',monospace;color:#151618">01</span><span>Open a mesh and set which way is up.</span><span style="font:400 11px/1.6 'Geist Mono',monospace;color:#151618">02</span><span>Voxelise it, from 16³ to 256³.</span><span style="font:400 11px/1.6 'Geist Mono',monospace;color:#151618">03</span><span>Blur it with Quantum Blur Core, on Atlas or locally.</span><span style="font:400 11px/1.6 'Geist Mono',monospace;color:#151618">04</span><span>Make the surface, check it and export an STL.</span></div></div>
+    <div style="display:flex;flex-direction:column;gap:12px;padding-top:20px;border-top:1px solid rgba(21,22,24,.16)"><span style="font:600 10px/1 'Geist Mono',monospace;letter-spacing:.04em">ATLAS</span><span style="font:400 14px/1.35 'TWK Everett',sans-serif;text-wrap:pretty">No key set. The local emulation and the Gaussian stand-in work without one.</span><div style="display:flex"><dc-import name="QPill" kind="hair" size="s" dot="off" label="Set API key" hint-size="110px,22px"></dc-import></div></div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1920,&quot;height&quot;:1080}}"></script>
+</body>
+</html>

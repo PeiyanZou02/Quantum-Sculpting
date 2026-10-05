@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<sc-if value="{{ vert }}" hint-placeholder-val="{{ true }}"><div style="position:relative;width:190px;height:{{ len }}px;margin:10px 0">
+  <sc-for list="{{ ticks }}" as="t" hint-placeholder-count="0"><div style="position:absolute;left:{{ t.lx }}px;top:{{ t.pos }}px;width:{{ t.l }}px;height:1px;background:{{ t.col }}"></div><sc-if value="{{ t.hasNum }}"><span style="position:absolute;left:0;top:{{ t.pos }}px;transform:translateY(-50%);font:400 9px/1 'Geist Mono',monospace;color:var(--qs-ink3)">{{ t.num }}</span></sc-if></sc-for>
+  <div style="position:absolute;left:44px;top:-8px;bottom:-8px;width:4px;border-radius:2px;background:#C4C6CB;box-shadow:inset 0 1px 2px rgba(20,22,28,.35),0 1px 0 rgba(255,255,255,.75)"></div>
+  <div style="position:absolute;left:30px;top:{{ pos }}px;width:32px;height:16px;margin-top:-8px;border-radius:3px;background:linear-gradient(180deg,#F8F9FA 0%,#E3E4E7 38%,#C8C9CD 52%,#DCDDE0 70%,#F1F2F3 100%);box-shadow:0 1px 1.5px rgba(20,22,28,.24),0 6px 12px rgba(20,22,28,.12)"><div style="position:absolute;left:4px;right:4px;top:7.5px;height:1px;background:var(--qs-ink)"></div></div>
+  <div style="position:absolute;left:66px;top:{{ pos }}px;width:26px;height:1px;background:var(--qs-ink)"></div>
+  <div style="position:absolute;left:98px;top:{{ pos }}px;transform:translateY(-50%);display:flex;flex-direction:column;gap:5px;white-space:nowrap"><span style="font:400 11px/1 'Geist Mono',monospace;color:var(--qs-ink)">{{ label }} {{ readout }}</span><sc-if value="{{ hasParam }}"><span style="font:400 10px/1 'Geist Mono',monospace;color:var(--qs-ink3)">{{ param }}</span></sc-if></div>
+</div></sc-if>
+<sc-if value="{{ horiz }}"><div style="position:relative;width:{{ len }}px;height:100px;margin:0 10px">
+  <span style="position:absolute;left:{{ pos }}px;top:0;transform:translateX(-50%);font:400 11px/1 'Geist Mono',monospace;color:var(--qs-ink);white-space:nowrap">{{ label }} {{ readout }}</span>
+  <div style="position:absolute;left:{{ pos }}px;top:16px;width:1px;height:10px;background:var(--qs-ink)"></div>
+  <div style="position:absolute;left:-8px;right:-8px;top:38px;height:4px;border-radius:2px;background:#C4C6CB;box-shadow:inset 0 1px 2px rgba(20,22,28,.35),0 1px 0 rgba(255,255,255,.75)"></div>
+  <sc-for list="{{ ticks }}" as="t" hint-placeholder-count="0"><div style="position:absolute;left:{{ t.pos }}px;top:58px;width:1px;height:{{ t.l }}px;background:{{ t.col }}"></div><sc-if value="{{ t.hasNum }}"><span style="position:absolute;left:{{ t.pos }}px;top:72px;transform:translateX(-50%);font:400 9px/1 'Geist Mono',monospace;color:var(--qs-ink3)">{{ t.num }}</span></sc-if></sc-for>
+  <div style="position:absolute;left:{{ pos }}px;top:26px;width:16px;height:28px;margin-left:-8px;border-radius:3px;background:linear-gradient(90deg,#F8F9FA 0%,#E3E4E7 38%,#C8C9CD 52%,#DCDDE0 70%,#F1F2F3 100%);box-shadow:0 1px 1.5px rgba(20,22,28,.24),0 6px 12px rgba(20,22,28,.12)"><div style="position:absolute;top:4px;bottom:4px;left:7.5px;width:1px;background:var(--qs-ink)"></div></div>
+  <sc-if value="{{ hasParam }}"><span style="position:absolute;left:0;top:88px;font:400 10px/1 'Geist Mono',monospace;color:var(--qs-ink3)">{{ param }}</span></sc-if>
+</div></sc-if>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:320,&quot;height&quot;:240},&quot;orient&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;v&quot;,&quot;h&quot;],&quot;default&quot;:&quot;v&quot;,&quot;tsType&quot;:&quot;'v'|'h'&quot;},&quot;len&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:200,&quot;tsType&quot;:&quot;number&quot;},&quot;min&quot;:{&quot;editor&quot;:&quot;float&quot;,&quot;default&quot;:0,&quot;tsType&quot;:&quot;number&quot;},&quot;max&quot;:{&quot;editor&quot;:&quot;float&quot;,&quot;default&quot;:31,&quot;tsType&quot;:&quot;number&quot;},&quot;value&quot;:{&quot;editor&quot;:&quot;float&quot;,&quot;default&quot;:16,&quot;tsType&quot;:&quot;number&quot;},&quot;steps&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:31,&quot;tsType&quot;:&quot;number&quot;},&quot;major&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:8,&quot;tsType&quot;:&quot;number&quot;},&quot;label&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;Z&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;readout&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;16 / 31&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;param&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    const p = this.props, vert = (p.orient ?? 'v') === 'v', len = +(p.len ?? 200), min = +(p.min ?? 0), max = +(p.max ?? 31), val = +(p.value ?? 16), steps = +(p.steps ?? (max - min)), maj = +(p.major ?? 8);
+    const f = Math.max(0, Math.min(1, (val - min) / ((max - min) || 1)));
+    const ticks = [];
+    for (let i = 0; i <= steps; i++) { const t = i / steps, M = i % maj === 0 || i === steps; ticks.push({ pos: (vert ? len * (1 - t) : len * t).toFixed(1), l: M ? 9 : 5, lx: 34 - (M ? 9 : 5), col: M ? 'var(--qs-ink3)' : 'var(--qs-ink4)', num: String(Math.round(min + (max - min) * t)), hasNum: M }); }
+    return { vert, horiz: !vert, len, ticks, pos: ((vert ? 1 - f : f) * len).toFixed(1), label: p.label ?? 'Z', readout: p.readout ?? (val + ' / ' + max), param: p.param ?? '', hasParam: !!p.param };
+  }
+}
+</script>
+</body>
+</html>

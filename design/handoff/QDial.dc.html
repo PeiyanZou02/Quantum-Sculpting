@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<div style="display:inline-flex;flex-direction:column;align-items:center;gap:8px">
+  <div style="position:relative;width:{{ box }}px;height:{{ box }}px">
+    <sc-for list="{{ ticks }}" as="t" hint-placeholder-count="0"><div style="position:absolute;left:{{ c }}px;top:{{ c }}px;width:{{ t.len }}px;height:1px;margin-top:-.5px;background:{{ t.col }};transform-origin:0 50%;transform:rotate({{ t.a }}deg) translateX({{ t.r }}px)"></div></sc-for>
+    <sc-for list="{{ labels }}" as="l" hint-placeholder-count="0"><span style="position:absolute;left:{{ l.x }}px;top:{{ l.y }}px;transform:translate(-50%,-50%);font:400 9px/1 'Geist Mono',monospace;color:{{ l.col }};white-space:nowrap">{{ l.t }}</span></sc-for>
+    <div style="position:absolute;left:{{ pad }}px;top:{{ pad }}px;width:{{ size }}px;height:{{ size }}px;border-radius:50%;background:repeating-conic-gradient(from 0deg,rgba(255,255,255,.65) 0deg 1.2deg,rgba(40,42,48,.09) 1.2deg 3.6deg),conic-gradient(from 210deg,#F3F4F5,#CACBCF,#F0F1F2,#C4C5C9,#F3F4F5);box-shadow:0 1px 1.5px rgba(20,22,28,.18),0 10px 22px rgba(20,22,28,.12)"></div>
+    <div style="position:absolute;left:{{ fo }}px;top:{{ fo }}px;width:{{ face }}px;height:{{ face }}px;border-radius:50%;background:repeating-radial-gradient(circle at 50% 50%,rgba(255,255,255,.2) 0 1px,rgba(255,255,255,0) 1px 2.5px),radial-gradient(circle at 50% 26%,rgba(255,255,255,.92) 0%,rgba(255,255,255,0) 60%),conic-gradient(from 15deg,#EDEEF0,#D2D3D7,#F6F7F8,#CDCED2,#EEEFF1,#D0D1D5,#F5F6F7,#CBCCD0,#EDEEF0);box-shadow:0 0 0 1px rgba(255,255,255,.6),0 1px 2px rgba(20,22,28,.2)"></div>
+    <div style="position:absolute;left:{{ pad }}px;top:{{ pad }}px;width:{{ size }}px;height:{{ size }}px;transform:rotate({{ angle }}deg)"><div style="position:absolute;left:50%;top:{{ it }}px;width:1.5px;height:{{ il }}px;margin-left:-.75px;border-radius:1px;background:var(--qs-ink)"></div></div>
+  </div>
+  <sc-if value="{{ hasLabel }}"><div style="display:flex;flex-direction:column;align-items:center;gap:5px;white-space:nowrap"><span style="font:400 10px/1 'Geist Mono',monospace;color:var(--qs-ink)">{{ label }} <span style="color:var(--qs-ink2)">{{ readout }}</span></span><sc-if value="{{ hasParam }}"><span style="font:400 10px/1 'Geist Mono',monospace;color:var(--qs-ink3)">{{ param }}</span></sc-if></div></sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:220,&quot;height&quot;:240},&quot;size&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:96,&quot;tsType&quot;:&quot;number&quot;,&quot;min&quot;:40,&quot;max&quot;:220},&quot;value&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;default&quot;:0.5,&quot;tsType&quot;:&quot;number&quot;,&quot;min&quot;:0,&quot;max&quot;:1,&quot;step&quot;:0.01},&quot;label&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;Level&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;readout&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;0.50&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;param&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;min&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;max&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;ticks&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:37,&quot;tsType&quot;:&quot;number&quot;},&quot;major&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:4,&quot;tsType&quot;:&quot;number&quot;},&quot;detents&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;active&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:0,&quot;tsType&quot;:&quot;number&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    const p = this.props, size = +(p.size ?? 96), pad = Math.max(24, Math.round(size * .3)), box = size + pad * 2, c = box / 2, r0 = size / 2 + 7;
+    const det = p.detents ? String(p.detents).split(',').map(s => s.trim()) : null;
+    let v = Math.max(0, Math.min(1, +(p.value ?? .5)));
+    const ticks = [], labels = [];
+    const at = (f, R) => { const a = (-225 + 270 * f) * Math.PI / 180; return [(c + R * Math.cos(a)).toFixed(1), (c + R * Math.sin(a)).toFixed(1)]; };
+    if (det) {
+      const n = det.length, act = +(p.active ?? 0); v = n > 1 ? act / (n - 1) : 0;
+      det.forEach((t, i) => { const f = n > 1 ? i / (n - 1) : .5, [x, y] = at(f, r0 + 20); ticks.push({ a: (-225 + 270 * f).toFixed(1), r: r0, len: 8, col: i === act ? 'var(--qs-ink)' : 'var(--qs-ink4)' }); labels.push({ x, y, t, col: i === act ? 'var(--qs-ink)' : 'var(--qs-ink3)' }); });
+    } else {
+      const n = +(p.ticks ?? 37), maj = +(p.major ?? 4);
+      for (let i = 0; i < n; i++) { const f = i / (n - 1), M = i % maj === 0 || i === n - 1; ticks.push({ a: (-225 + 270 * f).toFixed(1), r: r0, len: M ? 9 : 5, col: f <= v + 1e-6 ? 'var(--qs-ink)' : 'var(--qs-ink4)' }); }
+      [[0, p.min], [1, p.max]].forEach(([f, t]) => { if (t == null || t === '') return; const [x, y] = at(f, r0 + 18); labels.push({ x, y, t, col: 'var(--qs-ink3)' }); });
+    }
+    const face = Math.round(size * .78);
+    return { box, c, size, pad, face, fo: pad + (size - face) / 2, ticks, labels, angle: (-135 + 270 * v).toFixed(1), it: Math.round(size * .12), il: Math.round(size * .22), label: p.label ?? '', hasLabel: !!p.label, readout: p.readout ?? '', param: p.param ?? '', hasParam: !!p.param };
+  }
+}
+</script>
+</body>
+</html>

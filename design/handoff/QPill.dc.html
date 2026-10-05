@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<div style="display:inline-flex;align-items:center;gap:8px;height:{{ h }}px;padding:0 {{ px }}px;border-radius:999px;border:{{ bd }};background:{{ bg }};color:{{ fg }};font:400 {{ fs }}px/1 'Geist Mono',monospace;white-space:nowrap;cursor:pointer;transition:background .15s,border-color .15s,color .15s;box-sizing:border-box">
+  <sc-if value="{{ hasDot }}"><span style="width:6px;height:6px;border-radius:50%;flex:none;background:{{ dotBg }};box-shadow:{{ dotSh }}"></span></sc-if>
+  <span>{{ label }}</span>
+  <sc-if value="{{ hasArrow }}"><span>{{ arrow }}</span></sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:220,&quot;height&quot;:60},&quot;label&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;Submit to Atlas&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;kind&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;line&quot;,&quot;hair&quot;,&quot;ghost&quot;,&quot;faint&quot;,&quot;active&quot;,&quot;commit&quot;,&quot;disabled&quot;],&quot;default&quot;:&quot;line&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;size&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;s&quot;,&quot;m&quot;,&quot;l&quot;],&quot;default&quot;:&quot;m&quot;,&quot;tsType&quot;:&quot;'s'|'m'|'l'&quot;},&quot;dot&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;&quot;,&quot;on&quot;,&quot;off&quot;,&quot;busy&quot;],&quot;default&quot;:&quot;&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;arrow&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    const p = this.props, k = p.kind ?? 'line';
+    const S = { s: [22, 10, 10], m: [30, 11, 14], l: [40, 12, 20] }[p.size ?? 'm'] || [30, 11, 14];
+    const K = { line: ['1px solid var(--qs-ink)', 'transparent', 'var(--qs-ink)'], hair: ['1px solid rgba(21,22,24,.26)', 'transparent', 'var(--qs-ink2)'], ghost: ['1px solid transparent', 'transparent', 'var(--qs-ink2)'], faint: ['1px solid transparent', 'rgba(21,22,24,.07)', 'var(--qs-ink)'], active: ['1px solid var(--qs-ink)', '#CBCCD0', 'var(--qs-ink)'], commit: ['1px solid var(--qs-ink)', 'transparent', 'var(--qs-ink)'], disabled: ['1px dashed var(--qs-ink4)', 'transparent', 'var(--qs-ink4)'] }[k] || ['1px solid var(--qs-ink)', 'transparent', 'var(--qs-ink)'];
+    const D = { on: ['var(--qs-ink)', 'none'], off: ['transparent', 'inset 0 0 0 1px var(--qs-ink3)'], busy: ['linear-gradient(90deg,var(--qs-ink) 50%,transparent 50%)', 'inset 0 0 0 1px var(--qs-ink)'] }[p.dot ?? ''];
+    const arrow = p.arrow ?? (k === 'commit' ? '→' : '');
+    return { h: S[0], fs: S[1], px: S[2], bd: K[0], bg: K[1], fg: K[2], label: p.label ?? 'Button', hasDot: !!D, dotBg: D ? D[0] : '', dotSh: D ? D[1] : '', arrow, hasArrow: !!arrow };
+  }
+}
+</script>
+</body>
+</html>

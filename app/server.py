@@ -889,6 +889,16 @@ def index():
     return send_from_directory(STATIC, "index.html")
 
 
+# Quantum Sculptor 界面（web/ 用 Vite 构建到 static/studio/）
+@app.get("/studio/")
+@app.get("/studio/<path:name>")
+def studio(name="index.html"):
+    if not (STATIC / "studio" / "index.html").exists():
+        abort(404, "Build the interface first: cd web && pnpm install && pnpm build")
+    path = STATIC / "studio" / name
+    return send_from_directory(STATIC / "studio", name if path.is_file() else "index.html")
+
+
 def main():
     global HOME, ATLAS_BASE, INPUT, GRIDS, OUTPUT
     p = argparse.ArgumentParser(description="Quantum Sculpting")

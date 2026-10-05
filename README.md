@@ -19,6 +19,12 @@ The Python environment and your API key live in your user folder, not in this pr
 are never committed or synced. On a new machine the first run rebuilds the environment and you
 enter the key once.
 
+## Quantum Sculptor interface
+
+A redesigned interface built from the Quicksilver design system lives in `web/` (React +
+three.js, same Flask API). After `cd web && pnpm install && pnpm build` it is served at
+<http://127.0.0.1:8765/studio/>; see `web/README.md`. The design handoff is in `design/handoff/`.
+
 ## How to use it
 
 1. **Model** — choose a `.stl`, `.obj`, `.ply`, `.glb` or `.off` file, or drag it onto the

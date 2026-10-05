@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<div style="position:relative;width:1920px;height:1080px;color:#151618">
+  <div style="position:absolute;left:24px;top:24px;width:16px;height:16px;border-left:1px solid #151618;border-top:1px solid #151618"></div><div style="position:absolute;right:24px;top:24px;width:16px;height:16px;border-right:1px solid #151618;border-top:1px solid #151618"></div><div style="position:absolute;left:24px;bottom:24px;width:16px;height:16px;border-left:1px solid #151618;border-bottom:1px solid #151618"></div><div style="position:absolute;right:24px;bottom:24px;width:16px;height:16px;border-right:1px solid #151618;border-bottom:1px solid #151618"></div>
+  <div style="position:absolute;left:30px;top:200px;bottom:200px;display:flex;flex-direction:column;justify-content:space-between"><span style="width:4px;height:4px;background:#8B8D93"></span><span style="width:4px;height:4px;background:#8B8D93"></span><span style="width:4px;height:4px;background:#8B8D93"></span><span style="width:4px;height:4px;background:#8B8D93"></span><span style="width:4px;height:4px;background:#8B8D93"></span></div>
+  <div style="position:absolute;right:30px;top:200px;bottom:200px;display:flex;flex-direction:column;justify-content:space-between"><span style="width:4px;height:4px;background:#8B8D93"></span><span style="width:4px;height:4px;background:#8B8D93"></span><span style="width:4px;height:4px;background:#8B8D93"></span><span style="width:4px;height:4px;background:#8B8D93"></span><span style="width:4px;height:4px;background:#8B8D93"></span></div>
+  <div style="position:absolute;left:48px;top:36px;display:flex;align-items:baseline;gap:14px"><span style="font:400 20px/1 'TWK Everett',sans-serif">Quantum Sculptor</span><span style="font:400 11px/1 'Geist Mono',monospace;color:#8B8D93">local · 127.0.0.1:8765</span></div>
+  <div style="position:absolute;left:432px;top:41px;display:flex;align-items:center;gap:10px;font:400 11px/1 'Geist Mono',monospace;font-variant-numeric:tabular-nums"><sc-for list="{{ run }}" as="r" hint-placeholder-count="5"><span style="color:{{ r.c }}">{{ r.t }}</span><sc-if value="{{ r.sep }}"><span style="color:#B3B5BB">/</span></sc-if></sc-for></div>
+  <div style="position:absolute;right:48px;top:32px;display:flex;align-items:center;gap:8px"><dc-import name="QPill" kind="{{ aKind }}" size="s" dot="{{ aDot }}" label="{{ aLabel }}" hint-size="150px,22px"></dc-import><dc-import name="QPill" kind="ghost" size="s" label="Help" hint-size="50px,22px"></dc-import></div>
+  <div style="position:absolute;left:48px;top:112px;width:344px;display:flex;flex-direction:column;gap:16px;padding-left:20px;box-sizing:border-box;font:400 11px/1 'Geist Mono',monospace"><div style="position:absolute;left:0;top:-4px;bottom:-4px;width:1px;background:#B3B5BB"></div><sc-if value="{{ hasBar }}"><div style="position:absolute;left:-1.5px;top:{{ barTop }}px;width:4px;height:24px;background:#151618"></div></sc-if><sc-for list="{{ steps }}" as="s" hint-placeholder-count="4"><span style="display:flex;justify-content:space-between;color:{{ s.fg }}">{{ s.t }}<span style="color:{{ s.sc }}">{{ s.s }}</span></span></sc-for></div>
+  <div style="position:absolute;left:48px;top:236px;width:344px;height:1px;background:rgba(21,22,24,.16)"></div>
+  <div style="position:absolute;left:432px;top:112px;width:18px;height:18px;border-left:1px solid #151618;border-top:1px solid #151618"></div><div style="position:absolute;left:1470px;top:112px;width:18px;height:18px;border-right:1px solid #151618;border-top:1px solid #151618"></div><div style="position:absolute;left:432px;top:814px;width:18px;height:18px;border-left:1px solid #151618;border-bottom:1px solid #151618"></div><div style="position:absolute;left:1470px;top:814px;width:18px;height:18px;border-right:1px solid #151618;border-bottom:1px solid #151618"></div>
+  <span style="position:absolute;left:949px;top:461px;width:22px;height:22px;background:linear-gradient(#8B8D93,#8B8D93) center/1px 100% no-repeat,linear-gradient(#8B8D93,#8B8D93) center/100% 1px no-repeat"></span>
+  <sc-if value="{{ probe }}"><dc-import name="QProbe" w="1056" h="720" step="{{ pstep }}" style="position:absolute;left:432px;top:112px" hint-size="1056px,720px"></dc-import></sc-if>
+  <div style="position:absolute;right:448px;top:128px;display:inline-flex;padding:2px;border-radius:999px;border:1px solid rgba(21,22,24,.26)"><sc-for list="{{ views }}" as="v" hint-placeholder-count="4"><span style="display:inline-flex;align-items:center;height:22px;padding:0 11px;border-radius:999px;border:1px solid {{ v.bd }};background:{{ v.bg }};color:{{ v.fg }};font:400 11px/1 'Geist Mono',monospace;box-sizing:border-box">{{ v.t }}</span></sc-for></div>
+  <sc-if value="{{ cam }}"><div style="position:absolute;left:452px;top:648px"><dc-import name="QCam" az="035" el="22" dist="2.40" hint-size="372px,160px"></dc-import></div></sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1920,&quot;height&quot;:1080},&quot;step&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:0,&quot;tsType&quot;:&quot;number&quot;,&quot;min&quot;:-1,&quot;max&quot;:3},&quot;run&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;run1|test_cup.stl|32³ coverage|emulation|level 0.50&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;atlas&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;off&quot;,&quot;on&quot;,&quot;busy&quot;,&quot;bad&quot;],&quot;default&quot;:&quot;on&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;view&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:0,&quot;tsType&quot;:&quot;number&quot;},&quot;avail&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:4,&quot;tsType&quot;:&quot;number&quot;},&quot;cam&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    const p = this.props, step = +(p.step ?? 0), T = ['01 Model', '02 Voxelise', '03 Quantum', '04 Mesh'];
+    const steps = T.map((t, i) => ({ t, s: step < 0 ? '—' : i < step ? 'done' : i === step ? 'live' : '—', fg: step >= 0 && i <= step ? '#151618' : '#8B8D93', sc: i === step ? '#151618' : '#8B8D93' }));
+    const run = String(p.run ?? 'No model loaded').split('|').map((t, i, a) => ({ t, sep: i < a.length - 1, c: i === 0 ? '#151618' : '#55575D' }));
+    const A = { off: ['hair', 'off', 'Set API key'], on: ['hair', 'on', 'Atlas key set'], busy: ['hair', 'busy', 'Atlas · 3 jobs running'], bad: ['line', 'off', 'Key rejected · 401'] }[p.atlas ?? 'off'] || ['hair', 'off', 'Set API key'];
+    const view = +(p.view ?? 0), avail = +(p.avail ?? 4);
+    const views = ['Model', 'Voxels', 'Processed', 'Result'].map((t, i) => ({ t, bg: i === view && avail > 0 ? '#CBCCD0' : 'transparent', bd: i === view && avail > 0 ? '#151618' : 'transparent', fg: i === view && avail > 0 ? '#151618' : i < avail ? '#55575D' : '#B3B5BB' }));
+    return { steps, hasBar: step >= 0, barTop: step * 27 - 6.5, run, aKind: A[0], aDot: A[1], aLabel: A[2], views, cam: p.cam ?? true, probe: p.probe ?? (step >= 0 && (p.cam ?? true)), pstep: Math.max(0, step) };
+  }
+}
+</script>
+</body>
+</html>
