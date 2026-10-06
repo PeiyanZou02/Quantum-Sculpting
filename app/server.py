@@ -1313,8 +1313,12 @@ def studio(name="index.html"):
 def studio_fonts(name):
     """新界面的字体。它的样式表里写的是 /fonts/...：开发服务器直接从 web/public/fonts/ 给，
     构建之后这些文件在 static/studio/fonts/，要靠这里才取得到。字体是授权的，不在仓库里；
-    没有就 404，界面落到系统的等宽字体上。"""
-    return send_from_directory(STATIC / "studio" / "fonts", name)
+    没有就 404，界面落到系统的等宽字体上。新界面读长文用的 TWK Everett 和原界面是同一套文件，
+    所以构建里没有的，再到原界面的 static/fonts/ 里找。"""
+    for folder in (STATIC / "studio" / "fonts", STATIC / "fonts"):
+        if (folder / name).is_file():
+            return send_from_directory(folder, name)
+    abort(404)
 
 
 def main():

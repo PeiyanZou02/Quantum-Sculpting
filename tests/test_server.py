@@ -1041,6 +1041,12 @@ class ServerTest(unittest.TestCase):
                 with self.c.get("/fonts/Mono-Regular.woff2") as r:
                     self.assertEqual((r.status_code, r.data), (200, b"wOF2"))
                 self.assertEqual(self.c.get("/fonts/../index.html").status_code, 404, "只给字体目录里的文件")
+                # 构建里没有的字体，原界面的 fonts/ 里有也行（两个界面共用 TWK Everett）
+                (static / "fonts").mkdir()
+                (static / "fonts" / "Sans-Regular.otf").write_bytes(b"OTTO")
+                with self.c.get("/fonts/Sans-Regular.otf") as r:
+                    self.assertEqual((r.status_code, r.data), (200, b"OTTO"))
+                self.assertEqual(self.c.get("/fonts/Missing.otf").status_code, 404)
             finally:
                 server.STATIC = real
 
