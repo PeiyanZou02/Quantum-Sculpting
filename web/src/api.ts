@@ -1,6 +1,7 @@
 // Typed client for Peiyan's Flask service (app/server.py). Every route is documented there.
 import type { Grid } from './qs/grid'
 import { en } from './i18n'
+import { DEMO, RECORD, follow, play, record, demoFile } from './demo'
 
 export type UpAxis = '+z' | '-z' | '+y' | '-y' | '+x' | '-x'
 export type Fill = 'holes' | 'capped' | 'none'
@@ -165,13 +166,15 @@ async function request(path: string, init?: RequestInit): Promise<Response> {
   const method = init?.method ?? 'GET'
   let res: Response
   try {
-    res = await fetch(path, { ...init, headers: { ...(init?.headers as Record<string, string>), 'X-Client': CLIENT } })
+    res = DEMO ? await play(path, init) : await fetch(path, { ...init, headers: { ...(init?.headers as Record<string, string>), 'X-Client': CLIENT } })
   } catch (e) {
     const cancelled = e instanceof DOMException && e.name === 'AbortError'
     netListeners.forEach((fn) => fn({ method, path, status: 0, ms: performance.now() - t0, quiet: cancelled }))
     throw new ApiError(0, cancelled ? 'Cancelled.' : 'Cannot reach the local service. Check that it is running, then reload.', cancelled)
   }
   netListeners.forEach((fn) => fn({ method, path, status: res.status, ms: performance.now() - t0 }))
+  if (RECORD) await record(path, init, res).catch(() => { /* recording is best effort */ })
+  if (DEMO || RECORD) await follow(path, method, res)
   const b = res.headers.get('X-Boot')
   if (b) {
     if (boot && b !== boot) bootListeners.forEach((fn) => fn())
@@ -314,7 +317,7 @@ export const api = {
     return { report: meta, mesh: decodeMesh(buffer) }
   },
   export: (p: MeshParams) => postJSON<{ file: string; folder: string; report: MeshReport }>('/api/export', p),
-  downloadUrl: (file: string) => `/api/download/${encodeURIComponent(file)}`,
+  downloadUrl: (file: string) => (DEMO && demoFile(file)) || `/api/download/${encodeURIComponent(file)}`,
 
   /** Evolve: the territory at the end of `turn` (0 = founding), expanded to n³ bytes of owner + 1 (0 = empty). */
   nationsFrame: async (turn: number, signal?: AbortSignal) => {

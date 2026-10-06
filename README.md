@@ -6,6 +6,16 @@ shape is deformed by quantum interference, then turn the result back into a prin
 A local web app prototype: a small Python (Flask) service plus a browser interface with a live
 3D preview.
 
+## Website
+
+A recorded demo of the app runs on GitHub Pages: <https://peiyanzou02.github.io/Quantum-Sculpting/>.
+It has no service behind it; it plays back real runs of the built-in shapes recorded from this app
+(`web/demo/`, see `web/src/demo.ts`). Anything that was not recorded, such as your own model, needs
+the app running locally (below). Every push to `main` rebuilds it (`.github/workflows/pages.yml`).
+
+To record more: run the app locally, open it with `?record` in the address
+(<http://127.0.0.1:5109/?record>), go through the runs, then commit `web/demo/`.
+
 ## Start
 
 Double-click `run.bat`. The first run creates a Python environment in

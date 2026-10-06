@@ -1,7 +1,7 @@
 // OUTPUT: what each step produced. Read-only readouts and charts, plus the export.
 import { useContext, useEffect, useEffectEvent, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useStore } from '../store'
-import type { QrngSummary } from '../api'
+import { api, type QrngSummary } from '../api'
 import { Segmented } from '../qs/Segmented'
 import { Slider } from '../qs/Slider'
 import { QReadout } from '../qs/QReadout'
@@ -321,7 +321,7 @@ function ExportOut() {
     <Blk id="out-export" label="Export" note="output/">
       <div className="row">
         <QPill kind={st.report ? 'commit' : 'disabled'} size="s" label="Export STL" loading={st.busy.export} onClick={st.exportStl} />
-        {st.exported && <QPill kind="hair" size="s" label="Download" onClick={() => window.open(`/api/download/${encodeURIComponent(st.exported!.file)}`)} />}
+        {st.exported && <QPill kind="hair" size="s" label="Download" onClick={() => window.open(api.downloadUrl(st.exported!.file))} />}
       </div>
       {st.exported ? (
         <div className="qs-mono" style={{ display: 'flex', flexDirection: 'column', gap: 6, lineHeight: 1.3 }}>

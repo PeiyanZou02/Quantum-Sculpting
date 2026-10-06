@@ -1,0 +1,76 @@
+{
+ "af765ab75a0f45f4": [
+  {
+   "file": "files/af765ab75a0f45f4-0.bin",
+   "path": "/api/model/test-cup",
+   "headers": {
+    "Content-Type": "application/json",
+    "X-Boot": "63eadc74c8d5"
+   }
+  }
+ ],
+ "136e5e9d56456a6a": [
+  {
+   "file": "files/136e5e9d56456a6a-0.bin",
+   "path": "/api/model/mesh",
+   "headers": {
+    "Content-Type": "application/octet-stream",
+    "X-Meta": "{\"model_id\": 1}",
+    "X-Boot": "63eadc74c8d5"
+   }
+  }
+ ],
+ "567a79ac2e3596a7": [
+  {
+   "file": "files/567a79ac2e3596a7-0.bin",
+   "path": "/api/voxelize",
+   "headers": {
+    "Content-Type": "application/json",
+    "X-Boot": "63eadc74c8d5"
+   }
+  }
+ ],
+ "7122eddb1d9e0a47": [
+  {
+   "file": "files/7122eddb1d9e0a47-0.bin",
+   "path": "/api/grid/input?compact=1",
+   "headers": {
+    "Content-Type": "application/octet-stream",
+    "X-Meta": "{\"n\": 32, \"grid_id\": 2, \"box\": [[4, 28], [4, 28], [2, 30]]}",
+    "X-Boot": "63eadc74c8d5"
+   }
+  }
+ ],
+ "955db37a27067e58": [
+  {
+   "file": "files/955db37a27067e58-0.bin",
+   "path": "/api/process",
+   "headers": {
+    "Content-Type": "application/json",
+    "X-Boot": "63eadc74c8d5"
+   }
+  }
+ ],
+ "0f7008a8d6a783f2": [
+  {
+   "file": "files/0f7008a8d6a783f2-0.bin",
+   "path": "/api/grid/processed?compact=1",
+   "headers": {
+    "Content-Type": "application/octet-stream",
+    "X-Meta": "{\"n\": 32, \"grid_id\": 2, \"proc\": {\"mode\": \"emulator\", \"run\": \"run1\", \"params\": {\"strength\": 0.3, \"style\": \"x\", \"reach\": 0.0, \"axes\": null, \"shots\": null}, \"cached\": false, \"job_id\": null, \"tiles\": {\"mode\": \"cube\", \"shape\": [32, 32, 32], \"jobs\": 1, \"total\": 1}, \"seconds\": 0.001, \"proc_id\": 1, \"grid_id\": 2, \"min\": 0.0, \"max\": 1.01986}, \"box\": [[0, 32], [0, 32], [0, 32]]}",
+    "X-Boot": "63eadc74c8d5"
+   }
+  }
+ ],
+ "26724e5da509a13a": [
+  {
+   "file": "files/26724e5da509a13a-0.bin",
+   "path": "/api/mesh",
+   "headers": {
+    "Content-Type": "application/octet-stream",
+    "X-Meta": "{\"extents\": [80.6, 80.6, 90.0], \"watertight\": true, \"faces\": 12146, \"parts\": 1, \"voxel_mm\": 3.44, \"volume_cm3\": 57.6, \"total_parts\": 1, \"level\": 0.5, \"keep\": \"largest\", \"smooth\": 5, \"height\": 90.0, \"method\": \"threshold\", \"refine\": 1, \"amount\": 2.0, \"field\": \"threshold\", \"vfilter\": \"none\", \"vwidth\": 1.0, \"grow\": 0.0, \"close\": 0.0, \"proc_id\": 1, \"fine_voxel_mm\": 3.44}",
+    "X-Boot": "63eadc74c8d5"
+   }
+  }
+ ]
+}
