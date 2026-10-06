@@ -1,4 +1,4 @@
-// Quantum glyphs (design/handoff/QLGlyphs4.dc.html, "07 Quantum glyphs"): what happens behind the
+// Quantum glyphs (docs/design/QLGlyphs4.dc.html, "07 Quantum glyphs"): what happens behind the
 // scenes, in the same pills and hairlines, fed from the live context. Maths follows app/emulator.py:
 // each axis is Gray-coded onto qubits; qubit k turns by θ_k = π·strength·((1−reach)·2^−k + reach),
 // once per letter of the style, and mixes cells 2^(k+1) apart. Display only, except the gray pairing

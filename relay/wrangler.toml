@@ -1,0 +1,4 @@
+# The Atlas relay for the website (see worker.js). Deploy: npx wrangler deploy
+name = "quantum-sculptor-atlas"
+main = "worker.js"
+compatibility_date = "2026-10-01"

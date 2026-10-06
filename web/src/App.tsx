@@ -12,6 +12,8 @@ import { InputPane } from './screens/InputPane'
 import { Stage } from './screens/Stage'
 import { OutputPane } from './screens/OutputPane'
 import { KeyDialog } from './screens/KeyDialog'
+import { Welcome } from './screens/Welcome'
+import { IN_BROWSER } from './engine'
 import { Toasts } from './screens/Toasts'
 import { TooltipLayer } from './qs/Tooltip'
 import { usePresent } from './present'
@@ -92,6 +94,7 @@ export default function App() {
       </div>
       {full && !bare && <div className="ux-foot"><Drawer /></div>}
       <BarePeek />
+      {IN_BROWSER && lab && !keyOpen && <Welcome />}
       {keyOpen && <KeyDialog />}
       {sh.homeAsk && <HomeDialog />}
       <Toasts />

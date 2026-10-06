@@ -21,7 +21,8 @@ venv/
 config.json
 
 # 工具与系统文件
-.claude/
+.claude/*
+!.claude/settings.json
 Thumbs.db
 .DS_Store
 

@@ -2,6 +2,8 @@
 // The service holds the real data in memory; this keeps what the page needs to draw it.
 import type { SliceColor, SliceOf } from './qs/sectionColor'
 import { create } from 'zustand'
+import { IN_BROWSER } from './engine'
+import { keepFile, stlOf } from './stl'
 import {
   api, ApiError,
   type AtlasJobRow, type Field, type Fill, type GridInfo, type JobView, type KeyStatus, type MeshData,
@@ -839,6 +841,17 @@ export const useStore = create<S>()((set, get) => {
       if (get().focus.follow) get().setFocus('mesh', `Surface · ${report.faces.toLocaleString()} faces`)
     }),
     exportStl: () => run('export', async () => {
+      const { resultMesh, report, model } = get()
+      if (IN_BROWSER) {
+        // the website: the STL is the mesh on screen, saved straight to the visitor's downloads
+        if (!resultMesh || !report) return
+        const file = `${(model?.file ?? 'sculpture').replace(/\.[^.]+$/, '')}-quantum.stl`
+        const a = Object.assign(document.createElement('a'), { href: keepFile(file, stlOf(resultMesh)), download: file })
+        a.click()
+        set({ exported: { file, folder: 'Downloads', report } })
+        get().pushLog(`Saved ${file}`)
+        return
+      }
       const res = await api.export(get().m)
       set({ exported: res })
       get().setFocus('mesh', `Exported ${res.file}`)

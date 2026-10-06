@@ -1,4 +1,4 @@
-// The HUD composer's contract. Every mark family from the Quicksilver library (design/handoff/QLMarks4,
+// The HUD composer's contract. Every mark family from the Quicksilver library (docs/design/QLMarks4,
 // QLNav4, QLControls4, QLOverlay4, QLGlyphs4, QLData4) is ported as HudModules that draw over the
 // 3D view from this context. The composer turns on any number of variants per family.
 import type { ReactNode } from 'react'

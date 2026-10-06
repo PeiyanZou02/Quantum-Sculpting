@@ -41,14 +41,22 @@ const keep = (s: Shell) => {
   try { localStorage.setItem(KEY, JSON.stringify({ tab: s.tab, left: s.left, right: s.right, bottom: s.bottom, drawer: s.drawer, drawerOpen: s.drawerOpen, swap: s.swap, leftOpen: s.leftOpen, rightOpen: s.rightOpen, dock: s.dock })) } catch { /* per-viewer */ }
 }
 
+// Each tab has its own address: Research is #research, Lab the page itself, so a link opens the tab it
+// names and the browser's Back goes between them.
+const tabOfHash = (): Tab | null => (location.hash === '#research' ? 'research' : location.hash === '#lab' ? 'lab' : null)
+function showTab(t: Tab) {
+  if (tabOfHash() === t || (t === 'lab' && !location.hash)) return
+  history.pushState(null, '', t === 'research' ? '#research' : location.pathname + location.search)
+}
+
 export const useShell = create<Shell>()((set, get) => {
   const up = (p: Partial<Shell>) => { set(p); keep(get()) }
-  // Explore and Compose were tabs of their own; both are part of Lab now. Notes is Research.
-  const was = saved.tab as string | undefined
-  const first: Tab = was === 'notes' || was === 'research' ? 'research' : 'lab'
+  // the address decides: the page itself opens on Lab
+  const first: Tab = tabOfHash() ?? 'lab'
+  window.addEventListener('popstate', () => { const t = tabOfHash() ?? 'lab'; if (t !== get().tab) up({ tab: t }) })
   return {
     tab: first,
-    setTab: (t) => up({ tab: t }),
+    setTab: (t) => { showTab(t); up({ tab: t }) },
     left: saved.left ?? 288,
     right: saved.right ?? 312,
     bottom: saved.bottom ?? 168,

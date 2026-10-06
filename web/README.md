@@ -1,7 +1,7 @@
 # Quantum Sculptor — interface
 
 The design layer for Quantum Sculptor: the Quicksilver component library and its
-screens (design handoff in `../design/handoff/`), built in React + TypeScript + three.js on top of
+screens (design handoff in `../docs/design/`), built in React + TypeScript + three.js on top of
 the Flask service in `../app/`. The research pipeline (voxelising, Quantum Blur Core, level sets,
 Evolve) lives in `../app/` and is documented in the top-level `README.md`; this folder only talks to
 it through `/api`.

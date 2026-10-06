@@ -31,11 +31,17 @@ function flask(): Plugin {
 
 export default defineConfig(({ command }) => ({
   plugins: [react(), flask()],
+  // the website runs the service in the visitor's browser (src/engine/); QS_BROWSER=1 tries that locally
+  define: process.env.QS_SITE || process.env.QS_BROWSER ? { 'import.meta.env.VITE_QS_BROWSER': JSON.stringify('1') } : {},
+  worker: { format: 'es' },
   // the service serves the build from app/static/studio/ at / (assets under /studio/); a build for the
   // website (QS_SITE=1, `pnpm build:site`) stands alone at the root of its domain, in web/dist
-  base: command === 'build' && !process.env.QS_SITE ? '/studio/' : '/',
+  // (QS_BASE: the site under a path, e.g. /Quantum-Sculptor/ on GitHub Pages)
+  base: command === 'build' && !process.env.QS_SITE ? '/studio/' : process.env.QS_BASE ?? '/',
   build: process.env.QS_SITE ? { outDir: 'dist', emptyOutDir: true } : { outDir: '../app/static/studio', emptyOutDir: true },
   server: {
+    // the engine bundles the service's own files from ../app
+    fs: { allow: ['..'] },
     proxy: {
       // the service rejects cross-origin requests, so the proxy rewrites Origin to its own host
       '/api': {
