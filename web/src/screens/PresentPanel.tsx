@@ -15,6 +15,7 @@ import { useLive } from '../live'
 import { exportFrame, exportGlb, renderStill, screenshot, toggleRecording } from './capture'
 import { FRAMES, frameOf, type FrameId } from '../frames'
 import { CURATED, TIDY_LEVELS, presetCompose } from '../hud/tidy'
+import { MOTION_PRESETS } from '../hud/motionPresets'
 import { DEFAULT_COMPOSITION, DEFAULT_HUD, DEFAULT_ID } from '../hud/defaultComposition'
 import { FloorSize, LibRow, MarkLibrary } from './MarkLibrary'
 import { PRESENT_TOOLS } from './presentTools'
@@ -133,6 +134,20 @@ function Presets() {
             <button key={c.id} role="radio" aria-checked={on} className={'pd-prow' + (on ? ' pd-prow--on' : '')} onClick={() => p.applyCurated(c.id)}>
               <span className="pd-prow__t">{c.title}{off && <span className="pd-prow__k">{c.mode === 'nations' ? 'Evolve runs' : 'blur runs'}</span>}</span>
               <span className="pd-prow__d">{c.desc}</span>
+            </button>
+          )
+        })}
+      </div>
+      <span className="pd-plist__h">In motion</span>
+      <div className="pd-plist" role="radiogroup" aria-label="Presets in motion">
+        {MOTION_PRESETS.map((m) => {
+          const on = p.motion === m.id
+          const off = 'curated' in m.pieces && m.pieces.curated === 'evolve' && !evolve
+          return (
+            <button key={m.id} role="radio" aria-checked={on} className={'pd-prow' + (on ? ' pd-prow--on' : '')} disabled={!hasGrid} onClick={() => p.applyMotion(m.id)}
+              data-tip={m.title} data-tip-desc="Puts its pieces on the view, animates every one of them, sets the loop and starts playing.">
+              <span className="pd-prow__t"><span className="pd-prow__name"><svg className="pd-prow__play" width="9" height="9" viewBox="0 0 10 10" aria-hidden><path d="M2 1.2v7.6L8.6 5z" /></svg>{m.title}</span>{off && <span className="pd-prow__k">Evolve runs</span>}</span>
+              <span className="pd-prow__d">{m.desc}</span>
             </button>
           )
         })}
@@ -325,7 +340,8 @@ function Animate() {
         </div>
         <Slider label="Seconds per step" value={r.sec} min={1} max={12} step={0.5} format={(v) => `${v} s`} onChange={(v) => p.setStageReel({ sec: v })} />
         {evolve && <Slider label="Turns per second" value={r.tps} min={1} max={30} step={1} format={(v) => `${v} / s · ${(s.evolve.turns / v).toFixed(1)} s`} onChange={(v) => p.setStageReel({ tps: v })} />}
-        <div className="pd-checks"><Checkbox label="Blend between steps" tip="Each step fades in; the result rises out of the voxels on a plane." checked={r.blend} onChange={(v) => p.setStageReel({ blend: v })} /></div>
+        <Pills<typeof r.blend> label="Between steps" value={r.blend} onChange={(v) => p.setStageReel({ blend: v })}
+          options={[{ id: 'off', t: 'Cut' }, { id: 'fade', t: 'Fade' }, { id: 'wipe', t: 'Grow through the plane' }]} />
       </Panel>
       <Panel id="anim-plane" title="Cutting plane" sub aside={r.plane === 'off' ? 'off' : `${r.planeSec} s`}>
         <Pills<typeof r.plane> value={r.plane} onChange={(v) => p.setStageReel({ plane: v })}

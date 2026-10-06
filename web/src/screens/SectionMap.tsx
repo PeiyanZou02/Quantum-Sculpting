@@ -2,13 +2,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from '../store'
 import { section, type Axis, type Grid } from '../qs/grid'
-import { sectionRGBA, type SliceColor } from '../qs/sectionColor'
+import { sectionRGBA, sectionSmooth, type SliceColor } from '../qs/sectionColor'
 
-export function SectionMap({ grid, input, axis, index, level, onIndex, size: S = 344, scheme = 'grey', owner }: {
+export function SectionMap({ grid, input, axis, index, level, onIndex, size: S = 344, scheme = 'grey', owner, kind = 'cells' }: {
   size?: number
   grid: Grid | null; input?: Grid | null; axis: Axis; index: number; level: number; onIndex?: (i: number) => void
-  /** Grey, Heat or Nations (with Evolve's frame as `owner`). */
+  /** Grey, Heat, Diffusion or Nations (with Evolve's frame as `owner`). */
   scheme?: Exclude<SliceColor, 'auto'>; owner?: Uint8Array | null
+  /** One colour per cell, or drawn smooth: the field's diffusion, or the mesh's own cut. */
+  kind?: 'cells' | 'diffusion' | 'mesh'
 }) {
   const ref = useRef<HTMLCanvasElement>(null)
   const theme = useStore((st) => st.theme)
@@ -35,6 +37,19 @@ export function SectionMap({ grid, input, axis, index, level, onIndex, size: S =
     ctx.fillStyle = css('--qs-ink4')
     for (let v = 0; v < n; v++) for (let x = 0; x < n; x++) ctx.fillRect(x * u + u / 2 - 0.5, (n - 1 - v) * u + u / 2 - 0.5, 1, 1)
     if (!sec || !grid) return
+    if (kind !== 'cells') {
+      // smooth: the image already carries the level's contour
+      const img = sectionSmooth(grid, axis, Math.min(index, grid.n - 1), kind, level, theme, owner)
+      const off = document.createElement('canvas')
+      off.width = off.height = img.size
+      const id = new ImageData(img.size, img.size)
+      // rows run bottom-up in the section, top-down on a canvas
+      for (let r = 0; r < img.size; r++) id.data.set(img.rgba.subarray(r * img.size * 4, (r + 1) * img.size * 4), (img.size - 1 - r) * img.size * 4)
+      off.getContext('2d')!.putImageData(id, 0, 0)
+      ctx.imageSmoothingEnabled = true
+      ctx.drawImage(off, 0, 0, S, S)
+      return
+    }
     const rgba = sectionRGBA(grid, axis, Math.min(index, grid.n - 1), scheme, theme, owner)
     for (let v = 0; v < n; v++)
       for (let x = 0; x < n; x++) {
@@ -75,7 +90,7 @@ export function SectionMap({ grid, input, axis, index, level, onIndex, size: S =
     }
     ctx.globalAlpha = 1; contour(f, ink, [], 1)
     ctx.setLineDash([])
-  }, [sec, inSec, n, level, S, theme, grid, axis, index, scheme, owner])
+  }, [sec, inSec, n, level, S, theme, grid, axis, index, scheme, owner, kind])
 
   const cell = (e: React.PointerEvent) => {
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect()

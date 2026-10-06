@@ -6,7 +6,9 @@ import { create } from 'zustand'
 import type { FrameId } from './frames'
 import { CURATED, presetCompose, toRemove, type TidyLevel } from './hud/tidy'
 import { useStore } from './store'
-import { DEFAULT_COMPOSITION, DEFAULT_ID } from './hud/defaultComposition'
+import { DEFAULT_COMPOSITION, DEFAULT_HUD, DEFAULT_ID } from './hud/defaultComposition'
+import { MOTION_PRESETS } from './hud/motionPresets'
+import type { SliceColor, SliceOf } from './qs/sectionColor'
 
 export interface Shot { az: number; el: number; dist: number }
 /** Fractions of the view: the piece's top-left, or its centre when `c` (where a dragged component was dropped). */
@@ -24,20 +26,29 @@ export type PanelTab = 'view' | 'layers' | 'library' | 'notes' | 'motion' | 'out
 export interface Cycles { shading: boolean; light: boolean; backdrop: boolean; sec: number }
 /** Where the cutting plane runs on the clock: not at all, through the whole loop, or during the mesh. */
 export type PlaneRun = 'off' | 'loop' | 'mesh'
+/** How one step gives way to the next: a cut, a fade, or a wipe (the next grows up through the plane). */
+export type Blend = 'off' | 'fade' | 'wipe'
+/** A layer of the view, for the split: the model, the voxels, the result (quantum or Evolve), the mesh. */
+export type SplitLayer = 'model' | 'voxels' | 'processed' | 'result'
+/** Split view: the cutting plane divides the object, one layer under it and another over it. */
+export interface Split { on: boolean; below: SplitLayer; above: SplitLayer }
 /** The loop: the run told from the original geometry to the mesh, one segment per step (each can be
  *  left out): model, voxels and mesh hold `sec` seconds; Evolve plays its turns at `tps` a second (the
- *  quantum step holds `sec`). `blend` fades each step in and reveals the result with a rising plane.
+ *  quantum step holds `sec`). `blend`: each step cuts, fades in, or wipes up through the plane.
  *  The cutting plane sweeps between `from` and `to` (fractions of the grid), one pass in `planeSec`. */
 export interface Reel {
   on: boolean; sec: number; tps: number; segs: { model: boolean; voxels: boolean; quantum: boolean; mesh: boolean }
-  blend: boolean
+  blend: Blend
   plane: PlaneRun; planeSec: number; planeMode: 'bounce' | 'up' | 'down'; from: number; to: number
 }
 export const REEL: Reel = {
   on: true, sec: 4, tps: 4, segs: { model: true, voxels: true, quantum: true, mesh: true },
-  blend: true, plane: 'loop', planeSec: 8, planeMode: 'bounce', from: 0, to: 1,
+  blend: 'wipe', plane: 'loop', planeSec: 8, planeMode: 'bounce', from: 0, to: 1,
 }
-export interface Saved { id: string; name: string; compose: Record<string, string>; pos: Record<string, Pos>; looks: Record<string, Look>; texts: TextNote[]; guides?: Guides }
+/** How a saved composition plays: the loop, the pieces holding still, the split, the clock's speed and
+ *  loop, the look of the slice. Older saves have none and keep what is set. */
+export interface SavedMotion { reel: Reel; still: Record<string, true>; split: Split; speed: number; loop: boolean; slice?: { of: SliceOf; color: SliceColor } }
+export interface Saved { id: string; name: string; compose: Record<string, string>; pos: Record<string, Pos>; looks: Record<string, Look>; texts: TextNote[]; guides?: Guides; motion?: SavedMotion }
 
 interface P {
   /** Present composition: family → variant ids, comma-separated, or 'off'. Empty is clean. */
@@ -86,6 +97,10 @@ interface P {
   applyDefault: () => void
   /** Put a curated preset on the view (replacing the pieces, keeping notes) and lay it out. */
   applyCurated: (id: string) => void
+  /** Apply a preset in motion (hud/motionPresets.ts): its pieces and how it plays; then it plays. */
+  applyMotion: (id: string) => void
+  /** The preset in motion last applied (null once the pieces or the animation are changed by hand). */
+  motion: string | null
   /** The artboard's shape (frames.ts) and the export size picked for it (index into its sizes). */
   frame: FrameId
   setFrame: (f: FrameId) => void
@@ -151,6 +166,10 @@ interface P {
   setStill: (k: string, still: boolean) => void
   /** The clock is moving the cutting plane right now (so the view shows it). */
   planeLive: boolean
+  /** A wipe from one step to the next under way: the layers either side of the plane (animator.ts). */
+  wipe: { below: SplitLayer; above: SplitLayer } | null
+  split: Split
+  setSplit: (s: Partial<Split>) => void
   /** The one clock all of it reads: `t0` seconds into the pass when play began (or where it is paused),
    *  `playFrom` the wall time it began (ms), at `speed`; `loop` goes round at the end. `seekKey` bumps on
    *  every seek so a paused view shows that moment. */
@@ -178,7 +197,9 @@ interface P {
 
 const KEY = 'qs-present'
 const VERSION = 2   // v2: compositions start clean and are saved by name; the old presets are gone
-type Kept = Partial<P> & { v?: number; story?: Partial<Reel> }
+type Kept = Partial<P> & { v?: number; story?: Partial<Omit<Reel, 'blend'>> & { blend?: Blend | boolean } }
+// the blend was a yes or no before the wipe came
+const blendOf = (b: Blend | boolean | undefined): Blend => (b === false ? 'off' : b === true || b == null ? 'wipe' : b)
 const read = (): Kept => { try { return JSON.parse(localStorage.getItem(KEY) ?? '{}') } catch { return {} } }
 const raw = read()
 // a first visit opens on the default composition (Lab's layout as laid out by hand)
@@ -192,7 +213,7 @@ const keep = (s: P) => {
   try {
     localStorage.setItem(KEY, JSON.stringify({
       v: VERSION, compose: s.compose, pos: s.pos, shots: s.shots, spin: s.spin, reelSec: s.reelSec, spinSpeed: s.spinSpeed,
-      cycleSec: s.cycleSec, drawer: s.drawer, looks: s.looks, cycles: s.cycles, story: s.stageReel, still: s.still, speed: s.speed, loop: s.loop, notes: s.notes, frame: s.frame, outSize: s.outSize, spinDir: s.spinDir, texts: s.texts, pngInk: s.pngInk, saved: s.saved, current: s.current, guides: s.guides, tab: s.tab, libCat: s.libCat, opened: s.opened,
+      cycleSec: s.cycleSec, drawer: s.drawer, looks: s.looks, cycles: s.cycles, story: s.stageReel, still: s.still, split: s.split, speed: s.speed, loop: s.loop, notes: s.notes, frame: s.frame, outSize: s.outSize, spinDir: s.spinDir, texts: s.texts, pngInk: s.pngInk, saved: s.saved, current: s.current, guides: s.guides, tab: s.tab, libCat: s.libCat, opened: s.opened,
     }))
   } catch { /* per-viewer only */ }
 }
@@ -211,7 +232,10 @@ export const usePresent = create<P>()((set, get) => {
   const up = (p: Partial<P>) => { set(p); keep(get()) }
   const snap = (): Omit<Saved, 'id' | 'name'> => {
     const s = get()
-    return { compose: { ...s.compose }, pos: strip(s.pos), looks: { ...s.looks }, texts: [...s.texts], guides: { ...s.guides } }
+    const st = useStore.getState()
+    // the whole compose: the pieces and how it plays
+    const motion: SavedMotion = { reel: { ...s.stageReel, segs: { ...s.stageReel.segs } }, still: { ...s.still }, split: { ...s.split }, speed: s.speed, loop: s.loop, slice: { of: st.sliceOf, color: st.sliceColor } }
+    return { compose: { ...s.compose }, pos: strip(s.pos), looks: { ...s.looks }, texts: [...s.texts], guides: { ...s.guides }, motion }
   }
   return {
       compose: saved.compose ?? (fresh ? { ...DEFAULT_COMPOSITION.compose } : {}),
@@ -253,18 +277,44 @@ export const usePresent = create<P>()((set, get) => {
       set({ tidyKey: get().tidyKey + 1, aim: get().aim + 1 })
     },
     applyDefault: () => {
+      set({ motion: null })
       const s = get(), d = DEFAULT_COMPOSITION
       const pos = Object.fromEntries(Object.entries(d.pos).map(([k, v]) => [`present|${k}`, v]))
       up({ compose: { ...d.compose }, pos: { ...Object.fromEntries(Object.entries(s.pos).filter(([k]) => !k.startsWith('present|'))), ...pos }, looks: {}, guides: { ...s.guides, ...d.guides }, current: s.saved.some((x) => x.id === DEFAULT_ID) ? DEFAULT_ID : null, sel: null })
       set({ aim: get().aim + 1 })
     },
     applyCurated: (id) => {
+      set({ motion: null })
       const c = CURATED.find((x) => x.id === id)
       if (!c) return
       const s = get()
       // every preset stands on the scene: the grid box and the print grid
       up({ compose: { ...presetCompose(c, useStore.getState().q.mode) }, pos: withOthers(s.pos, {}), looks: {}, current: null, sel: null, guides: { ...s.guides, box: true, floor: true } })
       set({ tidyKey: get().tidyKey + 1, aim: get().aim + 1 })
+    },
+    motion: null,
+    applyMotion: (id) => {
+      const m = MOTION_PRESETS.find((x) => x.id === id)
+      if (!m) return
+      const st = useStore.getState()
+      if ('default' in m.pieces) { get().applyDefault(); st.setHud(DEFAULT_HUD) }
+      else if ('curated' in m.pieces) get().applyCurated(m.pieces.curated)
+      else {
+        const s = get()
+        up({ compose: { ...m.pieces.own(st.q.mode) }, pos: withOthers(s.pos, {}), looks: {}, current: null, sel: null, guides: { ...s.guides, box: true, floor: true } })
+        set({ tidyKey: get().tidyKey + 1, aim: get().aim + 1 })
+      }
+      // every piece moves; the loop, the plane and the split as the preset says
+      up({
+        stageReel: { ...REEL, ...m.reel, segs: { ...REEL.segs, ...m.reel.segs } },
+        split: { ...get().split, on: false, ...m.split }, still: {}, speed: m.speed ?? 1, loop: true,
+        spin: m.spin != null, spinSpeed: m.spin ?? get().spinSpeed,
+      })
+      st.setSliceOf(m.slice?.of ?? 'auto')
+      st.setSliceColor(m.slice?.color ?? 'auto')
+      set({ motion: id })
+      get().seek(0)
+      get().setPlaying(true)
     },
     frame: saved.frame ?? 'window',
     setFrame: (f) => { up({ frame: f, outSize: 0 }); setTimeout(() => set({ tidyKey: get().tidyKey + 1, aim: get().aim + 1 }), 80) },
@@ -279,6 +329,7 @@ export const usePresent = create<P>()((set, get) => {
     preview: null,
     setPreview: (k) => set({ preview: k }),
     place: (family, id, at) => {
+      set({ motion: null })
       const s = get()
       const cur = variants(s.compose[family])
       const compose = cur.includes(id) ? s.compose : { ...s.compose, [family]: [...cur, id].join(',') }
@@ -289,6 +340,7 @@ export const usePresent = create<P>()((set, get) => {
       up({ compose, pos, sel: at ? `${family}:${id}` : s.sel })
     },
     removePiece: (key) => {
+      set({ motion: null })
       const s = get()
       if (key.startsWith('text:')) { s.setText(key.slice(5), null); set({ sel: null }); return }
       const [family, id] = key.split(':')
@@ -356,10 +408,13 @@ export const usePresent = create<P>()((set, get) => {
     cycles: { shading: false, light: false, backdrop: false, sec: 3, ...saved.cycles },
     setCycles: (c) => up({ cycles: { ...get().cycles, ...c } }),
     // the loop is kept under `story` (the older stage reel, off by default, is left behind)
-    stageReel: { ...REEL, ...saved.story, segs: { ...REEL.segs, ...saved.story?.segs } },
-    setStageReel: (r) => up({ stageReel: { ...get().stageReel, ...r } }),
+    stageReel: { ...REEL, ...saved.story, segs: { ...REEL.segs, ...saved.story?.segs }, blend: blendOf(saved.story?.blend) },
+    setStageReel: (r) => up({ stageReel: { ...get().stageReel, ...r }, motion: null }),
     still: saved.still ?? {},
     planeLive: false,
+    wipe: null,
+    split: { on: false, below: 'voxels', above: 'processed', ...saved.split },
+    setSplit: (x) => up({ split: { ...get().split, ...x } }),
     setStill: (k, v) => { const still = { ...get().still }; if (v) still[k] = true; else delete still[k]; up({ still }) },
     playing: false,
     playFrom: 0,
@@ -389,10 +444,16 @@ export const usePresent = create<P>()((set, get) => {
       up({ saved: [...s.saved, { id, name: name?.trim() || `Composition ${s.saved.length + 1}`, ...snap() }], current: id })
     },
     load: (id) => {
+      set({ motion: null })
       const s = get()
       const c = s.saved.find((x) => x.id === id)
       if (!c) return
       up({ compose: { ...c.compose }, pos: withOthers(s.pos, c.pos), looks: { ...c.looks }, texts: [...c.texts], guides: c.guides ?? s.guides, current: id, sel: null })
+      const m = c.motion
+      if (m) {
+        up({ stageReel: { ...REEL, ...m.reel, segs: { ...REEL.segs, ...m.reel.segs }, blend: blendOf(m.reel.blend) }, still: { ...m.still }, split: { ...m.split }, speed: m.speed, loop: m.loop })
+        if (m.slice) { useStore.getState().setSliceOf(m.slice.of); useStore.getState().setSliceColor(m.slice.color) }
+      }
     },
     rename: (id, name) => up({ saved: get().saved.map((x) => (x.id === id ? { ...x, name } : x)) }),
     removeSaved: (id) => up({ saved: get().saved.filter((x) => x.id !== id), current: get().current === id ? null : get().current }),

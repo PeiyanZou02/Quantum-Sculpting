@@ -127,11 +127,17 @@ Viewport tools (the tool shelf on the left of the view):
 Shading:
 
 - **Wireframe** — edges only: voxels as a lattice, meshes as triangles.
-- **Solid** — plain studio shading in one grey.
-- **Value** — cells shaded by their value, darker is denser.
-- **Entanglement** — thin-film interference driven by the cell values, from lookup tables computed
-  by Moth's Entanglement Shader (`app/shaders.py`, routes under `/api/shader/`). Under Evolve,
-  nations keep their own colours and value shading.
+- **Solid** — the form alone in one grey: no values, no nations.
+- **Value** — coloured by the data: cells darker where denser; the model and the mesh painted by how
+  dense the result is just under their surface; under Evolve, every layer (voxels, model, mesh) in its
+  nations' colours.
+- **Entangle** — thin-film interference from lookup tables computed by Moth's entanglement-shader-v1
+  (`app/shaders.py`, routes under `/api/shader/`): the value sets the film's thickness, and under
+  Evolve each nation gets a thickness, and so an interference colour, of its own.
+
+**Visibility · Split at the cutting plane** divides the object at the plane: one layer under it and
+another over it (Model, Voxels, the result, Mesh), say the voxels under and Evolve over, or Evolve
+under and the mesh over. Move the plane, or let the clock sweep it, to move the cut.
 
 ## Compose and Output
 
@@ -145,6 +151,11 @@ always stays in the centre. **Properties · Compose** holds it:
    down rather than lose pieces. *Lay out again* re-runs the layout for the frame (all pieces, without
    repeats, or only the essentials); *Arrange* (C) lets you drag, resize by the corner, select and
    remove pieces on the view; *Clear* takes them all off.
+   **In motion**: whole compositions that play. Each puts its pieces on the view, turns every piece's
+   motion on, sets the loop, the plane, the split and the slice, and starts: *Default, in motion*;
+   *Growth* (the form alone, turning, step growing out of step); *Nations, turn by turn* (Evolve's
+   pieces through every turn); *Cut through* (voxels under the plane, the result over it, the section
+   in diffusion); *Data in motion* (readouts and cards counting as it plays).
 2. **On the view** — the view's own controls (tool shelf, navigation, axis gizmo, camera, info, value
    scale, corners) and the scene guides (grid box, print grid with its cell size, cutting plane).
    Pieces show figures, bars and charts only; *Explanations in pieces* brings back their captions and
@@ -163,8 +174,9 @@ always stays in the centre. **Properties · Compose** holds it:
    *Steps* cycles the run from the original geometry to the mesh (on by default): Model, Voxels,
    Evolve (or Quantum) and Mesh, each a toggle, so the loop can be Evolve alone or any mix; seconds
    per step, and for Evolve turns per second (every turn of the history plays, the territory morphing
-   from one to the next). *Blend between steps* fades each step in and raises the result out of the
-   voxels on a plane before it plays.
+   from one to the next). *Between steps*: a cut, a fade, or **grow through the plane**, where each
+   step rises out of the one before it (the voxels out of the sphere, Evolve out of the voxels, the
+   mesh out of the last turn; with the loop on, the sphere grows back out of the mesh).
    *Cutting plane*: off, through the whole loop, or with the mesh; up and down, up or down; one pass
    in so many seconds, between two layers. The plane on the view, the slice card and the layer stack
    follow it.
@@ -176,7 +188,9 @@ always stays in the centre. **Properties · Compose** holds it:
    sized by territory; borders weighted by their ties, heavy at alliances; this turn's attacks in red;
    exiles ringed) drifts, swells and thickens with the turns.
 5. **Annotate** — notes and measurements pinned to the geometry.
-6. **Saved compositions** — saved by name and cycled with `[` `]` or 1–9.
+6. **Saved compositions** — the whole compose, saved by name: the pieces and where they are, and how it
+   plays (the loop, the plane, the split, the pieces holding still, the slice's look). Cycled with
+   `[` `]` or 1–9.
 
 **Properties · Output** holds the frame (window, 16:9, 21:9, 1.91:1, 1:1, 4:5, 9:16, 1:2, A-series)
 and its export size, images (the frame as PNG, a screen grab, the geometry alone, the pieces alone),
@@ -185,7 +199,10 @@ with *Hide controls* (H) for clean takes, and 3D (STL, GLB).
 
 Properties keeps the group you pick on its rail; it does not follow the step open in Parameters.
 Sections (Grid · Slice, the slice card, and the cutting plane in the view, which shows itself when you
-move it) are coloured Auto, Grey, Heat or Nations: Auto is Nations while an Evolve turn is on screen.
+move it) **cut** the voxels, the result or the mesh (the result filled where it passes the level, as
+the printed part would be cut); Auto follows the view. They are coloured Auto, Grey, Heat, Diffusion
+or Nations: Diffusion draws the field as the blur leaves it, smooth between cells and coloured, with
+the level's contour (Peiyan's slice, in colour); Auto is Nations while an Evolve turn is on screen.
 
 The drawer has three feeds, each a different source: **Runtime** is this app and the local service
 (requests, steps, warnings); **Evolve log** is the story of the Evolve run, turn by turn; **Atlas

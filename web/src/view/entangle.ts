@@ -138,10 +138,16 @@ void main() {
   n = im * (n / vec3(dot(im[0], im[0]), dot(im[1], im[1]), dot(im[2], im[2])));
 #endif
   vValue = 0.0;
+  float span = u_valueRange.y - u_valueRange.x;
+  span = abs(span) < 1e-5 ? 1e-5 : span;
 #ifdef USE_INSTANCING_COLOR
   float lum = dot(instanceColor, vec3(0.2126, 0.7152, 0.0722));
-  float span = u_valueRange.y - u_valueRange.x;
-  vValue = clamp((lum - u_valueRange.x) / (abs(span) < 1e-5 ? 1e-5 : span), 0.0, 1.0);
+  vValue = clamp((lum - u_valueRange.x) / span, 0.0, 1.0);
+#endif
+#ifdef USE_COLOR
+  // a painted mesh (vertex colours) reads the same way
+  float lumV = dot(color, vec3(0.2126, 0.7152, 0.0722));
+  vValue = clamp((lumV - u_valueRange.x) / span, 0.0, 1.0);
 #endif
   vec4 mvPosition = modelViewMatrix * p;
   vViewPos = mvPosition.xyz;

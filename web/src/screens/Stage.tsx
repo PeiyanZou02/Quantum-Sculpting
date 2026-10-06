@@ -9,22 +9,24 @@ import { loadBundled, makeEntangleMaterial, type ShaderTables } from '../view/en
 import { QProbe } from '../qs/QProbe'
 import { useProbe, type ProbeHit } from '../qs/useProbe'
 import { Icon, IconButton } from '../qs/Icon'
-import { Popover, PopSection } from '../qs/Popover'
+import { Check, Popover, PopSection } from '../qs/Popover'
+import { Segmented } from '../qs/Segmented'
 import { Slider } from '../qs/Slider'
 import { Spinner } from './parts'
 import { HudLayer } from '../hud/Composer'
 import { FAMILIES } from '../hud/registry'
 import { chosenOf, toggleVariant, variantsOf } from '../hud/compose'
 import { MARK_MIME } from './MarkLibrary'
-import { usePresent } from '../present'
+import { usePresent, type SplitLayer } from '../present'
 import { usePresentKeys } from './presentKeys'
 import { useAnimator } from './animator'
 import { DEFAULT_COMPOSITION } from '../hud/defaultComposition'
 import type { HudCtx, Vec3 } from '../hud/types'
 import { live, bump } from '../live'
-import { ownerPalette, nationName } from '../view/nations'
+import { ownerGreys, ownerPalette, nationName } from '../view/nations'
+import { densityPaint, nationPaint, peakOf } from './meshPaint'
 import { fit, frameOf } from '../frames'
-import { sectionRGBA, useSliceScheme } from '../qs/sectionColor'
+import { sectionRGBA, sectionSmooth, useSection } from '../qs/sectionColor'
 
 const MODE_LABEL: Record<string, string> = { gaussian: 'Gaussian', emulator: 'Emulation', atlas: 'Atlas', nations: 'Evolve' }
 const modeLabel = (m: string) => MODE_LABEL[m] ?? m
@@ -60,9 +62,9 @@ const BACKDROPS = [
 
 const SHADINGS: { id: Shading; icon: string; t: string; d: string }[] = [
   { id: 'wire', icon: 'wire', t: 'Wireframe', d: 'Edges only: voxels as a lattice, meshes as triangles.' },
-  { id: 'solid', icon: 'solid', t: 'Solid', d: 'Plain studio shading in one grey.' },
-  { id: 'value', icon: 'value', t: 'Value', d: 'Cells shaded by their value: darker is denser.' },
-  { id: 'entangle', icon: 'entangle', t: 'Entanglement', d: "Shaded with lookup tables computed by Moth's Entanglement Shader: thin-film interference driven by the cell values." },
+  { id: 'solid', icon: 'solid', t: 'Solid', d: 'The form alone, in one grey: no values, no nations.' },
+  { id: 'value', icon: 'value', t: 'Value', d: 'Coloured by the data: cells darker where denser, meshes by the density under their surface, Evolve by nation.' },
+  { id: 'entangle', icon: 'entangle', t: 'Entangle', d: "Entanglement: thin-film interference from tables computed by Moth's entanglement-shader-v1; the value (or, in Evolve, the nation) sets the film's thickness." },
 ]
 
 export function Stage() {
@@ -113,43 +115,72 @@ export function Stage() {
   // Evolve draws the turn on screen, each cell in its nation's colour; other modes draw the result by value
   const ev = st.evolve
   const nations = useMemo(() => (st.proc?.mode === 'nations' && ev.owner && ev.n ? { owner: ev.owner, n: ev.n } : null), [st.proc?.mode, ev.owner, ev.n])
-  const isNations = !!nations
   useEffect(() => {
     if (!engine) return
-    if (!nations) { engine.setVoxels('processed', procData, m.level, valued); return }
+    if (!nations) { engine.setVoxels('processed', procData, m.level, valued, procData ? peakOf(procData, m.level) : 1); return }
     // from turn to turn the territory morphs (snaps when off or when the viewer asks for less motion)
     const still = matchMedia('(prefers-reduced-motion: reduce)').matches
     // while the loop plays the turns, each morph lasts about one turn, so the territory flows
     const pl = usePresent.getState()
     const ms = pl.playing && pl.stageReel.on ? Math.min(600, 900 / Math.max(0.5, pl.stageReel.tps * pl.speed)) : MORPH_MS[useStore.getState().morph]
-    engine.setLabels('processed', nations.owner, nations.n, ownerPalette(theme), still ? 0 : ms)
-  }, [engine, procData, m.level, valued, nations, theme])
+    // value: nation colours; solid: the form alone; entanglement: a film thickness per nation
+    const pal = shading === 'solid' ? ownerGreys('solid', theme) : shading === 'entangle' ? ownerGreys('film', theme) : ownerPalette(theme)
+    engine.setLabels('processed', nations.owner, nations.n, pal, still ? 0 : ms)
+  }, [engine, procData, m.level, valued, nations, theme, shading])
   useEffect(() => { engine?.setMesh('result', resultMesh) }, [engine, resultMesh])
+  // value and entanglement paint the meshes too: by nation in Evolve, else by the result's density
+  // under the surface (only the mesh on show is painted; switching repaints)
+  useEffect(() => {
+    if (!engine) return
+    const paint = shading === 'value' || shading === 'entangle'
+    // the mesh on show, and either side of a split or a wipe
+    const on = new Set<string>([view, ...(pr.wipe ? [pr.wipe.below, pr.wipe.above] : []), ...(pr.split.on ? [pr.split.below, pr.split.above] : [])])
+    for (const name of ['model', 'result'] as const) {
+      const shown = on.has(name)
+      if (!paint) { engine.paintMesh(name, null); continue }
+      if (!shown) continue
+      if (nations) engine.paintMesh(name, nationPaint(nations.owner, nations.n, shading === 'entangle' ? ownerGreys('film', theme) : ownerPalette(theme)))
+      else if (procData && procData.n === engine.n) engine.paintMesh(name, densityPaint(procData, m.level, peakOf(procData, m.level)))
+      else engine.paintMesh(name, null)
+    }
+  }, [engine, shading, view, nations, procData, m.level, theme, modelMesh, resultMesh, grid, pr.wipe, pr.split])
   useEffect(() => { engine?.show(view as ViewName) }, [engine, view, gridData, procData, resultMesh, modelMesh])
   useEffect(() => { engine?.setGhosts((Object.keys(layers) as Layer[]).filter((k) => layers[k].visible)) }, [engine, layers, gridData, procData, resultMesh, modelMesh])
   // the bounding box and print grid (a guide previewed from the library shows too)
   const guides = { ...pr.guides, box: pr.guides.box || pr.preview === 'guide:box', floor: pr.guides.floor || pr.preview === 'guide:floor' }
   useEffect(() => { engine?.setFrame({ bounds: guides.box, floor: guides.floor, divisions: guides.div }) }, [engine, guides.box, guides.floor, guides.div, grid])
-  const planeOn = hud.slice || tool === 'slice' || pr.planeLive || (shown.slicecard ?? 'off') !== 'off'
+  const planeOn = hud.slice || tool === 'slice' || pr.planeLive || pr.split.on || (shown.slicecard ?? 'off') !== 'off'
   useEffect(() => { engine?.setSlice(planeOn ? slice : null) }, [engine, slice, view, planeOn])
+  // split view: the cutting plane divides the object, one layer under it and one over it; a wipe in the
+  // loop splits the same way while one step grows up out of the last
+  const wiping = pr.wipe && pr.stageReel.on && (pr.playing || pr.t0 > 0) ? pr.wipe : null
+  const split = wiping ?? (pr.split.on ? pr.split : null)
+  const below = split?.below, above = split?.above
+  useEffect(() => {
+    engine?.setSplit(below && above ? { below, above, axis: slice.axis, index: slice.index } : null)
+  }, [engine, below, above, slice.axis, slice.index, grid])
   // while the loop plays, each step fades in rather than cutting
   const step = useStore((s) => s.focus.stage)
   useEffect(() => {
     const el = host.current, p = usePresent.getState()
-    if (!el || !p.playing || !p.stageReel.blend) return
+    if (!el || !p.playing || p.stageReel.blend !== 'fade') return
     el.classList.remove('stage__view--in')
     void el.offsetWidth
     el.classList.add('stage__view--in')
   }, [step])
-  // the cutting plane carries the section itself, coloured as the Slice panel says (nations in Evolve)
-  const planeProcessed = (view === 'processed' || view === 'result' || view === 'scan') && !!procData
-  const planeColors = useSliceScheme(planeProcessed)
+  // the cutting plane carries the section itself: what it cuts (voxels, result, mesh) and its colours
+  // as the Slice panel says (nations in Evolve, the diffusion of the field, the mesh's own cut)
+  const sec = useSection()
   useEffect(() => {
     if (!engine) return
-    const g = planeProcessed ? procData : gridData
+    const g = sec.grid
     if (!planeOn || !g || g.n !== engine.n) { engine.setSliceImage(null, 0, 'z'); return }
-    engine.setSliceImage(sectionRGBA(g, slice.axis, slice.index, planeColors.scheme, theme, planeColors.owner), g.n, slice.axis)
-  }, [engine, planeOn, planeProcessed, procData, gridData, slice.axis, slice.index, planeColors.scheme, planeColors.owner, theme])
+    if (sec.kind === 'cells') engine.setSliceImage(sectionRGBA(g, slice.axis, slice.index, sec.scheme, theme, sec.owner), g.n, slice.axis)
+    else {
+      const img = sectionSmooth(g, slice.axis, slice.index, sec.kind, sec.level, theme, sec.owner)
+      engine.setSliceImage(img.rgba, img.size, slice.axis, true)
+    }
+  }, [engine, planeOn, sec.grid, sec.kind, sec.scheme, sec.owner, sec.level, slice.axis, slice.index, theme])
   useEffect(() => { if (engine && view === 'scan') engine.setScan(slice.axis === 'z' ? slice.index + 1 : 0) }, [engine, view, slice, grid])
   // entering the scan view turns the plane to z (only then: the axis is read, not watched)
   useEffect(() => { const s = useStore.getState(); if (view === 'scan' && s.slice.axis !== 'z') s.setSlice({ axis: 'z' }) }, [view])
@@ -161,6 +192,7 @@ export function Stage() {
     const opts = { thickness: shade.thickness }
     const mats = {
       mesh: makeEntangleMaterial(table, { ...opts, instanced: false }),
+      meshV: Object.assign(makeEntangleMaterial(table, { ...opts, instanced: false }), { vertexColors: true }),
       voxels: makeEntangleMaterial(table, { ...opts, instanced: true }),
       processed: makeEntangleMaterial(table, { ...opts, instanced: true }),
     }
@@ -171,9 +203,9 @@ export function Stage() {
     if (!engine) return
     const bg = getComputedStyle(document.documentElement).getPropertyValue('--qs-bg').trim()
     if (entMats) for (const mat of Object.values(entMats)) if (mat.uniforms.u_bg) mat.uniforms.u_bg.value = new THREE.Color(bg)
-    // entanglement reads a voxel's colour as film thickness, so Evolve's nation colours keep plain value shading
-    engine.setShading(shading === 'entangle' && (!entMats || isNations) ? 'value' : shading, entMats)
-  }, [engine, shading, entMats, theme, isNations])
+    // entanglement reads a cell's colour as film thickness (Evolve hands it a grey per nation)
+    engine.setShading(shading === 'entangle' && !entMats ? 'value' : shading, entMats)
+  }, [engine, shading, entMats, theme])
 
   useEffect(() => { engine?.setLighting(shade.light) }, [engine, shade.light])
   // motion: turntable, and a reel that flies through the saved shots
@@ -452,6 +484,17 @@ export function Stage() {
                   </div>
                 )
               })}
+            </PopSection>
+            <PopSection label="Split at the cutting plane">
+              <Check label="Split the view" note="One layer under the plane, another over it; move the plane to move the cut." checked={pr.split.on} disabled={!gridData} onChange={(v) => pr.setSplit({ on: v })} />
+              {pr.split.on && (['below', 'above'] as const).map((side) => (
+                <div key={side} className="vis-split">
+                  <span className="vis-split__k">{side === 'below' ? 'Under' : 'Over'}</span>
+                  <Segmented<SplitLayer> size="s" value={pr.split[side]} onChange={(v) => pr.setSplit({ [side]: v })} aria-label={side === 'below' ? 'Under the plane' : 'Over the plane'}
+                    options={([['model', 'Model', !!modelMesh], ['voxels', 'Voxels', !!gridData], ['processed', st.proc?.mode === 'nations' ? 'Evolve' : 'Result', !!procData], ['result', 'Mesh', !!resultMesh]] as const)
+                      .map(([value, label, has]) => ({ value, label, disabled: !has }))} />
+                </div>
+              ))}
             </PopSection>
           </Popover>
           <ShadingOptions tables={tables} />

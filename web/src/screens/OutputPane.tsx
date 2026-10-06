@@ -13,7 +13,7 @@ import { LevelHistogram } from '../qs/LevelHistogram'
 import { histogram, solidPerLayer, type Axis } from '../qs/grid'
 import { SectionMap } from './SectionMap'
 import { fmt } from './fmt'
-import { SLICE_COLORS, useSliceScheme, type SliceColor } from '../qs/sectionColor'
+import { SLICE_COLORS, SLICE_OF, useSection, type SliceColor, type SliceOf } from '../qs/sectionColor'
 import { Panel, Row } from '../ui/Panel'
 import { PresentStyle } from './presentStyle'
 import { ComposeSections, OutputSections } from './PresentPanel'
@@ -188,16 +188,10 @@ export function GridOut() {
 
 export function SliceOut() {
   const st = useStore()
-  const { slice, gridData, procData, m, hud, view, scan } = st
-  const [src, setSrc] = useState<'input' | 'processed'>(procData ? 'processed' : 'input')
-  // a result arriving (or going) switches the source to it; otherwise the choice is the user's
-  const hasProc = !!procData
-  const [srcFor, setSrcFor] = useState(hasProc)
-  if (srcFor !== hasProc) {
-    setSrcFor(hasProc)
-    setSrc(hasProc ? 'processed' : 'input')
-  }
-  const g = src === 'processed' && procData ? procData : gridData
+  const { slice, gridData, procData, hud, view, scan } = st
+  // what the section cuts (voxels, result, mesh) is one setting for this map, the slice card and the plane
+  const sec = useSection()
+  const g = sec.grid
   const n = g?.n ?? 32
   const box = useRef<HTMLDivElement>(null)
   const [w, setW] = useState(260)
@@ -209,8 +203,6 @@ export function SliceOut() {
   // only a new grid size re-centres the slice; the index itself is read, not watched
   const fitSlice = useEffectEvent(() => { if (slice.index > n - 1) st.setSlice({ index: Math.floor(n / 2) }) })
   useEffect(() => { fitSlice() }, [n])
-  const level = src === 'processed' ? m.level : 0.5
-  const colors = useSliceScheme(src === 'processed')
   const nationsOn = st.proc?.mode === 'nations'
   const scanning = view === 'scan'
   const canScan = !!procData && !!gridData
@@ -224,14 +216,16 @@ export function SliceOut() {
     <Blk id="out-slice" label="Slice" note={`${slice.axis} ${slice.index} / ${n - 1}`}
       tools={<Shows on={hud.slice} what="the cutting plane" set={(v) => st.setHud({ slice: v })} />}>
       <div ref={box} style={{ width: '100%' }}>
-        {g ? <SectionMap size={w} grid={g} input={src === 'processed' ? gridData : null} axis={slice.axis} index={slice.index} level={level} scheme={colors.scheme} owner={colors.owner}
+        {g ? <SectionMap size={w} grid={g} input={sec.input} axis={slice.axis} index={slice.index} level={sec.level} scheme={sec.scheme} owner={sec.owner} kind={sec.kind}
           onIndex={(i) => { st.setSlice({ index: i }); if (!hud.slice) st.setHud({ slice: true }) }} />
           : <Empty>Voxelise to slice the grid.</Empty>}
       </div>
       <div className="out-pair">
-        <Segmented size="s" options={[{ value: 'input', label: 'Input' }, { value: 'processed', label: 'Processed', disabled: !procData }]} value={src} onChange={(v) => setSrc(v as 'input' | 'processed')} />
         <Segmented<Axis> size="s" options={(['x', 'y', 'z'] as Axis[]).map((a) => ({ value: a, label: a.toUpperCase(), disabled: scanning && a !== 'z' }))} value={slice.axis} onChange={(a) => st.setSlice({ axis: a })} />
       </div>
+      <Row label="Cuts">
+        <Segmented<SliceOf> size="s" options={SLICE_OF.map((c) => ({ ...c, disabled: (c.value === 'result' || c.value === 'mesh') && !procData }))} value={st.sliceOf} onChange={st.setSliceOf} aria-label="What the section cuts" />
+      </Row>
       <Row label="Colour">
         <Segmented<SliceColor> size="s" options={SLICE_COLORS.map((c) => ({ ...c, disabled: c.value === 'nations' && !nationsOn }))} value={st.sliceColor} onChange={st.setSliceColor} aria-label="Section colour" />
       </Row>

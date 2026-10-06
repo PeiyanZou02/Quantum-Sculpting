@@ -9,6 +9,8 @@ import type { Axis, Grid } from '../qs/grid'
 export type LayerName = 'model' | 'voxels' | 'processed' | 'result'
 export type ViewName = LayerName | 'scan'
 export type ShadingMode = 'wire' | 'solid' | 'value' | 'entangle'
+/** Entanglement materials per layer kind; `meshV` reads a painted mesh's colours as film thickness. */
+export interface EntMats { mesh: THREE.Material; meshV?: THREE.Material; voxels: THREE.Material; processed: THREE.Material }
 
 /** Box edges drawn from the face UVs, so instanced voxels read as a clean lattice (no triangle diagonals). */
 function voxelWire(): THREE.ShaderMaterial {
@@ -93,6 +95,8 @@ export class Engine {
   dirty = true
   private box = new THREE.BoxGeometry(0.9, 0.9, 0.9)
   private meshMat = new THREE.MeshStandardMaterial({ color: SURFACE, roughness: 0.85, metalness: 0, flatShading: true, side: THREE.DoubleSide })
+  /** A mesh painted per vertex (paintMesh): the value shading of the model and the result. */
+  private meshMatV = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.85, metalness: 0, flatShading: true, side: THREE.DoubleSide, vertexColors: true })
   private voxMats: Record<string, THREE.MeshLambertMaterial> = {
     voxels: new THREE.MeshLambertMaterial({ color: 0xffffff }),
     processed: new THREE.MeshLambertMaterial({ color: 0xffffff }),
@@ -102,8 +106,12 @@ export class Engine {
   private ghostMesh = new THREE.MeshBasicMaterial({ color: INK3, wireframe: true, transparent: true, opacity: 0.16, depthWrite: false })
   private ghostVox = new THREE.MeshBasicMaterial({ color: INK3, transparent: true, opacity: 0.08, depthWrite: false })
   private shading: ShadingMode = 'solid'
-  private ent: { mesh: THREE.Material; voxels: THREE.Material; processed: THREE.Material } | null = null
+  private ent: EntMats | null = null
   private ghosts = new Set<LayerName>()
+  /** Split view: one layer under the cutting plane, another over it (the plane's axis and layer). */
+  private split: { below: LayerName; above: LayerName; axis: Axis; index: number } | null = null
+  private splitCut = { below: new THREE.Plane(), above: new THREE.Plane() }
+  private splitMats = new Map<string, THREE.Material>()
   // scan view: processed kept below the plane, input voxels above it
   private cut = { processed: new THREE.Plane(new THREE.Vector3(0, 0, -1), 0), voxels: new THREE.Plane(new THREE.Vector3(0, 0, 1), 0) }
   private scanner = new THREE.Group()
@@ -505,7 +513,42 @@ export class Engine {
   }
 
   private shows(k: LayerName) {
-    return this.view === 'scan' ? k === 'voxels' || k === 'processed' : k === this.view
+    if (this.view === 'scan') return k === 'voxels' || k === 'processed'
+    if (this.split) return k === this.split.below || k === this.split.above
+    return k === this.view
+  }
+
+  /**
+   * Split view: the cutting plane divides the object, `below` drawn under it and `above` over it (say
+   * the voxels under and Evolve over, or Evolve under and the mesh over). Null goes back to one view.
+   */
+  setSplit(s: { below: LayerName; above: LayerName; axis: Axis; index: number } | null) {
+    this.split = s && s.below !== s.above ? s : null
+    if (this.split) {
+      const a = this.split.axis === 'x' ? 0 : this.split.axis === 'y' ? 1 : 2
+      const e = new THREE.Vector3().setComponent(a, 1)
+      // world = grid / n + the root's offset (setGrid); the cut runs through the plane's layer
+      const w = (this.split.index + 0.5) / this.n + this.root.position.getComponent(a)
+      this.splitCut.below.set(e.clone().negate(), w)
+      this.splitCut.above.set(e, -w)
+    }
+    this.apply()
+  }
+
+  /** A layer's material clipped to its side of the split (cached per layer and material; shader
+   *  materials share their uniforms with the original so live settings carry over). */
+  private splitMaterial(k: LayerName, base: THREE.Material): THREE.Material {
+    const side = this.split!.below === k ? 'below' : 'above'
+    const key = `${k}|${side}|${base.uuid}`
+    let m = this.splitMats.get(key)
+    if (!m) {
+      m = base.clone()
+      if (base instanceof THREE.ShaderMaterial) (m as THREE.ShaderMaterial).uniforms = base.uniforms
+      m.clippingPlanes = [this.splitCut[side]]
+      m.needsUpdate = true
+      this.splitMats.set(key, m)
+    }
+    return m
   }
 
   /** Material for a layer under the current shading mode (ghost layers get a faint wire). */
@@ -513,8 +556,9 @@ export class Engine {
     const inst = k === 'voxels' || k === 'processed'
     if (!this.shows(k) && this.ghosts.has(k)) return inst ? this.ghostVox : this.ghostMesh
     if (this.shading === 'wire') return inst ? this.wireVox[k] : this.meshWire
-    if (this.shading === 'entangle' && this.ent) return inst ? this.ent[k as 'voxels' | 'processed'] : this.ent.mesh
-    return inst ? this.voxMats[k] : this.meshMat
+    const painted = !inst && !!(this.layers[k] as THREE.Mesh | undefined)?.geometry?.getAttribute('color')
+    if (this.shading === 'entangle' && this.ent) return inst ? this.ent[k as 'voxels' | 'processed'] : painted && this.ent.meshV ? this.ent.meshV : this.ent.mesh
+    return inst ? this.voxMats[k] : painted && this.shading === 'value' ? this.meshMatV : this.meshMat
   }
 
   /** Visibility, materials and scan clipping, after any change. */
@@ -523,6 +567,7 @@ export class Engine {
     for (const [k, layer] of Object.entries(this.layers) as [LayerName, THREE.Mesh][]) {
       layer.visible = this.shows(k) || this.ghosts.has(k)
       const mat = this.materialFor(k)
+      if (this.split && !scan && this.shows(k)) { layer.material = this.splitMaterial(k, mat); continue }
       if (k === 'voxels' || k === 'processed') {
         const want = scan && this.shows(k) ? [this.cut[k]] : null
         if ((mat.clippingPlanes?.length ?? 0) !== (want?.length ?? 0)) {
@@ -537,9 +582,13 @@ export class Engine {
     this.dirty = true
   }
 
-  setShading(mode: ShadingMode, ent?: { mesh: THREE.Material; voxels: THREE.Material; processed: THREE.Material } | null) {
+  setShading(mode: ShadingMode, ent?: EntMats | null) {
     this.shading = mode
-    if (ent !== undefined) this.ent = ent
+    if (ent !== undefined && ent !== this.ent) {
+      this.ent = ent
+      for (const m of this.splitMats.values()) m.dispose()
+      this.splitMats.clear()
+    }
     this.apply()
   }
 
@@ -562,6 +611,41 @@ export class Engine {
     this.put(name, mesh)
   }
 
+  /**
+   * Paints a mesh layer per vertex: `sample` gets each vertex in grid coordinates (cell centres on whole
+   * numbers, as the voxels are drawn) with its normal, and returns a linear RGB colour, or null for the
+   * plain surface. Without a sampler the paint comes off. Value and entanglement shading use the paint.
+   */
+  paintMesh(name: LayerName, sample: ((p: THREE.Vector3, n: THREE.Vector3) => THREE.Color | null) | null) {
+    const mesh = this.layers[name]
+    if (!(mesh instanceof THREE.Mesh) || mesh instanceof THREE.InstancedMesh) return
+    const g = mesh.geometry as THREE.BufferGeometry
+    if (!sample) {
+      if (g.getAttribute('color')) { g.deleteAttribute('color'); this.apply() }
+      return
+    }
+    if (!g.getAttribute('normal')) g.computeVertexNormals()
+    const pos = g.getAttribute('position'), nor = g.getAttribute('normal')
+    const m = mesh.matrixAutoUpdate ? null : mesh.matrix
+    const nm = m ? new THREE.Matrix3().getNormalMatrix(m) : null
+    const out = new Float32Array(pos.count * 3)
+    const p = new THREE.Vector3(), n = new THREE.Vector3()
+    for (let i = 0; i < pos.count; i++) {
+      p.fromBufferAttribute(pos, i)
+      n.fromBufferAttribute(nor, i)
+      if (m && nm) { p.applyMatrix4(m); n.applyMatrix3(nm).normalize() }
+      const c = sample(p, n) ?? SURFACE
+      out[i * 3] = c.r; out[i * 3 + 1] = c.g; out[i * 3 + 2] = c.b
+    }
+    g.setAttribute('color', new THREE.BufferAttribute(out, 3))
+    this.apply()
+  }
+
+  /** The value ramp, linear RGB: the plain surface at 0, the deepest value colour at 1. */
+  static ramp(v: number, out = new THREE.Color()): THREE.Color {
+    return out.copy(SURFACE).lerp(DEEP, Math.max(0, Math.min(1, v)))
+  }
+
   /** Fit a raw mesh into the grid the way pipeline.placement does (longest side fills n − 2·pad, centred, on the floor). */
   static placement(data: MeshData, n: number, pad = 2): number[][] {
     const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity]
@@ -582,7 +666,7 @@ export class Engine {
   }
 
   /** Only cells with a neighbour below the threshold are drawn. Processed grids are shaded by value. */
-  setVoxels(name: LayerName, grid: Grid | null, threshold: number, shaded: boolean) {
+  setVoxels(name: LayerName, grid: Grid | null, threshold: number, shaded: boolean, peak = 1) {
     if (!grid) return this.clear(name)
     const { n, data } = grid, n2 = n * n
     const cells: number[] = []
@@ -601,7 +685,7 @@ export class Engine {
     const mesh = new THREE.InstancedMesh(this.box, this.voxMats[name] ?? this.voxMats.voxels, Math.max(count, 1))
     mesh.count = count
     const m = new THREE.Matrix4(), col = new THREE.Color()
-    const span = Math.max(1 - threshold, 1e-6)
+    const span = Math.max(peak - threshold, 1e-6)
     for (let k = 0; k < count; k++) {
       m.makeTranslation(cells[k * 4], cells[k * 4 + 1], cells[k * 4 + 2])
       mesh.setMatrixAt(k, m)
@@ -892,7 +976,7 @@ export class Engine {
   private planeInk = INK.clone()
   /** The section on the cutting plane: RGBA per cell as qs/sectionColor lays it out (row v, column u),
    *  or null for the plain faint sheet. Empty cells keep a faint tint so the plane still reads. */
-  setSliceImage(rgba: Uint8ClampedArray | null, n: number, axis: Axis) {
+  setSliceImage(rgba: Uint8ClampedArray | null, n: number, axis: Axis, smooth = false) {
     const mat = this.plane.material as THREE.MeshBasicMaterial
     this.planeTex?.dispose()
     this.planeTex = null
@@ -916,8 +1000,8 @@ export class Engine {
         else { data[o] = ink[0]; data[o + 1] = ink[1]; data[o + 2] = ink[2]; data[o + 3] = 16 }
       }
     const tex = new THREE.DataTexture(data, n, n, THREE.RGBAFormat)
-    tex.magFilter = THREE.NearestFilter
-    tex.minFilter = THREE.NearestFilter
+    tex.magFilter = smooth ? THREE.LinearFilter : THREE.NearestFilter
+    tex.minFilter = smooth ? THREE.LinearFilter : THREE.NearestFilter
     tex.colorSpace = THREE.SRGBColorSpace
     tex.needsUpdate = true
     this.planeTex = tex
