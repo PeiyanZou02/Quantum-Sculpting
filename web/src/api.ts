@@ -1,6 +1,8 @@
 // Typed client for Peiyan's Flask service (app/server.py). Every route is documented there.
 import type { Grid } from './qs/grid'
 import { en } from './i18n'
+import { IN_BROWSER, engineFetch } from './engine'
+import { savedFile } from './stl'
 
 export type UpAxis = '+z' | '-z' | '+y' | '-y' | '+x' | '-x'
 export type Fill = 'holes' | 'capped' | 'none'
@@ -165,7 +167,8 @@ async function request(path: string, init?: RequestInit): Promise<Response> {
   const method = init?.method ?? 'GET'
   let res: Response
   try {
-    res = await fetch(path, { ...init, headers: { ...(init?.headers as Record<string, string>), 'X-Client': CLIENT } })
+    const req = { ...init, headers: { ...(init?.headers as Record<string, string>), 'X-Client': CLIENT } }
+    res = IN_BROWSER ? await engineFetch(path, req) : await fetch(path, req)
   } catch (e) {
     const cancelled = e instanceof DOMException && e.name === 'AbortError'
     netListeners.forEach((fn) => fn({ method, path, status: 0, ms: performance.now() - t0, quiet: cancelled }))
@@ -314,7 +317,7 @@ export const api = {
     return { report: meta, mesh: decodeMesh(buffer) }
   },
   export: (p: MeshParams) => postJSON<{ file: string; folder: string; report: MeshReport }>('/api/export', p),
-  downloadUrl: (file: string) => `/api/download/${encodeURIComponent(file)}`,
+  downloadUrl: (file: string) => (IN_BROWSER && savedFile(file)) || `/api/download/${encodeURIComponent(file)}`,
 
   /** Evolve: the territory at the end of `turn` (0 = founding), expanded to n³ bytes of owner + 1 (0 = empty). */
   nationsFrame: async (turn: number, signal?: AbortSignal) => {

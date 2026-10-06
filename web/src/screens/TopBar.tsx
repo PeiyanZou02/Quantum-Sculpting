@@ -66,7 +66,7 @@ export function TopBar() {
       <div className="top__actions">
         <AtlasStatus />
         <ThemeButton />
-        <IconButton name="help" size={28} title="Help · README" onClick={() => window.open('https://github.com/madebyrayz/quantum-sculptor#readme', '_blank')} />
+        <IconButton name="help" size={28} title="Help · README" onClick={() => window.open('https://github.com/wedgeglobal/Quantum-Sculptor#readme', '_blank')} />
       </div>
     </header>
   )

@@ -1,4 +1,4 @@
-// More navigation, from design/handoff/QLNav4.dc.html ("06 Navigation", E–K), fed from the live HudCtx.
+// More navigation, from docs/design/QLNav4.dc.html ("06 Navigation", E–K), fed from the live HudCtx.
 // E and E2 time the last run from the runtime log: every request line ("POST /api/voxelize  200  18 ms") is
 // stamped when the request ends, so it covers [t − ms, t]. G tabs, H segmented progress and I breadcrumb
 // follow the view and switch it with ctx.goStep; J ruler index and K expanding index open a step's settings.

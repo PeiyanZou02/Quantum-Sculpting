@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react'
 import { useStore } from '../store'
 import { Dot } from './parts'
+import { IN_BROWSER } from '../engine'
+import { GET_KEY } from './Welcome'
 
 export function KeyDialog() {
   const st = useStore()
@@ -31,7 +33,10 @@ export function KeyDialog() {
           <button className="kd__close" onClick={close} aria-label="Close" data-tip="Close" data-tip-key="Esc">×</button>
         </header>
         <div className="kd__body">
-          <p className="kd__p">Paste the key from your Moth account. It is kept in your user folder, never in the project, and never shown again.</p>
+          <p className="kd__p">{IN_BROWSER
+            ? 'Paste the key from your Moth account. It stays in this browser tab, goes only to Atlas, and is gone when you close the tab.'
+            : 'Paste the key from your Moth account. It is kept in your user folder, never in the project, and never shown again.'}</p>
+          {!st.key?.set && <a className="kd__link" href={GET_KEY} target="_blank" rel="noreferrer">No key yet? Get one from Moth ↗</a>}
           <label className="kd__field">
             <span className="kd__k">Key</span>
             <span className="kd__in">
@@ -47,7 +52,7 @@ export function KeyDialog() {
               <Dot live={test.ok} /> {test.ok ? `Key valid · ${test.ms} ms` : `Rejected · ${test.msg ?? ''}`}
             </span>
           )}
-          <span className="kd__note">Sent as Authorization: Bearer to {st.key?.base?.replace(/^https?:\/\//, '') ?? 'api.mothquantum.com'}</span>
+          <span className="kd__note">Sent as Authorization: Bearer to {IN_BROWSER ? 'Atlas, through the relay' : st.key?.base?.replace(/^https?:\/\//, '') ?? 'api.mothquantum.com'}</span>
           {st.key?.set && (
             <button type="button" className="kd__remove" onClick={() => { if (window.confirm('Remove the saved Atlas key from this computer?')) st.clearKey() }}>Remove the saved key</button>
           )}

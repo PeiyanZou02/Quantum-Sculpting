@@ -1,4 +1,4 @@
-// Data and runtime, from design/handoff/QLData4.dc.html ("08 Data and runtime"): figures for the mesh
+// Data and runtime, from docs/design/QLData4.dc.html ("08 Data and runtime"): figures for the mesh
 // level, the density floor, the runtime block (run header, steps, log, runs) and more views of the
 // data: tiles, signed distance on the slice, voxel values and a level sweep.
 // Everything is derived here from HudCtx (the raw grids, the log, the run and job metadata) and memoised

@@ -637,3 +637,4 @@ body.ux-resizing, body.ux-resizing * { user-select: none !important; }
 
 /* Presets · in motion: a heading of their own, a play mark before each name */
 .pd-prow:disabled { opacity: .45; cursor: default; }
+.kd__link { align-self: flex-start; font: 400 13px/20px var(--qs-mono); letter-spacing: var(--qs-track); color: var(--qs-ink); text-decoration: underline; text-underline-offset: 3px; }
