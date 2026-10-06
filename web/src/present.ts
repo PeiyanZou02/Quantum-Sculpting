@@ -4,10 +4,9 @@
 // compositions you like are saved by name.
 import { create } from 'zustand'
 import type { FrameId } from './frames'
-import { CURATED, presetCompose, toRemove, type TidyLevel } from './hud/tidy'
-import { useStore } from './store'
+import { toRemove, type TidyLevel } from './hud/tidy'
+import { useStore, type Hud, type Layer, type S as StoreState, type Shading } from './store'
 import { DEFAULT_COMPOSITION, DEFAULT_HUD, DEFAULT_ID } from './hud/defaultComposition'
-import { MOTION_PRESETS } from './hud/motionPresets'
 import type { SliceColor, SliceOf } from './qs/sectionColor'
 
 export interface Shot { az: number; el: number; dist: number }
@@ -48,7 +47,17 @@ export const REEL: Reel = {
 /** How a saved composition plays: the loop, the pieces holding still, the split, the clock's speed and
  *  loop, the look of the slice. Older saves have none and keep what is set. */
 export interface SavedMotion { reel: Reel; still: Record<string, true>; split: Split; speed: number; loop: boolean; slice?: { of: SliceOf; color: SliceColor } }
-export interface Saved { id: string; name: string; compose: Record<string, string>; pos: Record<string, Pos>; looks: Record<string, Look>; texts: TextNote[]; guides?: Guides; motion?: SavedMotion }
+/** How a saved composition looks besides its pieces: the scene's shading, lighting, backdrop and
+ *  entanglement shader, the view's own controls (and explanations in pieces), which layers are shown,
+ *  the look cycling, the turntable and the frame. Older saves have none and keep what is set. */
+export interface SavedView {
+  shading: Shading; shade: StoreState['shade']; hud: Hud; notes: boolean
+  layers: Partial<Record<Layer, boolean>>; cycles: Cycles
+  spin: boolean; spinSpeed: number; spinDir: 1 | -1; frame: FrameId
+}
+export interface Saved { id: string; name: string; compose: Record<string, string>; pos: Record<string, Pos>; looks: Record<string, Look>; texts: TextNote[]; guides?: Guides; motion?: SavedMotion; view?: SavedView
+  /** The Default only: its published revision. A browser keeping an older one takes the newer. */
+  rev?: number }
 
 interface P {
   /** Present composition: family → variant ids, comma-separated, or 'off'. Empty is clean. */
@@ -95,12 +104,6 @@ interface P {
   tidy: (level: TidyLevel) => void
   /** Put the default composition back, pieces where they were laid out by hand. */
   applyDefault: () => void
-  /** Put a curated preset on the view (replacing the pieces, keeping notes) and lay it out. */
-  applyCurated: (id: string) => void
-  /** Apply a preset in motion (hud/motionPresets.ts): its pieces and how it plays; then it plays. */
-  applyMotion: (id: string) => void
-  /** The preset in motion last applied (null once the pieces or the animation are changed by hand). */
-  motion: string | null
   /** The artboard's shape (frames.ts) and the export size picked for it (index into its sizes). */
   frame: FrameId
   setFrame: (f: FrameId) => void
@@ -191,6 +194,10 @@ interface P {
   load: (id: string) => void
   rename: (id: string, name: string) => void
   removeSaved: (id: string) => void
+  /** A saved composition as JSON, to send or keep. */
+  exportSaved: (id: string) => string
+  /** Add a composition from JSON (one with the id of a saved one replaces it) and put it on screen. */
+  importSaved: (json: string) => void
   /** Start clean: nothing on the view. */
   clear: () => void
 }
@@ -235,7 +242,32 @@ export const usePresent = create<P>()((set, get) => {
     const st = useStore.getState()
     // the whole compose: the pieces and how it plays
     const motion: SavedMotion = { reel: { ...s.stageReel, segs: { ...s.stageReel.segs } }, still: { ...s.still }, split: { ...s.split }, speed: s.speed, loop: s.loop, slice: { of: st.sliceOf, color: st.sliceColor } }
-    return { compose: { ...s.compose }, pos: strip(s.pos), looks: { ...s.looks }, texts: [...s.texts], guides: { ...s.guides }, motion }
+    // and everything else that decides what is on screen
+    const view: SavedView = {
+      shading: st.shading, shade: { ...st.shade }, hud: { ...st.hud }, notes: s.notes,
+      layers: Object.fromEntries(Object.entries(st.layers).map(([k, v]) => [k, v.visible])), cycles: { ...s.cycles },
+      spin: s.spin, spinSpeed: s.spinSpeed, spinDir: s.spinDir, frame: s.frame,
+    }
+    return { compose: { ...s.compose }, pos: strip(s.pos), looks: { ...s.looks }, texts: [...s.texts], guides: { ...s.guides }, motion, view }
+  }
+  /** Put a saved composition on screen, all of it: pieces, motion and view. */
+  const apply = (c: Saved, current: string | null) => {
+    const s = get(), st = useStore.getState()
+    up({ compose: { ...c.compose }, pos: withOthers(s.pos, c.pos), looks: { ...c.looks }, texts: [...c.texts], guides: c.guides ?? s.guides, current, sel: null })
+    const m = c.motion
+    if (m) {
+      up({ stageReel: { ...REEL, ...m.reel, segs: { ...REEL.segs, ...m.reel.segs }, blend: blendOf(m.reel.blend) }, still: { ...m.still }, split: { ...m.split }, speed: m.speed, loop: m.loop })
+      if (m.slice) { st.setSliceOf(m.slice.of); st.setSliceColor(m.slice.color) }
+    }
+    const v = c.view
+    if (v) {
+      st.setShading(v.shading, v.shade)
+      st.setHud(v.hud)
+      for (const [l, on] of Object.entries(v.layers) as [Layer, boolean][]) st.setLayer(l, { visible: on })
+      up({ notes: v.notes, cycles: { ...v.cycles }, spin: v.spin, spinSpeed: v.spinSpeed, spinDir: v.spinDir })
+      if (v.frame !== get().frame) get().setFrame(v.frame)
+    }
+    set({ aim: get().aim + 1 })
   }
   return {
       compose: saved.compose ?? (fresh ? { ...DEFAULT_COMPOSITION.compose } : {}),
@@ -277,44 +309,11 @@ export const usePresent = create<P>()((set, get) => {
       set({ tidyKey: get().tidyKey + 1, aim: get().aim + 1 })
     },
     applyDefault: () => {
-      set({ motion: null })
-      const s = get(), d = DEFAULT_COMPOSITION
-      const pos = Object.fromEntries(Object.entries(d.pos).map(([k, v]) => [`present|${k}`, v]))
-      up({ compose: { ...d.compose }, pos: { ...Object.fromEntries(Object.entries(s.pos).filter(([k]) => !k.startsWith('present|'))), ...pos }, looks: {}, guides: { ...s.guides, ...d.guides }, current: s.saved.some((x) => x.id === DEFAULT_ID) ? DEFAULT_ID : null, sel: null })
-      set({ aim: get().aim + 1 })
-    },
-    applyCurated: (id) => {
-      set({ motion: null })
-      const c = CURATED.find((x) => x.id === id)
-      if (!c) return
-      const s = get()
-      // every preset stands on the scene: the grid box and the print grid
-      up({ compose: { ...presetCompose(c, useStore.getState().q.mode) }, pos: withOthers(s.pos, {}), looks: {}, current: null, sel: null, guides: { ...s.guides, box: true, floor: true } })
-      set({ tidyKey: get().tidyKey + 1, aim: get().aim + 1 })
-    },
-    motion: null,
-    applyMotion: (id) => {
-      const m = MOTION_PRESETS.find((x) => x.id === id)
-      if (!m) return
-      const st = useStore.getState()
-      if ('default' in m.pieces) { get().applyDefault(); st.setHud(DEFAULT_HUD) }
-      else if ('curated' in m.pieces) get().applyCurated(m.pieces.curated)
-      else {
-        const s = get()
-        up({ compose: { ...m.pieces.own(st.q.mode) }, pos: withOthers(s.pos, {}), looks: {}, current: null, sel: null, guides: { ...s.guides, box: true, floor: true } })
-        set({ tidyKey: get().tidyKey + 1, aim: get().aim + 1 })
-      }
-      // every piece moves; the loop, the plane and the split as the preset says
-      up({
-        stageReel: { ...REEL, ...m.reel, segs: { ...REEL.segs, ...m.reel.segs } },
-        split: { ...get().split, on: false, ...m.split }, still: {}, speed: m.speed ?? 1, loop: true,
-        spin: m.spin != null, spinSpeed: m.spin ?? get().spinSpeed,
-      })
-      st.setSliceOf(m.slice?.of ?? 'auto')
-      st.setSliceColor(m.slice?.color ?? 'auto')
-      set({ motion: id })
-      get().seek(0)
-      get().setPlaying(true)
+      // the Default in the saved list when there is one (it may have been saved over), else the built-in
+      const mine = get().saved.find((x) => x.id === DEFAULT_ID)
+      const d = mine ?? DEFAULT_COMPOSITION
+      apply(d, mine ? DEFAULT_ID : null)
+      if (!d.view) useStore.getState().setHud(DEFAULT_HUD)
     },
     frame: saved.frame ?? 'window',
     setFrame: (f) => { up({ frame: f, outSize: 0 }); setTimeout(() => set({ tidyKey: get().tidyKey + 1, aim: get().aim + 1 }), 80) },
@@ -329,7 +328,6 @@ export const usePresent = create<P>()((set, get) => {
     preview: null,
     setPreview: (k) => set({ preview: k }),
     place: (family, id, at) => {
-      set({ motion: null })
       const s = get()
       const cur = variants(s.compose[family])
       const compose = cur.includes(id) ? s.compose : { ...s.compose, [family]: [...cur, id].join(',') }
@@ -340,7 +338,6 @@ export const usePresent = create<P>()((set, get) => {
       up({ compose, pos, sel: at ? `${family}:${id}` : s.sel })
     },
     removePiece: (key) => {
-      set({ motion: null })
       const s = get()
       if (key.startsWith('text:')) { s.setText(key.slice(5), null); set({ sel: null }); return }
       const [family, id] = key.split(':')
@@ -409,7 +406,7 @@ export const usePresent = create<P>()((set, get) => {
     setCycles: (c) => up({ cycles: { ...get().cycles, ...c } }),
     // the loop is kept under `story` (the older stage reel, off by default, is left behind)
     stageReel: { ...REEL, ...saved.story, segs: { ...REEL.segs, ...saved.story?.segs }, blend: blendOf(saved.story?.blend) },
-    setStageReel: (r) => up({ stageReel: { ...get().stageReel, ...r }, motion: null }),
+    setStageReel: (r) => up({ stageReel: { ...get().stageReel, ...r } }),
     still: saved.still ?? {},
     planeLive: false,
     wipe: null,
@@ -430,7 +427,11 @@ export const usePresent = create<P>()((set, get) => {
     seek: (t) => set({ t0: Math.max(0, t), playFrom: Date.now(), seekKey: get().seekKey + 1 }),
     setSpeed: (v) => { const s = get(); up({ speed: v, t0: clockOf(s, Date.now()) }); set({ playFrom: Date.now() }) },
     setLoop: (v) => up({ loop: v }),
-    saved: saved.saved ?? (fresh ? [DEFAULT_COMPOSITION] : []),
+    saved: (() => {
+      const list = saved.saved ?? (fresh ? [DEFAULT_COMPOSITION] : [])
+      const i = list.findIndex((x) => x.id === DEFAULT_ID)
+      return i >= 0 && (list[i].rev ?? 0) < (DEFAULT_COMPOSITION.rev ?? 0) ? list.map((x, j) => (j === i ? DEFAULT_COMPOSITION : x)) : list
+    })(),
     current: saved.current ?? (fresh ? DEFAULT_ID : null),
     save: (name) => {
       const s = get()
@@ -444,16 +445,22 @@ export const usePresent = create<P>()((set, get) => {
       up({ saved: [...s.saved, { id, name: name?.trim() || `Composition ${s.saved.length + 1}`, ...snap() }], current: id })
     },
     load: (id) => {
-      set({ motion: null })
+      const c = get().saved.find((x) => x.id === id)
+      if (c) apply(c, id)
+    },
+    exportSaved: (id) => {
+      const c = get().saved.find((x) => x.id === id)
+      return c ? JSON.stringify(c, null, 2) : ''
+    },
+    importSaved: (json) => {
+      const c = JSON.parse(json) as Saved
+      if (!c || typeof c !== 'object' || !c.compose || !c.pos) throw new Error('Not a composition')
       const s = get()
-      const c = s.saved.find((x) => x.id === id)
-      if (!c) return
-      up({ compose: { ...c.compose }, pos: withOthers(s.pos, c.pos), looks: { ...c.looks }, texts: [...c.texts], guides: c.guides ?? s.guides, current: id, sel: null })
-      const m = c.motion
-      if (m) {
-        up({ stageReel: { ...REEL, ...m.reel, segs: { ...REEL.segs, ...m.reel.segs }, blend: blendOf(m.reel.blend) }, still: { ...m.still }, split: { ...m.split }, speed: m.speed, loop: m.loop })
-        if (m.slice) { useStore.getState().setSliceOf(m.slice.of); useStore.getState().setSliceColor(m.slice.color) }
-      }
+      // a composition with the id of one already here replaces it (the Default, sent back); else it is added
+      const id = c.id && s.saved.some((x) => x.id === c.id) ? c.id : uid()
+      const next: Saved = { ...c, id, name: c.name || 'Imported', texts: c.texts ?? [], looks: c.looks ?? {} }
+      up({ saved: s.saved.some((x) => x.id === id) ? s.saved.map((x) => (x.id === id ? next : x)) : [...s.saved, next] })
+      apply(next, id)
     },
     rename: (id, name) => up({ saved: get().saved.map((x) => (x.id === id ? { ...x, name } : x)) }),
     removeSaved: (id) => up({ saved: get().saved.filter((x) => x.id !== id), current: get().current === id ? null : get().current }),

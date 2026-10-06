@@ -14,9 +14,8 @@ import { Slider } from '../qs/Slider'
 import { useLive } from '../live'
 import { exportFrame, exportGlb, renderStill, screenshot, toggleRecording } from './capture'
 import { FRAMES, frameOf, type FrameId } from '../frames'
-import { CURATED, TIDY_LEVELS, presetCompose } from '../hud/tidy'
-import { MOTION_PRESETS } from '../hud/motionPresets'
-import { DEFAULT_COMPOSITION, DEFAULT_HUD, DEFAULT_ID } from '../hud/defaultComposition'
+import { TIDY_LEVELS } from '../hud/tidy'
+import { DEFAULT_COMPOSITION, DEFAULT_ID } from '../hud/defaultComposition'
 import { FloorSize, LibRow, MarkLibrary } from './MarkLibrary'
 import { PRESENT_TOOLS } from './presentTools'
 import { passLength, recordPass, storySegments } from './animator'
@@ -67,6 +66,24 @@ function Compositions() {
   const [name, setName] = useState<string | null>(null)
   const [ask, setAsk] = useState(false)
   const startClean = () => { if (dirty && !ask) { setAsk(true); return } setAsk(false); p.clear() }
+  const [paste, setPaste] = useState<string | null>(null)
+  const [msg, setMsg] = useState<string | null>(null)
+  const copy = async (id: string) => {
+    const json = p.exportSaved(id)
+    try { await navigator.clipboard.writeText(json); setMsg('Copied as JSON.') }
+    catch {
+      // no clipboard (an insecure origin): hand it over as a file instead
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(new Blob([json], { type: 'application/json' }))
+      a.download = `${p.saved.find((x) => x.id === id)?.name ?? 'composition'}.json`
+      a.click()
+      setMsg('Saved as a JSON file.')
+    }
+  }
+  const bring = () => {
+    try { p.importSaved(paste ?? ''); setPaste(null); setMsg('Composition added.') }
+    catch { setMsg('That is not a composition.') }
+  }
   return (
     <Group>
       <div className="pd-now">
@@ -83,13 +100,25 @@ function Compositions() {
               onClick={() => p.load(c.id)} onKeyDown={(e) => { if (e.key === 'Enter') p.load(c.id) }}>
               <span className="pd-save__n">{i + 1}</span>
               <span className="pd-save__t">{c.name}{c.id === p.current && dirty ? ' · changed' : ''}</span>
-              <span onClick={(e) => e.stopPropagation()}><IconButton name="clear" size={22} title="Delete" onClick={() => p.removeSaved(c.id)} /></span>
+              <span onClick={(e) => e.stopPropagation()}>
+                <button className="pd-chip pd-chip--s" onClick={() => copy(c.id)} data-tip="Copy" data-tip-desc="The whole composition as JSON: pieces, animation, shading, lighting and what the view shows.">Copy</button>
+                <IconButton name="clear" size={22} title="Delete" onClick={() => p.removeSaved(c.id)} />
+              </span>
             </div>
           ))}
         </div>
       )}
+      {paste != null && (
+        <div className="pd-row">
+          <textarea className="pd-in pd-paste" value={paste} placeholder="Paste a composition (JSON)" aria-label="Composition JSON" onChange={(e) => setPaste(e.target.value)} />
+        </div>
+      )}
+      {msg && <Note>{msg}</Note>}
       <div className="pd-row">
         {cur && <button className="pd-chip pd-chip--s" onClick={() => { p.saveNew(`${cur.name} copy`); setName(null) }}>Save as new</button>}
+        {paste == null
+          ? <button className="pd-chip pd-chip--s" onClick={() => { setPaste(''); setMsg(null) }}>Import</button>
+          : <><button className="pd-chip pd-chip--s" disabled={!paste.trim()} onClick={bring}>Add</button><button className="pd-chip pd-chip--s" onClick={() => setPaste(null)}>Cancel</button></>}
         <span className="pd-grow" />
         {ask
           ? <><button className="pd-chip pd-chip--s" onClick={startClean}>Discard changes</button><button className="pd-chip pd-chip--s" onClick={() => setAsk(false)}>Keep</button></>
@@ -112,52 +141,18 @@ function TidyRow() {
   )
 }
 
-/** The presets, one per row: put one on and it lays itself out around the object, which stays in the centre. */
+/** The preset: the Default, the whole composition (pieces, motion and view) as it was designed. */
 function Presets() {
   const p = usePresent()
-  const mode = useStore((s) => s.q.mode)
-  const evolve = mode === 'nations'
-  const hasGrid = useStore((s) => !!s.grid)
-  const setQ = useStore((s) => s.setQ)
+  const on = p.current === DEFAULT_ID || (!p.current && sameComposition(p.compose, DEFAULT_COMPOSITION.compose))
   return (
     <>
       <div className="pd-plist" role="radiogroup" aria-label="Presets">
-        <button role="radio" aria-checked={p.current === DEFAULT_ID && sameComposition(p.compose, DEFAULT_COMPOSITION.compose)} className={'pd-prow' + (sameComposition(p.compose, DEFAULT_COMPOSITION.compose) ? ' pd-prow--on' : '')}
-          onClick={() => { p.applyDefault(); useStore.getState().setHud(DEFAULT_HUD) }}>
+        <button role="radio" aria-checked={on} className={'pd-prow' + (on ? ' pd-prow--on' : '')} onClick={() => p.applyDefault()}>
           <span className="pd-prow__t">Default</span>
-          <span className="pd-prow__d">Lab's own layout: readouts down the sides, steps on top, the run underneath.</span>
+          <span className="pd-prow__d">The whole composition as designed: pieces, annotations, animation, shading, lighting and what the view shows.</span>
         </button>
-        {CURATED.map((c) => {
-          const on = sameComposition(p.compose, presetCompose(c, mode))
-          const off = c.mode === 'nations' ? !evolve : c.mode === 'blur' ? evolve : false
-          return (
-            <button key={c.id} role="radio" aria-checked={on} className={'pd-prow' + (on ? ' pd-prow--on' : '')} onClick={() => p.applyCurated(c.id)}>
-              <span className="pd-prow__t">{c.title}{off && <span className="pd-prow__k">{c.mode === 'nations' ? 'Evolve runs' : 'blur runs'}</span>}</span>
-              <span className="pd-prow__d">{c.desc}</span>
-            </button>
-          )
-        })}
       </div>
-      <span className="pd-plist__h">In motion</span>
-      <div className="pd-plist" role="radiogroup" aria-label="Presets in motion">
-        {MOTION_PRESETS.map((m) => {
-          const on = p.motion === m.id
-          const off = 'curated' in m.pieces && m.pieces.curated === 'evolve' && !evolve
-          return (
-            <button key={m.id} role="radio" aria-checked={on} className={'pd-prow' + (on ? ' pd-prow--on' : '')} disabled={!hasGrid} onClick={() => p.applyMotion(m.id)}
-              data-tip={m.title} data-tip-desc="Puts its pieces on the view, animates every one of them, sets the loop and starts playing.">
-              <span className="pd-prow__t"><span className="pd-prow__name"><svg className="pd-prow__play" width="9" height="9" viewBox="0 0 10 10" aria-hidden><path d="M2 1.2v7.6L8.6 5z" /></svg>{m.title}</span>{off && <span className="pd-prow__k">Evolve runs</span>}</span>
-              <span className="pd-prow__d">{m.desc}</span>
-            </button>
-          )
-        })}
-      </div>
-      {!evolve && CURATED.some((c) => c.mode === 'nations' && sameComposition(p.compose, presetCompose(c, mode))) && (
-        <div className="pd-need">
-          <Note>These pieces read an Evolve run. The quantum step is set to another engine.</Note>
-          <Buttons><Button kind="primary" disabled={!hasGrid} onClick={() => { setQ({ mode: 'nations' }); if (!useStore.getState().auto) useStore.getState().process() }} tip="Run Evolve" desc="Switch the quantum step to Evolve; it runs on the voxel grid straight away.">Run Evolve</Button></Buttons>
-        </div>
-      )}
       {p.crowded > 0 && <Note warn>{p.crowded === 1 ? 'One piece has' : `${p.crowded} pieces have`} no free room left and overlap others. Remove some, or make them smaller.</Note>}
       {p.leftOut > 0 && <Note warn>{p.leftOut === 1 ? 'One piece is' : `${p.leftOut} pieces are`} left out of this frame for want of room. A larger frame shows {p.leftOut === 1 ? 'it' : 'them'}.</Note>}
       <TidyRow />
@@ -484,8 +479,7 @@ export function ComposeSections() {
   const p = usePresent()
   // hovering a library row: it shows on the view and everything else dims
   const hover = (k: string | null, on: boolean) => { p.setPreview(k && !on ? k : null); p.setHl(k) }
-  const mode = useStore((s) => s.q.mode)
-  const preset = sameComposition(p.compose, DEFAULT_COMPOSITION.compose) ? { title: 'Default' } : CURATED.find((c) => sameComposition(p.compose, presetCompose(c, mode)))
+  const preset = p.current === DEFAULT_ID || sameComposition(p.compose, DEFAULT_COMPOSITION.compose) ? { title: 'Default' } : null
   const on = countOn(p.compose, CATEGORIES.flatMap((c) => c.fams)) + p.texts.length
   return (
     <div className={'pd pd--props' + (p.composing ? ' pd--composing' : '')} onPointerLeave={() => { p.setHl(null); p.setPreview(null) }}>

@@ -74,43 +74,6 @@ export function toRemove(keys: string[], level: TidyLevel, mode: string): string
   return [...out]
 }
 
-// ── presets ──────────────────────────────────────────────────────────────────────────────────────
-// One per category of the library, each with one piece from every family in it (the most telling
-// variant), on top of the scene's guides; and Composite, the most telling pieces of every category
-// together. Evolve and the quantum glyphs read their own runs; Composite picks by the engine in use.
-export interface Curated { id: string; title: string; desc: string; mode?: 'nations' | 'blur'; compose: Record<string, string> | ((mode: string) => Record<string, string>) }
-export const CURATED: Curated[] = [
-  {
-    id: 'marks', title: 'Marks', desc: 'Frame, orbit, camera, dial, bounds, focus, selection, callouts, slice.',
-    compose: { frame: 'v1', orbit: 'v1', camera: 'c4', dial: 'o1', bounds: 'v2', focus: 'v2', selection: 'v3', callout: 'v3', scan: 'v2' },
-  },
-  {
-    id: 'navigation', title: 'Navigation', desc: 'Steps, run timeline, progress, index and captures.',
-    compose: { frame: 'v2', steps: 'v2', timeline: 'v1', bars: 'v2', indexes: 'v1', captures: 'v3' },
-  },
-  {
-    id: 'evolve', title: 'Evolve', mode: 'nations', desc: 'Record, roster, territory, chronicle, relations, log, one nation.',
-    compose: { frame: 'v3', meta: 'v5', evolve: 'v5,v1,v2,v3,v4,v6,v7' },
-  },
-  {
-    id: 'glyphs', title: 'Glyphs', mode: 'blur', desc: 'Backend, register, rotation, shots, engine, qubits, pulses, usage.',
-    compose: { frame: 'v2', backend: 'v1', register: 'v1', rotation: 'v1', shots: 'v1', processing: 'v1', blur: 'v2', pulse: 'v2', usage: 'v1' },
-  },
-  {
-    id: 'data', title: 'Data', desc: 'Readouts, the result card, level against kept, the slice and the stages.',
-    compose: { frame: 'v2', meta: 'v3', cards: 'v1', figures: 'v4', slicecard: 'v1', stages: 'v1' },
-  },
-  {
-    id: 'composite', title: 'Composite', desc: 'The most telling piece of every category, together.',
-    compose: (mode): Record<string, string> => mode === 'nations'
-      ? { frame: 'v2', meta: 'v5', bounds: 'v2', steps: 'v2', evolve: 'v2,v7', param: 'turn' }
-      : { frame: 'v2', meta: 'v5', bounds: 'v2', steps: 'v2', blur: 'v2', cards: 'v1', param: 'level' },
-  },
-]
-
-/** A preset's pieces for the engine in use. */
-export const presetCompose = (c: Curated, mode: string) => (typeof c.compose === 'function' ? c.compose(mode) : c.compose)
-
 // ── layout ───────────────────────────────────────────────────────────────────────────────────────
 // A plate: one margin all round (inside the frame marks), one gutter between pieces, one scale for
 // every piece so a role reads the same size everywhere on the plate, and the object in the room left.

@@ -144,18 +144,11 @@ under and the mesh over. Move the plane, or let the clock sweep it, to move the 
 The view carries a composition: pieces from the Quicksilver library laid out around the object, which
 always stays in the centre. **Properties · Compose** holds it:
 
-1. **Presets** — **Default** (Lab's own layout), then one per category of the library, each with one
-   piece from every family in it on top of the scene's guides: **Marks**, **Navigation**, **Evolve**, **Glyphs**, **Data**, and
-   **Composite**, the most telling piece of each together (it follows the engine in use). A preset lays
-   its pieces out around the object, which stays in the centre; in a small view the whole plate scales
-   down rather than lose pieces. *Lay out again* re-runs the layout for the frame (all pieces, without
-   repeats, or only the essentials); *Arrange* (C) lets you drag, resize by the corner, select and
-   remove pieces on the view; *Clear* takes them all off.
-   **In motion**: whole compositions that play. Each puts its pieces on the view, turns every piece's
-   motion on, sets the loop, the plane, the split and the slice, and starts: *Default, in motion*;
-   *Growth* (the form alone, turning, step growing out of step); *Nations, turn by turn* (Evolve's
-   pieces through every turn); *Cut through* (voxels under the plane, the result over it, the section
-   in diffusion); *Data in motion* (readouts and cards counting as it plays).
+1. **Presets** — **Default** alone: the whole composition as designed, pieces, annotations,
+   animation, shading, lighting and what the view shows (`src/hud/defaultComposition.ts`). In a small
+   view the whole plate scales down rather than lose pieces. *Lay out again* re-runs the layout for
+   the frame (all pieces, without repeats, or only the essentials); *Arrange* (C) lets you drag,
+   resize by the corner, select and remove pieces on the view; *Clear* takes them all off.
 2. **On the view** — the view's own controls (tool shelf, navigation, axis gizmo, camera, info, value
    scale, corners) and the scene guides (grid box, print grid with its cell size, cutting plane).
    Pieces show figures, bars and charts only; *Explanations in pieces* brings back their captions and
@@ -188,9 +181,14 @@ always stays in the centre. **Properties · Compose** holds it:
    sized by territory; borders weighted by their ties, heavy at alliances; this turn's attacks in red;
    exiles ringed) drifts, swells and thickens with the turns.
 5. **Annotate** — notes and measurements pinned to the geometry.
-6. **Saved compositions** — the whole compose, saved by name: the pieces and where they are, and how it
-   plays (the loop, the plane, the split, the pieces holding still, the slice's look). Cycled with
-   `[` `]` or 1–9.
+6. **Saved compositions** — everything that decides what is on screen, saved by name: the pieces and
+   where they are, their looks and the annotations; how it plays (the loop, the plane, the split, the
+   pieces holding still, the slice's look); and the view (shading, lighting, backdrop, the
+   entanglement shader, the view's own controls, which layers show, the look cycling, the turntable
+   and the frame). Cycled with `[` `]` or 1–9. **Copy** puts a composition on the clipboard as JSON
+   and **Import** takes one back. To publish a new Default for everyone, save over Default, copy it
+   and replace `DEFAULT_COMPOSITION` with it, raising its `rev`: every browser that kept an older
+   Default takes the new one.
 
 **Properties · Output** holds the frame (window, 16:9, 21:9, 1.91:1, 1:1, 4:5, 9:16, 1:2, A-series)
 and its export size, images (the frame as PNG, a screen grab, the geometry alone, the pieces alone),
@@ -250,7 +248,7 @@ src/screens/     TopBar, Shell (drawer, resizers), Research (the article), Input
 src/shell.ts     the open tab, panel sizes and the drawer
 src/api.ts       typed client for every route in app/server.py
 src/store.ts     pipeline state (zustand), mirroring the handoff's "State" section
-src/present.ts   the composition: pieces, presets, shots, motion, capture
+src/present.ts   the composition: pieces, the Default, saved compositions, shots, motion, capture
 src/primitives.ts  the built-in shapes, made as STL in the browser
 ```
 

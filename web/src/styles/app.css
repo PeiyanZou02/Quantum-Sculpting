@@ -413,7 +413,7 @@ body:has(.app.ux) { background: var(--ux-app); }
 .pd-prow--on, .pd-prow--on:hover { background: var(--ux-fill); }
 .pd-prow:focus-visible { outline: 2px solid var(--qs-ink); outline-offset: -2px; }
 .pd-prow__t { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 8px; font: 500 12px/16px var(--qs-mono); letter-spacing: var(--qs-track); color: var(--qs-ink); }
-.pd-prow__k { font: 400 11px/16px var(--qs-mono); color: var(--qs-ink3); white-space: nowrap; }
+.pd-paste { height: 96px !important; padding: 8px !important; resize: vertical; white-space: pre; font: 400 11px/16px var(--qs-mono) !important; }
 .pd-prow__d { font: 400 11px/16px var(--qs-mono); letter-spacing: var(--qs-track); color: var(--qs-ink2); }
 .pd-checks { display: flex; flex-direction: column; gap: 10px; padding-bottom: 8px; }
 .ux .pd--props .pd-tidy { gap: 8px; padding: 0 0 8px; }
@@ -438,7 +438,6 @@ body.ux-resizing, body.ux-resizing * { user-select: none !important; }
 .run-bar__s { display: flex; align-items: center; gap: 8px; min-height: 16px; font: 400 11px/16px var(--qs-mono); letter-spacing: var(--qs-track); color: var(--qs-ink2); }
 .run-bar .ux-buttons { grid-auto-columns: minmax(0, 1fr); }
 .run-bar .ux-btn { justify-content: center; }
-.pd-need { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
 /* landing: shapes to start from, your own model, the steps; no small print */
 .ux .landing__card { width: min(640px, 100%); padding: 40px; gap: 32px; background: var(--ux-panel); border: 1px solid var(--ux-line); }
 .ux .landing__title { font: 500 24px/1.2 var(--qs-mono); letter-spacing: -.03em; color: var(--qs-ink); }
@@ -637,7 +636,4 @@ body.ux-resizing, body.ux-resizing * { user-select: none !important; }
 .vis-split__k { font: 400 11px/1 var(--qs-mono); color: var(--qs-ink2); }
 
 /* Presets · in motion: a heading of their own, a play mark before each name */
-.pd-plist__h { display: block; margin: 0 0 8px; font: 500 11px/1 var(--qs-mono); letter-spacing: var(--qs-track); color: var(--qs-ink2); }
-.pd-prow__name { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
-.pd-prow__play { flex: none; fill: currentColor; }
 .pd-prow:disabled { opacity: .45; cursor: default; }

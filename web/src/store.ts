@@ -112,7 +112,7 @@ export type Morph = 'off' | 'short' | 'long'
 /** Tween length per setting; short sits a little under one turn at TURNS_PER_SECOND so play stays continuous. */
 export const MORPH_MS: Record<Morph, number> = { off: 0, short: 140, long: 380 }
 
-interface S {
+export interface S {
   step: Step
   focus: Focus
   /** Point the workspace at a stage. The view follows; `follow` lets it move on with the pipeline. */
