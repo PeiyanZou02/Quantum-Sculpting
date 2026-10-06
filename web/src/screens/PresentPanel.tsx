@@ -80,6 +80,10 @@ function Compositions() {
       setMsg('Saved as a JSON file.')
     }
   }
+  const publish = async () => {
+    try { const rev = await p.publishDefault(); setMsg(`Published as Default (rev ${rev}) to web/src/hud/defaultComposition.json. Commit and push it to main so everyone gets it.`) }
+    catch (e) { setMsg(`Not published: ${e instanceof Error ? e.message : 'the local service is not running'}. Publishing needs the app running on this computer.`) }
+  }
   const bring = () => {
     try { p.importSaved(paste ?? ''); setPaste(null); setMsg('Composition added.') }
     catch { setMsg('That is not a composition.') }
@@ -116,6 +120,8 @@ function Compositions() {
       {msg && <Note>{msg}</Note>}
       <div className="pd-row">
         {cur && <button className="pd-chip pd-chip--s" onClick={() => { p.saveNew(`${cur.name} copy`); setName(null) }}>Save as new</button>}
+        <button className="pd-chip pd-chip--s" onClick={publish} data-tip="Publish as Default"
+          data-tip-desc="Writes what is on screen into the code as everyone's Default (web/src/hud/defaultComposition.json). Commit and push it to main; whoever pulls gets it on screen when they open the app.">Publish as Default</button>
         {paste == null
           ? <button className="pd-chip pd-chip--s" onClick={() => { setPaste(''); setMsg(null) }}>Import</button>
           : <><button className="pd-chip pd-chip--s" disabled={!paste.trim()} onClick={bring}>Add</button><button className="pd-chip pd-chip--s" onClick={() => setPaste(null)}>Cancel</button></>}

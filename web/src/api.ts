@@ -275,6 +275,8 @@ export const api = {
   setKey: (key: string) => postJSON<KeyStatus>('/api/key', { key }),
   clearKey: async () => (await request('/api/key', { method: 'DELETE' })).json() as Promise<KeyStatus>,
   testKey: () => postJSON<{ ok: true }>('/api/key/test'),
+  /** Write a composition into the repo as the Default (web/src/hud/defaultComposition.json); returns its new rev. */
+  publishDefault: (c: unknown) => postJSON<{ rev: number; file: string }>('/api/default-composition', c),
 
   models: () => getJSON<{ name: string; mb: number }[]>('/api/models'),
   testCup: () => postJSON<ModelInfo>('/api/model/test-cup'),

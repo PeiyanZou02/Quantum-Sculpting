@@ -5,11 +5,16 @@
   noreply address before the first commit. Never commit as "Claude" or under any other tool
   identity, and do not add `Co-Authored-By:` lines, "Generated with ..." lines or any other tool
   attribution to commit messages or pull request descriptions.
-- **Publish every change to `main`.** Peiyan pulls from `main`, so after each change: typecheck and
-  build (`cd web && npx tsc -b && npx vite build`), commit, merge the latest `origin/main` in first if
-  it moved, and push to `main` (and to the session's working branch). Don't leave finished work on a
-  side branch.
-- **The Default composition** (`web/src/hud/defaultComposition.ts`) is the only preset. It is Ray's
-  design: when Ray sends a new one (Compose · Saved compositions · Copy on Default), replace
-  `DEFAULT_COMPOSITION` with it and raise `rev`, so browsers holding the older Default take the new one.
+- **One repo, branches, pull requests.** All work happens in `PeiyanZou02/Quantum-Sculpting`. Start
+  each piece of work on its own branch from the latest `main` (`git fetch origin main && git checkout
+  -b <name>/<topic> origin/main`, e.g. `ray/research-prologue`, `peiyan/qrng-tiles`), commit there, push
+  the branch and open a pull request into `main`. Peiyan decides what is merged. Never push to `main`
+  directly. Before pushing, typecheck and build (`cd web && npx tsc -b && npx vite build`), and if
+  `main` moved, merge it into the branch first. After a merge, delete the branch.
+  Ray's fork (`madebyrayz/quantum-sculptor`) is no longer used for work.
+- **The Default composition** is the only preset; it is Ray's design and lives in
+  `web/src/hud/defaultComposition.json`. Ray publishes a new one from the app (Compose · Saved
+  compositions · Publish as Default), which writes that file and raises its `rev`; it goes to `main`
+  through a branch and pull request like any change. Whoever pulls it gets the new Default on screen
+  when they open the app.
 - The Research article lives in `web/src/screens/Research.tsx`; its text is plain JSX, edited in place.
