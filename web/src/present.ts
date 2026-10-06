@@ -5,6 +5,7 @@
 import { create } from 'zustand'
 import type { FrameId } from './frames'
 import { toRemove, type TidyLevel } from './hud/tidy'
+import { api } from './api'
 import { useStore, type Hud, type Layer, type S as StoreState, type Shading } from './store'
 import { DEFAULT_COMPOSITION, DEFAULT_HUD, DEFAULT_ID } from './hud/defaultComposition'
 import type { SliceColor, SliceOf } from './qs/sectionColor'
@@ -194,6 +195,10 @@ interface P {
   load: (id: string) => void
   rename: (id: string, name: string) => void
   removeSaved: (id: string) => void
+  /** The Default's revision this browser last took (see hud/defaultComposition.ts). */
+  defaultRev: number
+  /** Write what is on screen into the repo as the Default (local service only); resolves to its rev. */
+  publishDefault: () => Promise<number>
   /** A saved composition as JSON, to send or keep. */
   exportSaved: (id: string) => string
   /** Add a composition from JSON (one with the id of a saved one replaces it) and put it on screen. */
@@ -211,6 +216,8 @@ const read = (): Kept => { try { return JSON.parse(localStorage.getItem(KEY) ?? 
 const raw = read()
 // a first visit opens on the default composition (Lab's layout as laid out by hand)
 const fresh = !Object.keys(raw).length
+/** The Default in the code is newer than the one this browser last put on screen. */
+const newDefault = (DEFAULT_COMPOSITION.rev ?? 0) > (raw.defaultRev ?? 0)
 const firstPos = Object.fromEntries(Object.entries(DEFAULT_COMPOSITION.pos).map(([k, v]) => [`present|${k}`, v]))
 const saved: Kept = raw.v === VERSION ? raw : {
   shots: raw.shots, spin: raw.spin, reelSec: raw.reelSec, spinSpeed: raw.spinSpeed,
@@ -220,7 +227,7 @@ const keep = (s: P) => {
   try {
     localStorage.setItem(KEY, JSON.stringify({
       v: VERSION, compose: s.compose, pos: s.pos, shots: s.shots, spin: s.spin, reelSec: s.reelSec, spinSpeed: s.spinSpeed,
-      cycleSec: s.cycleSec, drawer: s.drawer, looks: s.looks, cycles: s.cycles, story: s.stageReel, still: s.still, split: s.split, speed: s.speed, loop: s.loop, notes: s.notes, frame: s.frame, outSize: s.outSize, spinDir: s.spinDir, texts: s.texts, pngInk: s.pngInk, saved: s.saved, current: s.current, guides: s.guides, tab: s.tab, libCat: s.libCat, opened: s.opened,
+      cycleSec: s.cycleSec, drawer: s.drawer, looks: s.looks, cycles: s.cycles, story: s.stageReel, still: s.still, split: s.split, speed: s.speed, loop: s.loop, notes: s.notes, frame: s.frame, outSize: s.outSize, spinDir: s.spinDir, texts: s.texts, pngInk: s.pngInk, saved: s.saved, current: s.current, defaultRev: s.defaultRev, guides: s.guides, tab: s.tab, libCat: s.libCat, opened: s.opened,
     }))
   } catch { /* per-viewer only */ }
 }
@@ -428,10 +435,19 @@ export const usePresent = create<P>()((set, get) => {
     setSpeed: (v) => { const s = get(); up({ speed: v, t0: clockOf(s, Date.now()) }); set({ playFrom: Date.now() }) },
     setLoop: (v) => up({ loop: v }),
     saved: (() => {
-      const list = saved.saved ?? (fresh ? [DEFAULT_COMPOSITION] : [])
-      const i = list.findIndex((x) => x.id === DEFAULT_ID)
-      return i >= 0 && (list[i].rev ?? 0) < (DEFAULT_COMPOSITION.rev ?? 0) ? list.map((x, j) => (j === i ? DEFAULT_COMPOSITION : x)) : list
+      const list = saved.saved ?? []
+      // a newer published Default replaces the one this browser kept (or joins the list)
+      if (!newDefault) return list
+      return list.some((x) => x.id === DEFAULT_ID) ? list.map((x) => (x.id === DEFAULT_ID ? DEFAULT_COMPOSITION : x)) : [DEFAULT_COMPOSITION, ...list]
     })(),
+    defaultRev: saved.defaultRev ?? 0,
+    publishDefault: async () => {
+      const c: Saved = { ...snap(), id: DEFAULT_ID, name: 'Default' }
+      const { rev } = await api.publishDefault(c)
+      const s = get(), next = { ...c, rev }
+      up({ saved: s.saved.some((x) => x.id === DEFAULT_ID) ? s.saved.map((x) => (x.id === DEFAULT_ID ? next : x)) : [next, ...s.saved], current: DEFAULT_ID, defaultRev: rev })
+      return rev
+    },
     current: saved.current ?? (fresh ? DEFAULT_ID : null),
     save: (name) => {
       const s = get()
@@ -479,3 +495,13 @@ export function isDirty(s: Pick<P, 'saved' | 'current' | 'compose' | 'pos' | 'lo
 /** Seconds into the pass on the composition's clock (not wrapped: the animator loops or stops it). */
 export const clockOf = (p: Pick<P, 'playing' | 'playFrom' | 't0' | 'speed'>, now: number) =>
   p.playing ? p.t0 + ((now - p.playFrom) / 1000) * p.speed : p.t0
+
+// a newer Default, pulled with the code, goes on screen as the browser opens: everyone sees the latest
+// design without exporting anything (their own saved compositions stay)
+if (newDefault) {
+  setTimeout(() => {
+    usePresent.getState().applyDefault()
+    usePresent.setState({ defaultRev: DEFAULT_COMPOSITION.rev ?? 0 })
+    keep(usePresent.getState())
+  }, 0)
+}

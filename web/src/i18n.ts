@@ -27,6 +27,7 @@ const RULES: [RegExp, string | ((...m: string[]) => string)][] = [
   [/^网格尺寸只能是 (.+) 之一/, (_, s) => `Grid size must be one of ${s}.`],
   [/^填充方式只能是 (.+) 之一/, (_, s) => `Fill must be one of ${s}.`],
   [/^不支持的朝向 (.+)/, (_, u) => `Unsupported up axis ${u}.`],
+  [/^这不是一个布局/, 'That is not a composition (it has no compose or pos).'],
   // Evolve (app/nations.py, server.evolve)
   [/^未知的模式 nations/, 'This service does not know Evolve yet. Restart the local service to load it.'],
   [/^「演化」最大支持 (\d+)³ 的网格/, (_, n) => `Evolve works on grids up to ${n}³. Choose a smaller grid size first.`],

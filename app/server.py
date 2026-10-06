@@ -251,6 +251,25 @@ def clear_key():
     return jsonify(key_status())
 
 
+DEFAULT_COMPOSITION = ROOT / "web" / "src" / "hud" / "defaultComposition.json"
+
+
+@app.post("/api/default-composition")
+def publish_default():
+    """把界面上的布局写进代码，作为大家共用的 Default（web/src/hud/defaultComposition.json），rev 加一。
+    提交并推到 main 以后，别人拉下来、打开界面，就会自动换成这个新的 Default。"""
+    c = body()
+    if not isinstance(c.get("compose"), dict) or not isinstance(c.get("pos"), dict):
+        raise ValueError("这不是一个布局（缺少 compose 或 pos）。")
+    try:
+        rev = int(json.loads(DEFAULT_COMPOSITION.read_text(encoding="utf-8")).get("rev", 0))
+    except (OSError, ValueError):
+        rev = 0
+    c.update(id="default", name="Default", rev=rev + 1)
+    DEFAULT_COMPOSITION.write_text(json.dumps(c, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return jsonify(rev=rev + 1, file=str(DEFAULT_COMPOSITION.relative_to(ROOT)).replace("\\", "/"))
+
+
 @app.post("/api/key/test")
 def test_key():
     key, _ = load_key()
