@@ -31,9 +31,10 @@ function flask(): Plugin {
 
 export default defineConfig(({ command }) => ({
   plugins: [react(), flask()],
-  // the service serves the build from app/static/studio/ at / (assets under /studio/)
-  base: command === 'build' ? '/studio/' : '/',
-  build: { outDir: '../app/static/studio', emptyOutDir: true },
+  // the service serves the build from app/static/studio/ at / (assets under /studio/); a build for the
+  // website (QS_SITE=1, `pnpm build:site`) stands alone at the root of its domain, in web/dist
+  base: command === 'build' && !process.env.QS_SITE ? '/studio/' : '/',
+  build: process.env.QS_SITE ? { outDir: 'dist', emptyOutDir: true } : { outDir: '../app/static/studio', emptyOutDir: true },
   server: {
     proxy: {
       // the service rejects cross-origin requests, so the proxy rewrites Origin to its own host
