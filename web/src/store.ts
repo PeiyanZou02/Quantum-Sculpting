@@ -1,6 +1,6 @@
 // App state: one zustand store mirroring the README "State" section of the design handoff.
 // The service holds the real data in memory; this keeps what the page needs to draw it.
-import type { SliceColor } from './qs/sectionColor'
+import type { SliceColor, SliceOf } from './qs/sectionColor'
 import { create } from 'zustand'
 import {
   api, ApiError,
@@ -184,6 +184,9 @@ interface S {
   setSlice: (p: Partial<S['slice']>) => void
   /** How sections are coloured, on the section map and on the cutting plane in the view. */
   sliceColor: SliceColor
+  /** What the section cuts through: the voxels, the result or the mesh; Auto follows the view. */
+  sliceOf: SliceOf
+  setSliceOf: (v: SliceOf) => void
   setSliceColor: (c: SliceColor) => void
   pushLog: (text: string, level?: LogLine['level']) => void
 
@@ -605,8 +608,15 @@ export const useStore = create<S>()((set, get) => {
     setCamera: (c) => set({ camera: c }),
     setSlice: (p) => set((s) => ({ slice: { ...s.slice, ...p } })),
     sliceColor: (() => {
-      try { const v = localStorage.getItem('qs-slice-color'); return v === 'grey' || v === 'heat' || v === 'nations' ? v : 'auto' } catch { return 'auto' }
+      try { const v = localStorage.getItem('qs-slice-color'); return v === 'grey' || v === 'heat' || v === 'diffusion' || v === 'nations' ? v : 'auto' } catch { return 'auto' }
     })(),
+    sliceOf: (() => {
+      try { const v = localStorage.getItem('qs-slice-of'); return v === 'voxels' || v === 'result' || v === 'mesh' ? v : 'auto' } catch { return 'auto' }
+    })(),
+    setSliceOf: (v) => {
+      try { localStorage.setItem('qs-slice-of', v) } catch { /* per-viewer */ }
+      set({ sliceOf: v })
+    },
     setSliceColor: (c) => {
       try { localStorage.setItem('qs-slice-color', c) } catch { /* per-viewer */ }
       set({ sliceColor: c })

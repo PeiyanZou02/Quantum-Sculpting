@@ -57,6 +57,26 @@ function table(theme: Theme) {
 /** Linear RGB per owner byte (256 × 3), the palette for Engine.setLabels: index 0 is no nation, b is nation b − 1. */
 export const ownerPalette = (theme: Theme = 'light') => table(theme)
 
+const greys: Partial<Record<string, Float32Array>> = {}
+/** The same layout in greys, for shadings that read a cell's colour as a value: `solid`, one surface grey
+ *  for every nation (the form alone); `film`, a step of grey per nation, so the entanglement shader gives
+ *  each nation its own film thickness and so its own interference colour. */
+export function ownerGreys(kind: 'solid' | 'film', theme: Theme = 'light'): Float32Array {
+  const key = kind + theme
+  let t = greys[key]
+  if (!t) {
+    t = new Float32Array(256 * 3)
+    const surface = toLinear(theme === 'dark' ? 0x9A / 255 : 0xC9 / 255)
+    for (let b = 1; b < 256; b++) {
+      // golden-ratio steps keep neighbouring ids far apart in thickness
+      const g = kind === 'solid' ? surface : 0.06 + 0.88 * (((b - 1) * 0.618034) % 1)
+      t.set([g, g, g], b * 3)
+    }
+    greys[key] = t
+  }
+  return t
+}
+
 /**
  * Instance colours for the voxels the engine drew: `cells` are the x, y, z, value quads that
  * Engine.setVoxels keeps in mesh.userData.cells; `owner` is a full n³ frame of owner + 1 (0 = empty),

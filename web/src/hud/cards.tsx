@@ -5,7 +5,7 @@ import { useMemo } from 'react'
 import { useStore } from '../store'
 import { histogram, solidPerLayer } from '../qs/grid'
 import { SectionMap } from '../screens/SectionMap'
-import { useSliceScheme } from '../qs/sectionColor'
+import { useSection } from '../qs/sectionColor'
 import { LevelHistogram } from '../qs/LevelHistogram'
 import { PresentStyle } from '../screens/presentStyle'
 import { Count } from './Num'
@@ -13,17 +13,17 @@ import { useHeld } from './motion'
 import './cards.css'
 
 export function SliceCard({ layers }: { layers?: boolean }) {
-  const { procData, gridData, slice: live, m, grid } = useStore()
+  const { gridData, slice: live, grid } = useStore()
   const slice = useHeld(live)
-  const g = procData ?? gridData
+  const sec = useSection()
+  const g = sec.grid
   const counts = useMemo(() => (gridData && layers ? solidPerLayer(gridData, slice.axis) : []), [gridData, layers, slice.axis])
-  const colors = useSliceScheme(!!procData)
   if (!g) return null
   const n = g.n, peak = Math.max(1, ...counts)
   return (
     <div className="hud-card">
       <div className="hud-card__head"><span className="hud-card__t">Slice</span><span className="hud-card__n">{slice.axis} {slice.index} / {n - 1}</span></div>
-      <SectionMap size={232} grid={g} input={procData ? gridData : null} axis={slice.axis} index={slice.index} level={procData ? m.level : 0.5} scheme={colors.scheme} owner={colors.owner} />
+      <SectionMap size={232} grid={g} input={sec.input} axis={slice.axis} index={slice.index} level={sec.level} scheme={sec.scheme} owner={sec.owner} kind={sec.kind} />
       <div className="hud-card__plane">
         <span className="hud-card__k">Cutting plane</span>
         <span className="hud-card__v"><Count>{slice.index}</Count> · <Count>{`${(slice.index * (grid?.voxel_size ?? 0)).toFixed(1)} mm`}</Count></span>

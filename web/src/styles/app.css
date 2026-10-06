@@ -382,7 +382,7 @@ body:has(.app.ux) { background: var(--ux-app); }
 .ux .qs-seg:has(> :nth-child(4)) { display: grid; grid-template-columns: 1fr 1fr; height: auto; gap: 0; }
 .ux .qs-seg:has(> :nth-child(4)) > .qs-seg__item { height: 32px !important; border-left: 0 !important; box-shadow: inset 1px 1px 0 var(--ux-line) !important; }
 .ux .qs-seg:has(> :nth-child(5)) { grid-template-columns: repeat(3, 1fr); }
-.ux .qs-seg:has(> :nth-child(5)):not(:has(> :nth-child(6))) { grid-template-columns: repeat(5, 1fr); }
+.ux .qs-seg:has(> :nth-child(5)):not(:has(> :nth-child(6))) { grid-template-columns: repeat(3, 1fr); }
 /* paired switchers (slice source and axis) stack */
 .out-pair { display: flex; flex-direction: column; gap: 8px; }
 /* Evolve nation rows: name and territory, question and odds, then the answer on its own line */
@@ -412,7 +412,7 @@ body:has(.app.ux) { background: var(--ux-app); }
 .pd-prow:hover { background: var(--ux-field-hi); }
 .pd-prow--on, .pd-prow--on:hover { background: var(--ux-fill); }
 .pd-prow:focus-visible { outline: 2px solid var(--qs-ink); outline-offset: -2px; }
-.pd-prow__t { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font: 500 12px/16px var(--qs-mono); letter-spacing: var(--qs-track); color: var(--qs-ink); }
+.pd-prow__t { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 8px; font: 500 12px/16px var(--qs-mono); letter-spacing: var(--qs-track); color: var(--qs-ink); }
 .pd-prow__k { font: 400 11px/16px var(--qs-mono); color: var(--qs-ink3); white-space: nowrap; }
 .pd-prow__d { font: 400 11px/16px var(--qs-mono); letter-spacing: var(--qs-track); color: var(--qs-ink2); }
 .pd-checks { display: flex; flex-direction: column; gap: 10px; padding-bottom: 8px; }
@@ -631,3 +631,13 @@ body.ux-resizing, body.ux-resizing * { user-select: none !important; }
 .anim-step:focus-visible { outline: 2px solid var(--qs-ink); outline-offset: -2px; }
 
 .anim-time__now { color: var(--qs-ink); }
+
+/* Visibility · split at the cutting plane: under and over, one segmented row each */
+.vis-split { display: grid; grid-template-columns: 40px minmax(0, 1fr); align-items: center; gap: 8px; margin-top: 8px; }
+.vis-split__k { font: 400 11px/1 var(--qs-mono); color: var(--qs-ink2); }
+
+/* Presets · in motion: a heading of their own, a play mark before each name */
+.pd-plist__h { display: block; margin: 0 0 8px; font: 500 11px/1 var(--qs-mono); letter-spacing: var(--qs-track); color: var(--qs-ink2); }
+.pd-prow__name { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+.pd-prow__play { flex: none; fill: currentColor; }
+.pd-prow:disabled { opacity: .45; cursor: default; }

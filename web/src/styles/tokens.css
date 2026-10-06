@@ -3,6 +3,10 @@
 @font-face { font-family: 'TWK Everett Mono'; src: url('/fonts/TWKEverettMono-Regular.woff2') format('woff2'); font-weight: 400; font-style: normal; font-display: swap; }
 @font-face { font-family: 'TWK Everett Mono'; src: url('/fonts/TWKEverettMono-Medium.woff2') format('woff2'); font-weight: 500; font-style: normal; font-display: swap; }
 @font-face { font-family: 'TWK Everett Mono'; src: url('/fonts/TWKEverettMono-Bold.woff2') format('woff2'); font-weight: 700; font-style: normal; font-display: swap; }
+/* TWK Everett (the sans) for reading: Research's prose. Same folder; the .otf names are Peiyan's (app/static/fonts). */
+@font-face { font-family: 'TWK Everett'; src: url('/fonts/TWKEverett-Regular.woff2') format('woff2'), url('/fonts/TWKEverett-Regular.otf') format('opentype'); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: 'TWK Everett'; src: url('/fonts/TWKEverett-Medium.woff2') format('woff2'), url('/fonts/TWKEverett-Medium.otf') format('opentype'); font-weight: 500; font-style: normal; font-display: swap; }
+@font-face { font-family: 'TWK Everett'; src: url('/fonts/TWKEverett-Bold.woff2') format('woff2'), url('/fonts/TWKEverett-Bold.otf') format('opentype'); font-weight: 700; font-style: normal; font-display: swap; }
 
 :root {
   --qs-scheme: light;
@@ -31,6 +35,8 @@
   /* one family: --qs-sans is kept as a name so older rules resolve to the same mono */
   --qs-mono: 'TWK Everett Mono', 'SF Mono', ui-monospace, Menlo, Consolas, 'Liberation Mono', monospace;
   --qs-sans: var(--qs-mono);
+  /* long reading (Research): the sans; mono stays for code and data */
+  --qs-read: 'TWK Everett', 'Helvetica Neue', Helvetica, Arial, sans-serif;
 
   /* type roles (Swiss: few sizes, set by role, never by place). Size/line-height pairs on a 4px rhythm. */
   --qs-t-display: 500 20px/24px var(--qs-mono);   /* hero figures */
