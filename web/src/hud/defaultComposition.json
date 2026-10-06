@@ -1,69 +1,48 @@
 {
   "id": "default",
   "name": "Default",
-  "rev": 1,
+  "rev": 2,
   "compose": {
     "frame": "v3",
+    "orbit": "off",
     "bounds": "v1",
     "meta": "v5",
     "cards": "v4",
-    "levels": "v1",
+    "levels": "off",
     "shots": "v1",
-    "rotation": "v1",
+    "rotation": "off",
     "runtime": "v3,v1",
     "bars": "v1",
-    "captures": "v3",
+    "captures": "off",
     "timeline": "v1",
     "slicecard": "v2",
-    "camera": "c3",
-    "evolve": "v4,v7"
+    "camera": "c3,c2,c4",
+    "evolve": "v4,v7,v1,v2",
+    "dial": "o3,o4",
+    "selection": "v1",
+    "callout": "v1,v4",
+    "scan": "v2,v3"
   },
   "pos": {
     "meta:v5": {
-      "x": 0.015,
-      "y": 0.024,
-      "auto": true,
-      "anchor": true
+      "x": 0.013350661625708886,
+      "y": 0.03370478381849315
     },
     "cards:v4": {
-      "x": 0.015,
-      "y": 0.208,
-      "auto": true,
-      "anchor": true
-    },
-    "levels:v1": {
-      "x": 0.013,
-      "y": 0.595,
-      "auto": true,
-      "anchor": true
+      "x": 0.015486545959357279,
+      "y": 0.4893547998715753
     },
     "shots:v1": {
-      "x": 0.015,
-      "y": 0.707,
-      "auto": true,
-      "anchor": true
-    },
-    "rotation:v1": {
-      "x": 0.095,
-      "y": 0.707,
-      "auto": true,
-      "anchor": true
+      "x": 0.1683398068289225,
+      "y": 0.8766119970034246
     },
     "runtime:v3": {
-      "x": 0.015,
-      "y": 0.828,
-      "auto": true,
-      "anchor": true
+      "x": 0.014465678166351607,
+      "y": 0.8305764394263698
     },
     "bars:v1": {
       "x": 0.42,
       "y": 0.03,
-      "auto": true,
-      "anchor": true
-    },
-    "captures:v3": {
-      "x": 0.41,
-      "y": 0.871,
       "auto": true,
       "anchor": true
     },
@@ -74,41 +53,118 @@
       "anchor": true
     },
     "slicecard:v2": {
-      "x": 0.875,
-      "y": 0.035,
-      "auto": true,
-      "anchor": true
+      "x": 0.8796926689508506,
+      "y": 0.03397233518835616
     },
     "camera:c3": {
-      "x": 0.875,
-      "y": 0.09,
-      "auto": true,
-      "anchor": true
+      "x": 0.7925164668005671,
+      "y": 0.8838860498715754
     },
     "evolve:v4": {
-      "x": 0.875,
-      "y": 0.376,
-      "auto": true,
-      "anchor": true
+      "x": 0.8805381616257089,
+      "y": 0.3306901487585616
     },
     "runtime:v1": {
-      "x": 0.875,
-      "y": 0.636,
-      "auto": true,
-      "anchor": true
+      "x": 0.8800341889177694,
+      "y": 0.7612973565924658
     },
     "evolve:v7": {
-      "x": 0.875,
-      "y": 0.767,
-      "auto": true,
-      "anchor": true
+      "x": 0.8771912659499055,
+      "y": 0.8810734160958904
+    },
+    "evolve:v1": {
+      "x": 0.8798569677457467,
+      "y": 0.5415005618578768
+    },
+    "evolve:v2": {
+      "x": 0.013306356332703214,
+      "y": 0.709843883775685
+    },
+    "camera:c2": {
+      "x": 0.6031574905482041,
+      "y": 0.890972816780822
+    },
+    "dial:o4": {
+      "x": 0.339875132915879,
+      "y": 0.877046767979452
+    },
+    "camera:c4": {
+      "x": 0.4566398865784499,
+      "y": 0.07401474208047945
+    },
+    "scan:v2": {
+      "x": 0.24151557487971131,
+      "y": 0.4337342144691781
+    },
+    "scan:v3": {
+      "x": 0.7619693514434643,
+      "y": 0.3885247217465753
     }
   },
-  "looks": {},
+  "looks": {
+    "evolve:v4": {
+      "size": 1.15
+    },
+    "slicecard:v2": {
+      "size": 1.34
+    },
+    "evolve:v1": {
+      "size": 1.18
+    },
+    "runtime:v1": {
+      "size": 1.09
+    },
+    "evolve:v7": {
+      "size": 1.5
+    },
+    "runtime:v3": {
+      "size": 1.39
+    },
+    "cards:v4": {
+      "size": 1.55
+    },
+    "meta:v5": {
+      "size": 1.53
+    },
+    "evolve:v2": {
+      "size": 0.89
+    }
+  },
   "texts": [],
   "guides": {
-    "box": false,
+    "box": true,
     "floor": true,
-    "div": 4
+    "div": 13
+  },
+  "motion": {
+    "reel": {
+      "on": true,
+      "sec": 8,
+      "tps": 9,
+      "segs": {
+        "model": false,
+        "voxels": true,
+        "quantum": true,
+        "mesh": true
+      },
+      "blend": "fade",
+      "plane": "loop",
+      "planeSec": 8,
+      "planeMode": "bounce",
+      "from": 0,
+      "to": 1
+    },
+    "still": {},
+    "split": {
+      "on": true,
+      "below": "processed",
+      "above": "processed"
+    },
+    "speed": 0.5,
+    "loop": true,
+    "slice": {
+      "of": "auto",
+      "color": "auto"
+    }
   }
 }
