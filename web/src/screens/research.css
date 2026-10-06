@@ -114,6 +114,12 @@
 .rs__notes a { color: var(--qs-ink3); text-decoration: none; margin-left: 4px; }
 .rs__notes a:hover { color: var(--qs-ink); }
 .rs__src { list-style: none; gap: 14px; }
+.rs__cited { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; font: 400 12px/18px var(--qs-read); letter-spacing: -.005em; color: var(--qs-ink2); }
+.rs__cited li { padding-left: 22px; text-indent: -22px; }
+.rs__ti { color: var(--qs-ink); }
+/* still to come: a field from the run's log, a page, a title. Dashed, so a draft shows its gaps */
+.rs__f, .rs__todo { padding: 0 4px; border: 1px dashed var(--qs-ctl); color: var(--qs-ink3); white-space: nowrap; }
+.rs__f { font-family: var(--qs-mono); font-size: max(11px, .86em); letter-spacing: var(--qs-track); }
 .rs__srcn { display: block; font-weight: 500; color: var(--qs-ink); }
 .rs__credits { margin: 0; display: grid; grid-template-columns: 160px minmax(0, 1fr); gap: 6px 16px;
   font: 400 12px/18px var(--qs-read); letter-spacing: -.005em; }
